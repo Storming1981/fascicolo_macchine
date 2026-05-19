@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CAPO_OFFICINA
+  MONTATORE
+  CABLATORE
+  PROGRAMMATORE
+  COLLAUDATORE
+  TECNICO_CAMPO
+  LOGISTICA
+}
+
+enum MachineStatus {
+  PRODUCTION
+  TESTING
+  SHIPPED
+  INSTALLED
+  MAINTENANCE
+  SCRAPPED
+}
+
+enum DiaryPhase {
+  PRODUCTION
+  TESTING
+  SHIPPED
+  INSTALLED
+  MAINTENANCE
+  SCRAPPED
+}
+
+enum SignMethod {
+  PEN
+  PIN
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(MONTATORE)
+  pinHash      String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  diaryEvents DiaryEvent[]
+  signatures  Signature[]
+  photos      Photo[]
+}
+
+model Machine {
+  id              String        @id @default(cuid())
+  code            String        @unique // M-2026-0142
+  job             String        // Job Number = commessa di vendita
+  jobBody         String?       // Corpo trituratore (BLUE DEVIL)
+  jobContainer    String?       // Container (BLUE DEVIL)
+  plantType       String?       // Tipologia impianto: BLUE DEVIL, BLUE SHARK, ...
+  model           String
+  year            Int
+  customer        String
+  country         String
+  countryCode     String        @default("IT")
+  site            String?
+  status          MachineStatus @default(PRODUCTION)
+  progress        Int           @default(0)
+  productionStart DateTime?
+  deliveryDate    DateTime?
+  pressureSettings String?
+  plateWeight     String?
+  platePower      String?
+  plateVoltage    String?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  components  Component[]
+  diaryEvents DiaryEvent[]
+  photos      Photo[]
+  documents   Document[]
+  signatures  Signature[]
+  milestones  MachineMilestone[]
+}
+
+model MachineMilestone {
+  id        String   @id @default(cuid())
+  machineId String
+  key       String // production_start | production_end | testing | shipped | installed | service | scrapped
+  date      DateTime
+  source    String   @default("MANUALE") // MANUALE | GESTIONALE
+  note      String?
+  updatedAt DateTime @updatedAt
+
+  machine Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@unique([machineId, key])
+  @@index([machineId])
+}
+
+model Component {
+  id        String  @id @default(cuid())
+  machineId String
+  groupId   String // gearboxes, hyd_motors, ...
+  brand     String?
+  extra     Json?
+  machine   Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  items     ComponentItem[]
+
+  @@unique([machineId, groupId])
+  @@index([machineId])
+}
+
+model ComponentItem {
+  id          String  @id @default(cuid())
+  componentId String
+  position    Int
+  label       String
+  serial      String?
+  note        String?
+  component   Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  photos      Photo[]
+
+  @@index([componentId])
+}
+
+model DiaryEvent {
+  id        String     @id @default(cuid())
+  machineId String
+  phase     DiaryPhase
+  type      String     @default("note") // replace | inspect | repair | note | milestone
+  title     String
+  note      String?
+  date      DateTime   @default(now())
+  actorName String
+  oldSerial String?
+  newSerial String?
+  componentRef String?
+  authorId  String?
+  createdAt DateTime   @default(now())
+
+  machine   Machine     @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  author    User?       @relation(fields: [authorId], references: [id])
+  signature Signature?
+  photos    Photo[]
+
+  @@index([machineId])
+}
+
+model Signature {
+  id           String     @id @default(cuid())
+  machineId    String
+  diaryEventId String?    @unique
+  role         String // Montaggio, Collaudo, Capo officina...
+  signerName   String
+  signerId     String?
+  method       SignMethod @default(PEN)
+  imageData    String?    @db.Text // dataURL of pen signature
+  hash         String
+  signedAt     DateTime   @default(now())
+
+  machine    Machine     @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  diaryEvent DiaryEvent? @relation(fields: [diaryEventId], references: [id], onDelete: Cascade)
+  signer     User?       @relation(fields: [signerId], references: [id])
+
+  @@index([machineId])
+}
+
+model Photo {
+  id              String   @id @default(cuid())
+  machineId       String
+  diaryEventId    String?
+  componentItemId String?
+  path            String // /uploads/...
+  category        String   @default("produzione")
+  caption         String?
+  authorName      String?
+  authorId        String?
+  takenAt         DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  machine       Machine        @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  diaryEvent    DiaryEvent?    @relation(fields: [diaryEventId], references: [id], onDelete: SetNull)
+  componentItem ComponentItem? @relation(fields: [componentItemId], references: [id], onDelete: SetNull)
+  author        User?          @relation(fields: [authorId], references: [id])
+
+  @@index([machineId])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Document {
+  id         String   @id @default(cuid())
+  machineId  String
+  name       String
+  path       String
+  sizeBytes  Int      @default(0)
+  category   String   @default("documento")
+  uploadedAt DateTime @default(now())
+
+  machine Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@index([machineId])
+}

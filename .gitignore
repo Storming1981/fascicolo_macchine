@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+build
+
+# Variabili d'ambiente (segrete) — usare .env.example come modello
+.env
+.env.local
+.env*.local
+
+# File caricati a runtime
+uploads/*
+!uploads/.gitkeep
+
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(psql --version)",
+      "Bash(python -c ' *)",
+      "Bash(grep -vE \"^\\\\s*$\")",
+      "Bash(powershell -NoProfile -Command 'Get-NetTCPConnection -LocalPort 3000 -State Listen -EA SilentlyContinue | Select -Expand OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -EA SilentlyContinue }')",
+      "Bash(powershell -NoProfile -Command 'Get-Process node -EA SilentlyContinue | Where-Object { $_.Path -like '\\\\''*'\\\\'' } | Select-Object Id,StartTime | Format-Table -Auto | Out-String')",
+      "Bash(powershell -NoProfile -Command '16932,49860,51616 | ForEach-Object { try { Stop-Process -Id $_ -Force -EA Stop; \"killed $_\" } catch { \"skip $_\" } }')",
+      "Bash(python -)",
+      "Bash(python -c \"import PIL, PIL.Image as I; im=I.open\\('File riferimento/Zato_Logo_R_2022_pos.png'\\); print\\(PIL.__version__, im.size, im.mode\\)\")",
+      "Bash(python -c \"from PIL import Image; im=Image.open\\('public/zato-logo.png'\\); print\\('public/zato-logo.png', im.size, 'aspect', round\\(im.size[0]/im.size[1],2\\)\\)\")",
+      "Bash(powershell -NoProfile -Command 'Get-Process node -EA SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.Id -Force -EA Stop } catch {} }')"
+    ]
+  }
+}
