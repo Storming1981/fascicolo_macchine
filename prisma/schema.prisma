@@ -41,19 +41,29 @@ enum SignMethod {
   PIN
 }
 
-model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(MONTATORE)
-  pinHash      String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+enum CollaudoStatus {
+  DRAFT
+  IN_PROGRESS
+  PENDING_APPROVAL
+  APPROVED
+}
 
-  diaryEvents DiaryEvent[]
-  signatures  Signature[]
-  photos      Photo[]
+model User {
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  passwordHash   String
+  role           Role     @default(MONTATORE)
+  pinHash        String?
+  signatureImage String? // dataURL della firma personale
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  diaryEvents    DiaryEvent[]
+  signatures     Signature[]
+  photos         Photo[]
+  collauduFatti  Collaudo[] @relation("CollaudoCompiler")
+  collauduAppr   Collaudo[] @relation("CollaudoApprover")
 }
 
 model Machine {
@@ -87,6 +97,31 @@ model Machine {
   documents   Document[]
   signatures  Signature[]
   milestones  MachineMilestone[]
+  collaudo    Collaudo?
+}
+
+model Collaudo {
+  id                String         @id @default(cuid())
+  machineId         String         @unique
+  status            CollaudoStatus @default(DRAFT)
+  answers           Json           @default("{}") // { "1": {value:"SI"|"NO"|"NA", note:""}, ... }
+  compilerId        String?
+  compilerName      String?
+  compiledAt        DateTime?
+  compilerSignature String? // dataURL
+  approverId        String?
+  approverName      String?
+  approvedAt        DateTime?
+  approverSignature String? // dataURL
+  approverRemarks   String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  machine  Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  compiler User?   @relation("CollaudoCompiler", fields: [compilerId], references: [id])
+  approver User?   @relation("CollaudoApprover", fields: [approverId], references: [id])
+
+  @@index([machineId])
 }
 
 model MachineMilestone {

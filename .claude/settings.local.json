@@ -11,7 +11,10 @@
       "Bash(python -)",
       "Bash(python -c \"import PIL, PIL.Image as I; im=I.open\\('File riferimento/Zato_Logo_R_2022_pos.png'\\); print\\(PIL.__version__, im.size, im.mode\\)\")",
       "Bash(python -c \"from PIL import Image; im=Image.open\\('public/zato-logo.png'\\); print\\('public/zato-logo.png', im.size, 'aspect', round\\(im.size[0]/im.size[1],2\\)\\)\")",
-      "Bash(powershell -NoProfile -Command 'Get-Process node -EA SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.Id -Force -EA Stop } catch {} }')"
+      "Bash(powershell -NoProfile -Command 'Get-Process node -EA SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.Id -Force -EA Stop } catch {} }')",
+      "Bash(git remote *)",
+      "Bash(powershell -NoProfile -Command 'Get-NetTCPConnection -LocalPort 3000 -State Listen -EA SilentlyContinue | Select -Expand OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -EA SilentlyContinue }; Get-Process node -EA SilentlyContinue | Where-Object { $_.StartTime -gt \\(Get-Date\\).AddHours\\(-2\\) } | ForEach-Object { try { Stop-Process -Id $_.Id -Force -EA Stop } catch {} }')",
+      "Bash(grep -nE \"^window\\\\.|^export default|^}\\\\s*$\" \"src/app/\\(app\\)/macchine/[code]/MachineDetail.tsx\")"
     ]
   }
 }

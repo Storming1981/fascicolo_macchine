@@ -141,6 +141,14 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
 - **Persone**: elenco operatori, firme, creazione operatore (solo ADMIN).
 - **Ricerca topbar intelligente** (`/api/search`): matricola componente / codice
   fascicolo / job → apre direttamente la macchina; testo generico → lista filtrata.
+- **Check list di collaudo M7.3** (`src/lib/checklist.ts`, 63 voci): card nello
+  scopo Collaudo & Firme con stato (Da compilare / In corso / In attesa di
+  approvazione / Approvato) e barra di avanzamento. Modal a tutta pagina con
+  SI / NO / N.A. + note per ogni voce, firma compilatore (utente loggato — può
+  salvare la firma personale `User.signatureImage`) e flusso di approvazione
+  con firma approvatore. API: `/api/machines/[id]/collaudo` (save/submit/approve)
+  + `/api/users/me` per la firma personale. Vincolo: il compilatore non può
+  approvare il proprio verbale.
 
 ## Note operative
 

@@ -6,6 +6,7 @@ import { SignaturePad, SignaturePadHandle } from "@/components/SignaturePad";
 import { COMPONENT_GROUPS } from "@/lib/components";
 import { STATUS_META, PHASE_META, STATUS_ORDER } from "@/lib/domain";
 import { MILESTONES, milestoneDef } from "@/lib/milestones";
+import { CHECKLIST_TRITURATORE } from "@/lib/checklist";
 import { fmtDate, fmtBytes } from "@/lib/format";
 import type { MachineStatus } from "@prisma/client";
 
@@ -29,6 +30,18 @@ type Machine = {
   documents: { id: string; name: string; path: string; sizeBytes: number; category: string }[];
   signatures: { id: string; role: string; signerName: string; method: string; imageData: string | null; signedAt: string }[];
   milestones: { key: string; date: string; source: string }[];
+  collaudo: {
+    status: "DRAFT" | "IN_PROGRESS" | "PENDING_APPROVAL" | "APPROVED";
+    answers: Record<string, { value: string | null; note?: string }>;
+    compilerName: string | null;
+    compiledAt: string | null;
+    compilerSignature: string | null;
+    approverName: string | null;
+    approvedAt: string | null;
+    approverSignature: string | null;
+    approverRemarks: string | null;
+    compilerId: string | null;
+  } | null;
 };
 
 const TABS = [
@@ -48,13 +61,14 @@ export default function MachineDetail({
 }: {
   machine: Machine;
   qrDataUrl: string;
-  currentUser: { name: string; role: string; hasPin: boolean };
+  currentUser: { id: string; name: string; role: string; hasPin: boolean; hasSignature: boolean };
   caps: { edit: boolean; intervention: boolean; sign: boolean };
 }) {
   const router = useRouter();
   const [tab, setTab] = useState("anagrafica");
   const [intervention, setIntervention] = useState<null | { groupId?: string; itemId?: string; itemLabel?: string; oldSerial?: string }>(null);
   const [signRole, setSignRole] = useState<string | null>(null);
+  const [collaudoOpen, setCollaudoOpen] = useState<null | "compile" | "approve" | "view">(null);
   const [toast, setToast] = useState<{ msg: string; kind: "ok" | "err" } | null>(null);
 
   const meta = STATUS_META[machine.status];
@@ -146,7 +160,14 @@ export default function MachineDetail({
       )}
       {tab === "foto" && <TabFoto machine={machine} onDone={refresh} notify={notify} />}
       {tab === "collaudo" && (
-        <TabCollaudo machine={machine} onSign={caps.sign ? (r) => setSignRole(r) : undefined} />
+        <TabCollaudo
+          machine={machine}
+          onSign={caps.sign ? (r) => setSignRole(r) : undefined}
+          currentUserId={currentUser.id}
+          canCompile={caps.intervention}
+          canApprove={caps.sign}
+          onOpenChecklist={(m) => setCollaudoOpen(m)}
+        />
       )}
       {tab === "diario" && (
         <TabDiario
@@ -180,6 +201,20 @@ export default function MachineDetail({
             setSignRole(null);
             refresh();
             notify("Firma registrata");
+          }}
+          onError={(m) => notify(m, "err")}
+        />
+      )}
+      {collaudoOpen && (
+        <CollaudoModal
+          machine={machine}
+          mode={collaudoOpen}
+          currentUser={currentUser}
+          onClose={() => setCollaudoOpen(null)}
+          onSaved={(msg) => {
+            setCollaudoOpen(null);
+            refresh();
+            notify(msg);
           }}
           onError={(m) => notify(m, "err")}
         />
@@ -832,14 +867,47 @@ function TabFoto({
 /* ── Tab Collaudo ───────────────────────────────────────── */
 const SIGN_ROLES = ["Montaggio", "Collaudo", "Capo officina"];
 
+const COLLAUDO_STATUS_META: Record<
+  string,
+  { label: string; color: string; bg: string }
+> = {
+  DRAFT: { label: "Da compilare", color: "#6b7280", bg: "#f3f4f6" },
+  IN_PROGRESS: { label: "In corso", color: "#b45309", bg: "#fef3c7" },
+  PENDING_APPROVAL: { label: "In attesa di approvazione", color: "#1d4ed8", bg: "#dbeafe" },
+  APPROVED: { label: "Approvato", color: "#0f9d68", bg: "#d1fae5" },
+};
+
+function checklistProgress(answers: Record<string, { value: string | null; note?: string }>) {
+  let done = 0;
+  for (const it of CHECKLIST_TRITURATORE) {
+    const a = answers[String(it.n)];
+    if (a && (a.value === "SI" || a.value === "NO" || a.value === "NA")) done++;
+  }
+  return { done, total: CHECKLIST_TRITURATORE.length };
+}
+
 function TabCollaudo({
   machine,
   onSign,
+  currentUserId,
+  canCompile,
+  canApprove,
+  onOpenChecklist,
 }: {
   machine: Machine;
   onSign?: (role: string) => void;
+  currentUserId: string;
+  canCompile: boolean;
+  canApprove: boolean;
+  onOpenChecklist: (mode: "compile" | "approve" | "view") => void;
 }) {
   const sigByRole = new Map(machine.signatures.map((s) => [s.role, s]));
+  const c = machine.collaudo;
+  const status = c?.status || "DRAFT";
+  const meta = COLLAUDO_STATUS_META[status];
+  const { done, total } = checklistProgress(c?.answers || {});
+  const pct = Math.round((done / total) * 100);
+  const isCompiler = c?.compilerId && c.compilerId === currentUserId;
   return (
     <div className="tab-content">
       <div className="grid-collaudo">
@@ -851,12 +919,82 @@ function TabCollaudo({
                 CL-{machine.year}-{machine.code.slice(-4)}
               </div>
             </div>
+            <span
+              className="phase-chip"
+              style={{ background: meta.bg, color: meta.color }}
+            >
+              {meta.label}
+            </span>
           </div>
-          <p className="muted small">
-            Le firme digitali certificano l&apos;esecuzione di montaggio, collaudo e
-            approvazione. Ogni firma è registrata con operatore, metodo e marca temporale
-            ed è tracciata nel diario macchina.
-          </p>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              padding: "14px 0",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div className="muted small" style={{ marginBottom: 6 }}>
+                Check list di collaudo trituratore (M7.3)
+              </div>
+              <div className="detail-progress-bar" style={{ width: "100%", height: 6 }}>
+                <span style={{ width: pct + "%", background: meta.color }} />
+              </div>
+              <div className="mono small muted" style={{ marginTop: 4 }}>
+                {done} / {total} voci compilate
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {status === "DRAFT" && canCompile && (
+                <button className="btn-primary" onClick={() => onOpenChecklist("compile")}>
+                  <Icon name="doc" size={14} /> Compila check list
+                </button>
+              )}
+              {status === "IN_PROGRESS" && canCompile && (
+                <button className="btn-primary" onClick={() => onOpenChecklist("compile")}>
+                  <Icon name="doc" size={14} /> Continua compilazione
+                </button>
+              )}
+              {status === "PENDING_APPROVAL" && (
+                <>
+                  <button className="btn-ghost" onClick={() => onOpenChecklist("view")}>
+                    <Icon name="doc" size={14} /> Vedi check list
+                  </button>
+                  {canApprove && !isCompiler && (
+                    <button className="btn-success" onClick={() => onOpenChecklist("approve")}>
+                      <Icon name="check" size={14} /> Approva
+                    </button>
+                  )}
+                </>
+              )}
+              {status === "APPROVED" && (
+                <button className="btn-ghost" onClick={() => onOpenChecklist("view")}>
+                  <Icon name="doc" size={14} /> Vedi check list
+                </button>
+              )}
+            </div>
+          </div>
+
+          {(c?.compilerName || c?.approverName) && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              {c?.compilerName && (
+                <div className="muted small">
+                  Compilato da <strong style={{ color: "var(--text)" }}>{c.compilerName}</strong>{" "}
+                  il <span className="mono">{fmtDate(c.compiledAt)}</span>
+                </div>
+              )}
+              {c?.approverName && (
+                <div className="muted small">
+                  Approvato da <strong style={{ color: "var(--text)" }}>{c.approverName}</strong>{" "}
+                  il <span className="mono">{fmtDate(c.approvedAt)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="card-divider" />
           <h4 className="check-group-h">Riepilogo verifiche dal diario</h4>
           <ul className="check-list">
@@ -1441,6 +1579,491 @@ function SignModal({
           <button className="btn-primary" disabled={busy} onClick={confirm}>
             <Icon name="check" size={14} /> {busy ? "Firmo…" : "Conferma firma"}
           </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/* ── Collaudo (Check list) Modal ────────────────────────── */
+type AnsVal = "SI" | "NO" | "NA" | null;
+type AnsMap = Record<string, { value: AnsVal; note: string }>;
+
+function CollaudoModal({
+  machine,
+  mode,
+  currentUser,
+  onClose,
+  onSaved,
+  onError,
+}: {
+  machine: Machine;
+  mode: "compile" | "approve" | "view";
+  currentUser: { id: string; name: string; hasSignature: boolean };
+  onClose: () => void;
+  onSaved: (msg: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const c = machine.collaudo;
+  const readonly = mode === "view" || mode === "approve";
+
+  // Hydrate answers from collaudo (or empty)
+  const [answers, setAnswers] = useState<AnsMap>(() => {
+    const out: AnsMap = {};
+    for (const it of CHECKLIST_TRITURATORE) {
+      const a = c?.answers?.[String(it.n)];
+      out[String(it.n)] = {
+        value: ((a?.value === "SI" || a?.value === "NO" || a?.value === "NA") ? a.value : null) as AnsVal,
+        note: a?.note || "",
+      };
+    }
+    return out;
+  });
+
+  const [remarks, setRemarks] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [useSavedSig, setUseSavedSig] = useState(currentUser.hasSignature);
+  const [saveSignature, setSaveSignature] = useState(!currentUser.hasSignature);
+  const sigRef = useRef<SignaturePadHandle>(null);
+
+  const done = CHECKLIST_TRITURATORE.reduce(
+    (n, it) => n + (answers[String(it.n)].value ? 1 : 0),
+    0
+  );
+  const total = CHECKLIST_TRITURATORE.length;
+  const allDone = done === total;
+
+  function setVal(n: number, v: AnsVal) {
+    if (readonly) return;
+    setAnswers((s) => ({ ...s, [String(n)]: { ...s[String(n)], value: v } }));
+  }
+  function setNote(n: number, note: string) {
+    if (readonly) return;
+    setAnswers((s) => ({ ...s, [String(n)]: { ...s[String(n)], note } }));
+  }
+
+  async function saveDraft() {
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/collaudo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "save", answers }),
+    });
+    setBusy(false);
+    if (res.ok) onSaved("Bozza check list salvata");
+    else {
+      const d = await res.json().catch(() => ({}));
+      onError(d.error || "Errore salvataggio bozza");
+    }
+  }
+
+  async function submitCompile() {
+    if (!allDone) return onError("Tutte le voci devono avere SI / NO / N.A.");
+    let signatureData: string | null = null;
+    if (useSavedSig && currentUser.hasSignature) {
+      // server userà la firma salvata sull'utente
+      signatureData = null;
+    } else {
+      if (sigRef.current?.isEmpty()) return onError("Apporre la firma del compilatore");
+      signatureData = sigRef.current?.toDataURL() || null;
+    }
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/collaudo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "submit",
+        answers,
+        compilerSignature: signatureData,
+        saveSignature: !!signatureData && saveSignature,
+      }),
+    });
+    setBusy(false);
+    if (res.ok) onSaved("Check list inviata per approvazione");
+    else {
+      const d = await res.json().catch(() => ({}));
+      onError(d.error || "Errore invio check list");
+    }
+  }
+
+  async function approve() {
+    let signatureData: string | null = null;
+    if (useSavedSig && currentUser.hasSignature) {
+      signatureData = null;
+    } else {
+      if (sigRef.current?.isEmpty()) return onError("Apporre la firma dell'approvatore");
+      signatureData = sigRef.current?.toDataURL() || null;
+    }
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/collaudo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "approve",
+        approverSignature: signatureData,
+        saveSignature: !!signatureData && saveSignature,
+        remarks: remarks || null,
+      }),
+    });
+    setBusy(false);
+    if (res.ok) onSaved("Verbale di collaudo approvato");
+    else {
+      const d = await res.json().catch(() => ({}));
+      onError(d.error || "Errore approvazione");
+    }
+  }
+
+  const title =
+    mode === "approve"
+      ? "Approva verbale di collaudo"
+      : mode === "view"
+      ? "Verbale di collaudo"
+      : "Compila check list di collaudo";
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: "min(900px, 96vw)", maxHeight: "92vh" }}
+      >
+        <header className="modal-header">
+          <div>
+            <h2>{title}</h2>
+            <div className="muted small">
+              Macchina <span className="mono">{machine.code}</span> · {machine.customer} ·{" "}
+              CL-{machine.year}-{machine.code.slice(-4)} · {done}/{total} compilate
+            </div>
+          </div>
+          <button className="icon-btn" onClick={onClose}>
+            <Icon name="x" size={18} />
+          </button>
+        </header>
+
+        <div className="modal-body" style={{ gap: 0 }}>
+          <div
+            className="muted small"
+            style={{
+              position: "sticky",
+              top: 0,
+              background: "var(--surface)",
+              padding: "6px 0 10px",
+              borderBottom: "1px solid var(--border)",
+              marginBottom: 10,
+              zIndex: 1,
+            }}
+          >
+            CHECK LIST COLLAUDO TRITURATORE — M7.3 (63 voci)
+          </div>
+
+          {CHECKLIST_TRITURATORE.map((it) => {
+            const a = answers[String(it.n)];
+            return (
+              <div
+                key={it.n}
+                style={{
+                  padding: "10px 0",
+                  borderBottom: "1px dashed var(--border)",
+                }}
+              >
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <div
+                    className="mono muted"
+                    style={{ minWidth: 28, paddingTop: 6, fontWeight: 600 }}
+                  >
+                    {it.n}.
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, lineHeight: 1.45 }}>{it.text}</div>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        marginTop: 8,
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                      }}
+                    >
+                      {(["SI", "NO", "NA"] as const).map((v) => {
+                        const active = a.value === v;
+                        const tone =
+                          v === "SI" ? "#0f9d68" : v === "NO" ? "#dc2626" : "#6b7280";
+                        return (
+                          <button
+                            key={v}
+                            type="button"
+                            disabled={readonly}
+                            onClick={() => setVal(it.n, v)}
+                            className="chip-btn"
+                            style={{
+                              cursor: readonly ? "default" : "pointer",
+                              borderColor: active ? tone : "var(--border)",
+                              background: active ? tone : "var(--surface)",
+                              color: active ? "#fff" : tone,
+                              fontWeight: 600,
+                              padding: "5px 14px",
+                              opacity: readonly && !active ? 0.4 : 1,
+                            }}
+                          >
+                            {v === "NA" ? "N.A." : v}
+                          </button>
+                        );
+                      })}
+                      <input
+                        className="input"
+                        placeholder="Note (opzionale)"
+                        value={a.note}
+                        onChange={(e) => setNote(it.n, e.target.value)}
+                        readOnly={readonly}
+                        style={{ flex: 1, minWidth: 200 }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Footer: compilatore + approvatore */}
+          <div
+            style={{
+              marginTop: 16,
+              padding: 14,
+              background: "var(--bg-3)",
+              borderRadius: 10,
+              border: "1px solid var(--border)",
+            }}
+          >
+            <h4 className="check-group-h" style={{ margin: "0 0 12px" }}>
+              Compilatore
+            </h4>
+            <div className="form-grid">
+              <div className="form-row">
+                <label>Nome compilatore</label>
+                <input
+                  className="input"
+                  readOnly
+                  value={c?.compilerName || currentUser.name}
+                />
+              </div>
+              <div className="form-row">
+                <label>Data compilazione</label>
+                <input
+                  className="input mono"
+                  readOnly
+                  value={c?.compiledAt ? fmtDate(c.compiledAt) : fmtDate(new Date().toISOString())}
+                />
+              </div>
+            </div>
+
+            <div className="form-row" style={{ marginTop: 10 }}>
+              <label>Firma compilatore</label>
+              {c?.compilerSignature ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={c.compilerSignature}
+                  alt="firma"
+                  style={{ maxHeight: 80, background: "#fff", border: "1px solid var(--border)", borderRadius: 6, padding: 4 }}
+                />
+              ) : mode === "compile" ? (
+                currentUser.hasSignature && useSavedSig ? (
+                  <div
+                    style={{
+                      padding: 12,
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <Icon name="check" size={16} color="var(--green)" />
+                    <span className="small">Verrà usata la firma salvata sul tuo profilo.</span>
+                    <button
+                      className="btn-ghost-sm"
+                      style={{ marginLeft: "auto" }}
+                      type="button"
+                      onClick={() => setUseSavedSig(false)}
+                    >
+                      Disegna nuova
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <SignaturePad ref={sigRef} height={120} />
+                    <div className="sig-actions">
+                      <button
+                        className="btn-ghost-sm"
+                        type="button"
+                        onClick={() => sigRef.current?.clear()}
+                      >
+                        Cancella
+                      </button>
+                      <label className="small" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          type="checkbox"
+                          checked={saveSignature}
+                          onChange={(e) => setSaveSignature(e.target.checked)}
+                        />
+                        Salva firma sul mio profilo
+                      </label>
+                      {currentUser.hasSignature && (
+                        <button
+                          className="btn-ghost-sm"
+                          type="button"
+                          onClick={() => setUseSavedSig(true)}
+                        >
+                          Usa firma salvata
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              ) : (
+                <span className="muted small">— da firmare</span>
+              )}
+            </div>
+
+            {(mode === "approve" || mode === "view" || c?.approverName) && (
+              <>
+                <div className="card-divider" />
+                <h4 className="check-group-h" style={{ margin: "0 0 12px" }}>
+                  Approvato da
+                </h4>
+                <div className="form-grid">
+                  <div className="form-row">
+                    <label>Nome approvatore</label>
+                    <input
+                      className="input"
+                      readOnly
+                      value={c?.approverName || (mode === "approve" ? currentUser.name : "")}
+                      placeholder="—"
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label>Data approvazione</label>
+                    <input
+                      className="input mono"
+                      readOnly
+                      value={
+                        c?.approvedAt
+                          ? fmtDate(c.approvedAt)
+                          : mode === "approve"
+                          ? fmtDate(new Date().toISOString())
+                          : "—"
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="form-row" style={{ marginTop: 10 }}>
+                  <label>Note approvazione</label>
+                  <textarea
+                    className="input"
+                    rows={2}
+                    readOnly={mode !== "approve"}
+                    value={mode === "approve" ? remarks : c?.approverRemarks || ""}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    placeholder={mode === "approve" ? "Eventuali note dell'approvatore" : "—"}
+                  />
+                </div>
+                <div className="form-row" style={{ marginTop: 10 }}>
+                  <label>Firma approvatore</label>
+                  {c?.approverSignature ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={c.approverSignature}
+                      alt="firma approvatore"
+                      style={{ maxHeight: 80, background: "#fff", border: "1px solid var(--border)", borderRadius: 6, padding: 4 }}
+                    />
+                  ) : mode === "approve" ? (
+                    currentUser.hasSignature && useSavedSig ? (
+                      <div
+                        style={{
+                          padding: 12,
+                          background: "var(--surface)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 8,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                      >
+                        <Icon name="check" size={16} color="var(--green)" />
+                        <span className="small">Verrà usata la firma salvata sul tuo profilo.</span>
+                        <button
+                          className="btn-ghost-sm"
+                          style={{ marginLeft: "auto" }}
+                          type="button"
+                          onClick={() => setUseSavedSig(false)}
+                        >
+                          Disegna nuova
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <SignaturePad ref={sigRef} height={120} />
+                        <div className="sig-actions">
+                          <button
+                            className="btn-ghost-sm"
+                            type="button"
+                            onClick={() => sigRef.current?.clear()}
+                          >
+                            Cancella
+                          </button>
+                          <label className="small" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input
+                              type="checkbox"
+                              checked={saveSignature}
+                              onChange={(e) => setSaveSignature(e.target.checked)}
+                            />
+                            Salva firma sul mio profilo
+                          </label>
+                          {currentUser.hasSignature && (
+                            <button
+                              className="btn-ghost-sm"
+                              type="button"
+                              onClick={() => setUseSavedSig(true)}
+                            >
+                              Usa firma salvata
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    <span className="muted small">— da firmare</span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <footer className="modal-footer">
+          <button className="btn-ghost" onClick={onClose}>
+            Chiudi
+          </button>
+          {mode === "compile" && (
+            <>
+              <button className="btn-ghost" disabled={busy} onClick={saveDraft}>
+                Salva bozza
+              </button>
+              <button
+                className="btn-primary"
+                disabled={busy || !allDone}
+                onClick={submitCompile}
+                title={!allDone ? "Compila tutte le voci prima di inviare" : ""}
+              >
+                <Icon name="check" size={14} /> {busy ? "Invio…" : "Invia per approvazione"}
+              </button>
+            </>
+          )}
+          {mode === "approve" && (
+            <button className="btn-success" disabled={busy} onClick={approve}>
+              <Icon name="check" size={14} /> {busy ? "Approvo…" : "Approva verbale"}
+            </button>
+          )}
         </footer>
       </div>
     </div>

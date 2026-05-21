@@ -23,6 +23,7 @@ export default async function MachinePage({
       documents: { orderBy: { uploadedAt: "desc" } },
       signatures: true,
       milestones: true,
+      collaudo: true,
     },
   });
   if (!machine) notFound();
@@ -113,13 +114,33 @@ export default async function MachinePage({
       date: m.date.toISOString(),
       source: m.source,
     })),
+    collaudo: machine.collaudo
+      ? {
+          status: machine.collaudo.status,
+          answers: (machine.collaudo.answers as Record<string, { value: string | null; note?: string }>) || {},
+          compilerName: machine.collaudo.compilerName,
+          compiledAt: machine.collaudo.compiledAt?.toISOString() || null,
+          compilerSignature: machine.collaudo.compilerSignature,
+          approverName: machine.collaudo.approverName,
+          approvedAt: machine.collaudo.approvedAt?.toISOString() || null,
+          approverSignature: machine.collaudo.approverSignature,
+          approverRemarks: machine.collaudo.approverRemarks,
+          compilerId: machine.collaudo.compilerId,
+        }
+      : null,
   };
 
   return (
     <MachineDetail
       machine={data}
       qrDataUrl={qrDataUrl}
-      currentUser={{ name: user!.name, role: ROLE_LABEL[user!.role], hasPin: !!user!.pinHash }}
+      currentUser={{
+        id: user!.id,
+        name: user!.name,
+        role: ROLE_LABEL[user!.role],
+        hasPin: !!user!.pinHash,
+        hasSignature: !!user!.signatureImage,
+      }}
       caps={{
         edit: caps["machine.edit"],
         intervention: caps["machine.intervention"],
