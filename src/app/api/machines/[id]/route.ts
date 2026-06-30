@@ -27,6 +27,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (typeof b.job === "string" && b.job.trim()) data.job = b.job.trim();
   if (typeof b.jobBody === "string") data.jobBody = b.jobBody.trim() || null;
   if (typeof b.jobContainer === "string") data.jobContainer = b.jobContainer.trim() || null;
+  if (typeof b.erpBodyOrder === "string") data.erpBodyOrder = b.erpBodyOrder.trim() || null;
+  if (typeof b.erpContainerOrder === "string")
+    data.erpContainerOrder = b.erpContainerOrder.trim() || null;
+  if (typeof b.erpStandOrder === "string") data.erpStandOrder = b.erpStandOrder.trim() || null;
+  if (typeof b.erpBladesOrder === "string")
+    data.erpBladesOrder = b.erpBladesOrder.trim() || null;
   if (Object.keys(data).length === 0)
     return NextResponse.json({ error: "Nessun campo valido" }, { status: 400 });
 

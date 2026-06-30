@@ -29,6 +29,12 @@ export default async function PeoplePage() {
       role: u.role,
       active: u.active,
       hasPin: !!u.pinHash,
+      matricola: u.matricola,
+      badgeId: u.badgeId,
+      zona: u.zona,
+      phone: u.phone,
+      photo: u.photo,
+      reparto: u.reparto,
       signs: c?._count._all ?? 0,
       last: c?._max.signedAt ? c._max.signedAt.toISOString() : null,
     };

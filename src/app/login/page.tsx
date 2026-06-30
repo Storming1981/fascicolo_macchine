@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { currentUser } from "@/lib/auth";
 import LoginForm from "./LoginForm";
 
 export default async function LoginPage() {
-  const s = await getSession();
-  if (s) redirect("/dashboard");
+  const u = await currentUser();
+  if (u) redirect("/dashboard");
   return (
     <div className="login-shell">
       <div className="login-side">

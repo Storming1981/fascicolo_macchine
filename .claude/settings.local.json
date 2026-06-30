@@ -14,7 +14,18 @@
       "Bash(powershell -NoProfile -Command 'Get-Process node -EA SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.Id -Force -EA Stop } catch {} }')",
       "Bash(git remote *)",
       "Bash(powershell -NoProfile -Command 'Get-NetTCPConnection -LocalPort 3000 -State Listen -EA SilentlyContinue | Select -Expand OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -EA SilentlyContinue }; Get-Process node -EA SilentlyContinue | Where-Object { $_.StartTime -gt \\(Get-Date\\).AddHours\\(-2\\) } | ForEach-Object { try { Stop-Process -Id $_.Id -Force -EA Stop } catch {} }')",
-      "Bash(grep -nE \"^window\\\\.|^export default|^}\\\\s*$\" \"src/app/\\(app\\)/macchine/[code]/MachineDetail.tsx\")"
+      "Bash(grep -nE \"^window\\\\.|^export default|^}\\\\s*$\" \"src/app/\\(app\\)/macchine/[code]/MachineDetail.tsx\")",
+      "Bash(tee scripts/erp-explore.log)",
+      "Bash(npx tsx *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(tee scripts/erp-match-jobs.log)",
+      "Bash(tee scripts/erp-probe-job.log)",
+      "Bash(rm -f scripts/erp-lib-test.ts)",
+      "Bash(git check-ignore *)",
+      "Bash(ls .claude/projects/c--Users-ute9-Desktop-App-fascicolo-tecnico/memory/)",
+      "Bash(cat .claude/projects/c--Users-ute9-Desktop-App-fascicolo-tecnico/memory/MEMORY.md)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Select-Object ProcessId, @{N='CmdLine';E={$_.CommandLine}} | Format-Table -AutoSize -Wrap)",
+      "Bash(npm run *)"
     ]
   }
 }

@@ -8,7 +8,16 @@ export type PermAction =
   | "machine.sign"
   | "machine.import"
   | "users.manage"
-  | "settings.manage";
+  | "settings.manage"
+  | "service.view"
+  | "intervento.create"
+  | "intervento.edit"
+  | "intervento.sign"
+  | "customer.manage"
+  | "chat.send"
+  | "chat.import"
+  | "knowledge.view"
+  | "knowledge.manage";
 
 export const PERM_ACTIONS: { key: PermAction; label: string }[] = [
   { key: "machine.create", label: "Creare fascicoli macchina" },
@@ -18,6 +27,15 @@ export const PERM_ACTIONS: { key: PermAction; label: string }[] = [
   { key: "machine.import", label: "Import massivo Excel/CSV" },
   { key: "users.manage", label: "Gestire operatori" },
   { key: "settings.manage", label: "Gestire impostazioni" },
+  { key: "service.view", label: "Accedere al modulo Service" },
+  { key: "intervento.create", label: "Creare interventi di service" },
+  { key: "intervento.edit", label: "Modificare / assegnare interventi" },
+  { key: "intervento.sign", label: "Firmare rapportini di intervento" },
+  { key: "customer.manage", label: "Gestire anagrafica clienti / cantieri" },
+  { key: "chat.send", label: "Inviare messaggi nel portale chat" },
+  { key: "chat.import", label: "Importare storico chat WhatsApp/Telegram" },
+  { key: "knowledge.view", label: "Consultare la Knowledge base" },
+  { key: "knowledge.manage", label: "Creare / modificare articoli Knowledge" },
 ];
 
 export const ALL_ROLES = Object.keys(ROLE_LABEL) as Role[];
@@ -43,13 +61,40 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     "machine.import": true,
     "users.manage": false,
     "settings.manage": false,
+    "service.view": true,
+    "intervento.create": true,
+    "intervento.edit": true,
+    "intervento.sign": true,
+    "customer.manage": true,
+    "chat.send": true,
+    "chat.import": true,
+    "knowledge.view": true,
+    "knowledge.manage": true,
   },
-  MONTATORE: { "machine.intervention": true, "machine.sign": true },
-  CABLATORE: { "machine.intervention": true, "machine.sign": true },
-  PROGRAMMATORE: { "machine.intervention": true, "machine.sign": true },
-  COLLAUDATORE: { "machine.intervention": true, "machine.sign": true, "machine.edit": true },
-  TECNICO_CAMPO: { "machine.intervention": true, "machine.sign": true, "machine.edit": true },
-  LOGISTICA: { "machine.edit": true },
+  MONTATORE: { "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
+  CABLATORE: { "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
+  PROGRAMMATORE: { "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
+  COLLAUDATORE: {
+    "machine.intervention": true,
+    "machine.sign": true,
+    "machine.edit": true,
+    "service.view": true,
+    "intervento.sign": true,
+    "knowledge.view": true,
+  },
+  TECNICO_CAMPO: {
+    "machine.intervention": true,
+    "machine.sign": true,
+    "machine.edit": true,
+    "service.view": true,
+    "intervento.create": true,
+    "intervento.edit": true,
+    "intervento.sign": true,
+    "chat.send": true,
+    "chat.import": true,
+    "knowledge.view": true,
+  },
+  LOGISTICA: { "machine.edit": true, "service.view": true, "knowledge.view": true },
 };
 
 /** Valuta un permesso. ADMIN può sempre tutto (non si può autobloccare). */

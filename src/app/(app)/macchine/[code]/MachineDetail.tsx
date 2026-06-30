@@ -1,14 +1,26 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon, { Flag } from "@/components/Icon";
 import { SignaturePad, SignaturePadHandle } from "@/components/SignaturePad";
 import { COMPONENT_GROUPS } from "@/lib/components";
-import { STATUS_META, PHASE_META, STATUS_ORDER } from "@/lib/domain";
+import {
+  STATUS_META,
+  PHASE_META,
+  STATUS_ORDER,
+  INTERVENTO_STATUS_META,
+  PRIORITY_META,
+} from "@/lib/domain";
 import { MILESTONES, milestoneDef } from "@/lib/milestones";
 import { CHECKLIST_TRITURATORE } from "@/lib/checklist";
 import { fmtDate, fmtBytes } from "@/lib/format";
-import type { MachineStatus } from "@prisma/client";
+import type { MachineStatus, InterventoStatus } from "@prisma/client";
+
+type ServiceData = {
+  interventi: { id: string; code: string; title: string; status: InterventoStatus; priority: number }[];
+  chats: { id: string; title: string; channel: string; contactName: string | null; messages: number }[];
+};
 
 type Item = { id: string; position: number; label: string; serial: string | null; note: string | null };
 type Comp = { id: string; groupId: string; brand: string | null; extra: Record<string, string> | null; items: Item[] };
@@ -19,8 +31,11 @@ type Diary = {
 };
 type Machine = {
   id: string; code: string; job: string; jobBody: string | null; jobContainer: string | null;
+  erpBodyOrder: string | null; erpContainerOrder: string | null;
+  erpStandOrder: string | null; erpBladesOrder: string | null;
+  erpDescription: string | null; erpHours: number | null; erpSyncedAt: string | null;
   plantType: string | null;
-  model: string; year: number; customer: string; country: string; countryCode: string;
+  model: string; year: number; customer: string; customerId: string | null; country: string; countryCode: string;
   site: string | null; status: MachineStatus; progress: number;
   productionStart: string | null; deliveryDate: string | null; pressureSettings: string | null;
   plateWeight: string | null; platePower: string | null; plateVoltage: string | null; notes: string | null;
@@ -50,21 +65,32 @@ const TABS = [
   { id: "foto", label: "Foto produzione", icon: "image" },
   { id: "collaudo", label: "Collaudo & Firme", icon: "sign" },
   { id: "diario", label: "Diario macchina", icon: "clock" },
+  { id: "service", label: "Service", icon: "wrench" },
   { id: "qr", label: "QR & Etichetta", icon: "qr" },
 ];
 
 export default function MachineDetail({
   machine,
   qrDataUrl,
+  service,
   currentUser,
   caps,
 }: {
   machine: Machine;
   qrDataUrl: string;
+  service: ServiceData;
   currentUser: { id: string; name: string; role: string; hasPin: boolean; hasSignature: boolean };
-  caps: { edit: boolean; intervention: boolean; sign: boolean };
+  caps: {
+    edit: boolean;
+    intervention: boolean;
+    sign: boolean;
+    service: boolean;
+    interventoCreate: boolean;
+    chatSend: boolean;
+  };
 }) {
   const router = useRouter();
+  const tabs = TABS.filter((t) => t.id !== "service" || caps.service);
   const [tab, setTab] = useState("anagrafica");
   const [intervention, setIntervention] = useState<null | { groupId?: string; itemId?: string; itemLabel?: string; oldSerial?: string }>(null);
   const [signRole, setSignRole] = useState<string | null>(null);
@@ -135,7 +161,7 @@ export default function MachineDetail({
       </header>
 
       <div className="tabs">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             className={"tab" + (tab === t.id ? " active" : "")}
@@ -174,6 +200,9 @@ export default function MachineDetail({
           machine={machine}
           onIntervention={caps.intervention ? () => setIntervention({}) : undefined}
         />
+      )}
+      {tab === "service" && caps.service && (
+        <TabService machine={machine} service={service} caps={caps} notify={notify} />
       )}
       {tab === "qr" && <TabQR machine={machine} qrDataUrl={qrDataUrl} />}
 
@@ -474,6 +503,9 @@ function TabAnagrafica({
             <div><dt>Data consegna</dt><dd>{fmtDate(machine.deliveryDate)}</dd></div>
           </dl>
         </section>
+
+        <ErpCard machine={machine} canEdit={canEdit} onDone={onDone} notify={notify} />
+
         <section className="card">
           <div className="card-header"><h3>Targa tecnica</h3></div>
           <dl className="kv">
@@ -575,6 +607,416 @@ function TabAnagrafica({
           </ul>
         </section>
       </div>
+    </div>
+  );
+}
+
+/* ── Card Dati gestionale (ERP / SQL Server ZATO) ───────── */
+type ErpJob = {
+  job: string;
+  found: boolean;
+  description: string | null;
+  customer: string | null;
+  customerCountryIso: string | null;
+  openedAt: string | null;
+  closedAt: string | null;
+  isClosed: boolean;
+  productionStart: string | null;
+  productionEnd: string | null;
+  progressRows: number;
+  hours: number;
+};
+type ErpOrderArticle = {
+  code: string | null;
+  desc: string | null;
+  hours: number;
+  rows: number;
+  start: string | null;
+  end: string | null;
+};
+type ErpOrderData = {
+  key: string;
+  found: boolean;
+  tipork: string;
+  anno: number;
+  serie: string;
+  num: number;
+  hours: number;
+  start: string | null;
+  end: string | null;
+  articles: ErpOrderArticle[];
+};
+type ErpData = {
+  jobs: ErpJob[];
+  orders: { role: string; data: ErpOrderData }[];
+  productionStart: string | null;
+  productionEnd: string | null;
+  totalHours: number;
+  hasProduction: boolean;
+};
+// Voce della tendina ordini di una commessa
+type ErpOrder = {
+  key: string;
+  tipork: string;
+  anno: number;
+  serie: string;
+  num: number;
+  mainArticleCode: string | null;
+  mainArticleDesc: string | null;
+  hours: number;
+  start: string | null;
+  end: string | null;
+  rows: number;
+  articleCount: number;
+};
+
+const GENERIC_COMMESSA = "999999999"; // commessa generica impianti nuovi
+function isGenericCommessa(v: string | null | undefined): boolean {
+  return !!v && String(v).trim() === GENERIC_COMMESSA;
+}
+
+function ErpCard({
+  machine,
+  canEdit,
+  onDone,
+  notify,
+}: {
+  machine: Machine;
+  canEdit: boolean;
+  onDone: () => void;
+  notify: (m: string, k?: "ok" | "err") => void;
+}) {
+  const [state, setState] = useState<"loading" | "ok" | "error" | "unavailable">("loading");
+  const [data, setData] = useState<ErpData | null>(null);
+  const [errMsg, setErrMsg] = useState<string>("");
+  const [applying, setApplying] = useState(false);
+
+  async function load() {
+    setState("loading");
+    try {
+      const res = await fetch(`/api/machines/${machine.id}/erp-sync`);
+      if (res.status === 503) {
+        setState("unavailable");
+        return;
+      }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrMsg(d.error || "Gestionale non raggiungibile");
+        setState("error");
+        return;
+      }
+      setData(d);
+      setState("ok");
+    } catch {
+      setErrMsg("Gestionale non raggiungibile");
+      setState("error");
+    }
+  }
+
+  // Si riaggiorna automaticamente quando cambiano i job (anche dopo "Modifica job")
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [machine.id, machine.job, machine.jobBody, machine.jobContainer]);
+
+  async function apply() {
+    setApplying(true);
+    const res = await fetch(`/api/machines/${machine.id}/erp-sync`, { method: "POST" });
+    setApplying(false);
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) {
+      notify("Date di produzione importate dal gestionale");
+      onDone();
+    } else {
+      notify(d.error || "Errore importazione", "err");
+    }
+  }
+
+  const jobsList = data?.jobs ?? [];
+  const found = jobsList.filter((j) => j.found);
+  // Etichetta il ruolo di ciascun job (Vendita / Corpo / Container)
+  const roleOf = (job: string): string => {
+    const r: string[] = [];
+    if (machine.job && job === machine.job) r.push("Vendita");
+    if (machine.jobBody && job === machine.jobBody) r.push("Corpo");
+    if (machine.jobContainer && job === machine.jobContainer) r.push("Container");
+    return r.join(" / ");
+  };
+  const fmtHours = (h: number) =>
+    h > 0 ? `${h.toLocaleString("it-IT", { maximumFractionDigits: 1 })} h` : "—";
+
+  return (
+    <section className="card">
+      <div className="card-header">
+        <h3>Dati gestionale (ERP)</h3>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="btn-ghost-sm" onClick={load} disabled={state === "loading"}>
+            <Icon name="clock" size={13} /> Aggiorna
+          </button>
+          {canEdit && data?.hasProduction && (
+            <button className="btn-primary-sm" disabled={applying} onClick={apply}>
+              <Icon name="check" size={13} /> Applica date
+            </button>
+          )}
+        </div>
+      </div>
+
+      {state === "loading" && <p className="muted small">Lettura dal gestionale…</p>}
+
+      {state === "unavailable" && (
+        <p className="muted small">Integrazione gestionale non configurata.</p>
+      )}
+
+      {state === "error" && (
+        <p className="muted small" style={{ color: "var(--danger, #b3261e)" }}>
+          {errMsg}
+        </p>
+      )}
+
+      {state === "ok" && data && (
+        <>
+          {jobsList.length === 0 ? (
+            <p className="muted small">
+              Nessun job numerico impostato in anagrafica (Job Number / Body / Container).
+            </p>
+          ) : (
+            <>
+              <dl className="kv">
+                <div>
+                  <dt>Inizio produzione (gestionale)</dt>
+                  <dd className="mono">
+                    {data.productionStart ? (
+                      fmtDate(data.productionStart)
+                    ) : (
+                      <span className="muted">— nessuna timbratura</span>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Fine produzione (gestionale)</dt>
+                  <dd className="mono">
+                    {data.productionEnd ? (
+                      fmtDate(data.productionEnd)
+                    ) : (
+                      <span className="muted">— in corso / assente</span>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Ore di lavorazione totali</dt>
+                  <dd className="mono">{fmtHours(data.totalHours)}</dd>
+                </div>
+              </dl>
+
+              <table className="erp-jobs">
+                <thead>
+                  <tr>
+                    <th>Job / Commessa</th>
+                    <th>Ruolo</th>
+                    <th>Descrizione</th>
+                    <th>Cliente</th>
+                    <th>Aperta</th>
+                    <th>Timbr.</th>
+                    <th>Ore</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobsList.map((j) => (
+                    <tr key={j.job} style={j.found ? undefined : { opacity: 0.55 }}>
+                      <td className="mono">{j.job}</td>
+                      <td>{roleOf(j.job) || "—"}</td>
+                      <td>
+                        {j.found ? (
+                          j.description || "—"
+                        ) : (
+                          <span className="muted">non trovata nel gestionale</span>
+                        )}
+                      </td>
+                      <td>{j.customer || "—"}</td>
+                      <td className="mono">{j.openedAt ? fmtDate(j.openedAt) : "—"}</td>
+                      <td className="mono">{j.found ? j.progressRows || 0 : "—"}</td>
+                      <td className="mono">{j.found ? fmtHours(j.hours) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Ordini di produzione: solo impianti nuovi (Body e Container = 999999999) */}
+              {isGenericCommessa(machine.jobBody) &&
+                isGenericCommessa(machine.jobContainer) && (
+                  <div style={{ marginTop: 14 }}>
+                    <div
+                      className="muted small"
+                      style={{ fontWeight: 600, marginBottom: 6 }}
+                    >
+                      Ordini di produzione (impianto nuovo, commessa 999999999)
+                    </div>
+                    <OrderPicker
+                      machineId={machine.id}
+                      role="Corpo"
+                      commessa={GENERIC_COMMESSA}
+                      field="erpBodyOrder"
+                      currentKey={machine.erpBodyOrder}
+                      canEdit={canEdit}
+                      onDone={onDone}
+                      notify={notify}
+                    />
+                    <OrderPicker
+                      machineId={machine.id}
+                      role="Container"
+                      commessa={GENERIC_COMMESSA}
+                      field="erpContainerOrder"
+                      currentKey={machine.erpContainerOrder}
+                      canEdit={canEdit}
+                      onDone={onDone}
+                      notify={notify}
+                    />
+                    <OrderPicker
+                      machineId={machine.id}
+                      role="Cavalletto"
+                      commessa={GENERIC_COMMESSA}
+                      field="erpStandOrder"
+                      currentKey={machine.erpStandOrder}
+                      canEdit={canEdit}
+                      onDone={onDone}
+                      notify={notify}
+                    />
+                    <OrderPicker
+                      machineId={machine.id}
+                      role="Lame"
+                      commessa={GENERIC_COMMESSA}
+                      field="erpBladesOrder"
+                      currentKey={machine.erpBladesOrder}
+                      canEdit={canEdit}
+                      onDone={onDone}
+                      notify={notify}
+                    />
+                  </div>
+                )}
+
+              {/* Dettaglio articoli degli ordini selezionati */}
+              {data.orders.filter((o) => o.data.found).map((o) => (
+                <div key={o.role + o.data.key} style={{ marginTop: 12 }}>
+                  <div className="muted small" style={{ fontWeight: 600 }}>
+                    Articoli ordine {o.role} — {o.data.tipork}/{o.data.anno}/
+                    {o.data.num} · {fmtHours(o.data.hours)} ·{" "}
+                    {o.data.start ? fmtDate(o.data.start) : "—"} →{" "}
+                    {o.data.end ? fmtDate(o.data.end) : "—"}
+                  </div>
+                  <table className="erp-jobs">
+                    <thead>
+                      <tr>
+                        <th>Articolo</th>
+                        <th>Descrizione</th>
+                        <th>Timbr.</th>
+                        <th>Ore</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {o.data.articles.map((a) => (
+                        <tr key={a.code || a.desc || Math.random()}>
+                          <td className="mono">{a.code || "—"}</td>
+                          <td>{a.desc || "—"}</td>
+                          <td className="mono">{a.rows}</td>
+                          <td className="mono">{fmtHours(a.hours)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+
+              <p className="muted small" style={{ marginTop: 8 }}>
+                Inizio/fine produzione = prima/ultima timbratura, ore = somma tempi
+                eseguiti (tabella <span className="mono">avlavp</span>). Per gli impianti
+                nuovi seleziona l&apos;ordine: ore/date/articoli vengono dall&apos;ordine,
+                non dalla commessa generica. “Applica date” aggiorna le date di stato del
+                diario con origine <span className="mono">GESTIONALE</span>.
+              </p>
+            </>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/* ── Selettore ordine di produzione di una commessa ─────── */
+function OrderPicker({
+  machineId,
+  role,
+  commessa,
+  field,
+  currentKey,
+  canEdit,
+  onDone,
+  notify,
+}: {
+  machineId: string;
+  role: string;
+  commessa: string;
+  field: "erpBodyOrder" | "erpContainerOrder" | "erpStandOrder" | "erpBladesOrder";
+  currentKey: string | null;
+  canEdit: boolean;
+  onDone: () => void;
+  notify: (m: string, k?: "ok" | "err") => void;
+}) {
+  const [orders, setOrders] = useState<ErpOrder[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch(`/api/erp/commessa/${encodeURIComponent(commessa)}/orders`)
+      .then((r) => (r.ok ? r.json() : { orders: [] }))
+      .then((d) => {
+        if (alive) setOrders(d.orders ?? []);
+      })
+      .catch(() => alive && setOrders([]))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [commessa]);
+
+  async function select(key: string) {
+    setSaving(true);
+    const res = await fetch(`/api/machines/${machineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: key }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      notify(key ? `Ordine ${role} selezionato` : `Ordine ${role} rimosso`);
+      onDone();
+    } else {
+      notify("Errore salvataggio ordine", "err");
+    }
+  }
+
+  return (
+    <div className="erp-order-row">
+      <label className="muted small" style={{ minWidth: 90 }}>
+        Ordine {role}
+      </label>
+      <select
+        className="input"
+        disabled={!canEdit || saving || loading}
+        value={currentKey ?? ""}
+        onChange={(e) => select(e.target.value)}
+      >
+        <option value="">
+          {loading ? "Caricamento…" : `— nessun ordine (${(orders ?? []).length} disponibili)`}
+        </option>
+        {(orders ?? []).map((o) => (
+          <option key={o.key} value={o.key}>
+            {o.tipork}/{o.anno}/{o.num} · {o.mainArticleDesc || o.mainArticleCode || "?"} ·{" "}
+            {o.hours.toLocaleString("it-IT", { maximumFractionDigits: 1 })} h
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -1214,6 +1656,123 @@ function TabQR({ machine, qrDataUrl }: { machine: Machine; qrDataUrl: string }) 
             <li><Icon name="image" size={16} /> <span className="fname">{machine.photos.length} foto</span></li>
             <li><Icon name="clock" size={16} /> <span className="fname">{machine.diary.length} eventi nel diario</span></li>
             <li><Icon name="sign" size={16} /> <span className="fname">{machine.signatures.length} firme registrate</span></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/* ── Tab Service (interventi + chat collegati al fascicolo) ─ */
+function TabService({
+  machine,
+  service,
+  caps,
+  notify,
+}: {
+  machine: Machine;
+  service: ServiceData;
+  caps: { interventoCreate: boolean; chatSend: boolean };
+  notify: (msg: string, kind?: "ok" | "err") => void;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<"int" | "chat" | null>(null);
+
+  async function newIntervento() {
+    setBusy("int");
+    try {
+      const res = await fetch("/api/interventi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `Intervento su ${machine.job || machine.code}`,
+          machineId: machine.id,
+          customerId: machine.customerId ?? undefined,
+        }),
+      });
+      const d = await res.json().catch(() => null);
+      if (res.ok) router.push(`/service/interventi/${d.id}`);
+      else notify(d?.error ?? "Errore", "err");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function openChat() {
+    setBusy("chat");
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `Chat ${machine.job || machine.code}`,
+          machineId: machine.id,
+          customerId: machine.customerId ?? undefined,
+        }),
+      });
+      const d = await res.json().catch(() => null);
+      if (res.ok) router.push(`/service/chat?conv=${d.id}`);
+      else notify(d?.error ?? "Errore", "err");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="tab-content">
+      <div className="grid-two">
+        <section className="card">
+          <div className="card-header">
+            <h3>Interventi in cantiere</h3>
+            {caps.interventoCreate && (
+              <button className="btn-ghost-sm" onClick={newIntervento} disabled={busy !== null}>
+                <Icon name="plus" size={13} /> {busy === "int" ? "…" : "Nuovo"}
+              </button>
+            )}
+          </div>
+          <ul className="mini-list">
+            {service.interventi.map((i) => {
+              const m = INTERVENTO_STATUS_META[i.status];
+              const prio = PRIORITY_META[i.priority] ?? PRIORITY_META[3];
+              return (
+                <li key={i.id}>
+                  <Link href={`/service/interventi/${i.id}`} className="mini-row">
+                    <span className="mono muted small">{i.code}</span>
+                    <span style={{ flex: 1, fontWeight: 600 }}>{i.title}</span>
+                    <span className="prio-chip" style={{ background: prio.color + "1f", color: prio.color }}>{prio.short}</span>
+                    <span className="status-chip" style={{ background: m.color + "22", color: m.color }}>{m.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+            {service.interventi.length === 0 && (
+              <li className="muted small">Nessun intervento di service per questa macchina.</li>
+            )}
+          </ul>
+        </section>
+
+        <section className="card">
+          <div className="card-header">
+            <h3>Conversazioni</h3>
+            {caps.chatSend && (
+              <button className="btn-ghost-sm" onClick={openChat} disabled={busy !== null}>
+                <Icon name="sign" size={13} /> {busy === "chat" ? "…" : "Apri chat"}
+              </button>
+            )}
+          </div>
+          <ul className="mini-list">
+            {service.chats.map((c) => (
+              <li key={c.id}>
+                <Link href={`/service/chat?conv=${c.id}`} className="mini-row">
+                  <span style={{ flex: 1, fontWeight: 600 }}>{c.contactName ?? c.title}</span>
+                  <span className="muted small">{c.channel}</span>
+                  <span className="mono muted small">{c.messages} msg</span>
+                </Link>
+              </li>
+            ))}
+            {service.chats.length === 0 && (
+              <li className="muted small">Nessuna conversazione collegata.</li>
+            )}
           </ul>
         </section>
       </div>

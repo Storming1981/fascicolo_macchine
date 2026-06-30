@@ -12,5 +12,14 @@ export default async function SettingsPage() {
   const perms = await getPermissions();
   if (!can(user.role, "settings.manage", perms)) redirect("/dashboard");
   const plantConfig = await getPlantConfig();
-  return <SettingsClient plantConfig={plantConfig} permissions={perms} />;
+  const canSync = can(user.role, "machine.import", perms);
+  const erpConfigured = Boolean(process.env.SQLSERVER_HOST && process.env.SQLSERVER_USER);
+  return (
+    <SettingsClient
+      plantConfig={plantConfig}
+      permissions={perms}
+      canSync={canSync}
+      erpConfigured={erpConfigured}
+    />
+  );
 }

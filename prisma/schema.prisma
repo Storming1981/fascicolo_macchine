@@ -48,6 +48,19 @@ enum CollaudoStatus {
   APPROVED
 }
 
+enum InterventoStatus {
+  NUOVO
+  PIANIFICATO
+  IN_CORSO
+  COMPLETATO
+  FATTURATO
+}
+
+enum MessageDirection {
+  IN
+  OUT
+}
+
 model User {
   id             String   @id @default(cuid())
   name           String
@@ -57,13 +70,21 @@ model User {
   pinHash        String?
   signatureImage String? // dataURL della firma personale
   active         Boolean  @default(true)
+  zona           String?  // zona operativa del tecnico (service): Nord-Ovest, Centro, ...
+  matricola      String?  @unique // matricola dipendente (timbratore)
+  badgeId        String?  @unique // badge RFID per match con le presenze in cantiere
+  phone          String?  // telefono dipendente
+  photo          String?  @db.Text // foto profilo (dataURL)
+  reparto        String?  // reparto (timbratore): PRO, APV, UTE…
   createdAt      DateTime @default(now())
 
   diaryEvents    DiaryEvent[]
   signatures     Signature[]
   photos         Photo[]
-  collauduFatti  Collaudo[] @relation("CollaudoCompiler")
-  collauduAppr   Collaudo[] @relation("CollaudoApprover")
+  collauduFatti  Collaudo[]   @relation("CollaudoCompiler")
+  collauduAppr   Collaudo[]   @relation("CollaudoApprover")
+  interventiAssegnati Intervento[] @relation("InterventoTech")
+  presences      TechPresence[]
 }
 
 model Machine {
@@ -88,6 +109,16 @@ model Machine {
   platePower      String?
   plateVoltage    String?
   notes           String?
+  // Dati sincronizzati dal gestionale ZATO (ERP) — vedi src/lib/erpSync.ts
+  erpDescription  String?       // co_descr1 della commessa di vendita
+  erpHours        Float?        // ore di lavorazione totali (somma avlavp.lce_tempese)
+  erpSyncedAt     DateTime?     // ultima sincronizzazione riuscita
+  // Ordini di produzione selezionati (impianti nuovi, commessa 999999999)
+  erpBodyOrder    String?       // chiave ordine corpo: "tipork|anno|serie|numero"
+  erpContainerOrder String?     // chiave ordine container
+  erpStandOrder   String?       // chiave ordine cavalletto
+  erpBladesOrder  String?       // chiave ordine lame
+  customerId      String?       // anagrafica cliente condivisa (service) — opzionale
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -98,6 +129,11 @@ model Machine {
   signatures  Signature[]
   milestones  MachineMilestone[]
   collaudo    Collaudo?
+  customerRef Customer?    @relation(fields: [customerId], references: [id])
+  interventi  Intervento[]
+  conversations Conversation[]
+
+  @@index([customerId])
 }
 
 model Collaudo {
@@ -209,9 +245,10 @@ model Signature {
 
 model Photo {
   id              String   @id @default(cuid())
-  machineId       String
+  machineId       String?
   diaryEventId    String?
   componentItemId String?
+  interventoId    String?  // foto di un intervento di service (cantiere)
   path            String // /uploads/...
   category        String   @default("produzione")
   caption         String?
@@ -220,12 +257,14 @@ model Photo {
   takenAt         DateTime @default(now())
   createdAt       DateTime @default(now())
 
-  machine       Machine        @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  machine       Machine?       @relation(fields: [machineId], references: [id], onDelete: Cascade)
   diaryEvent    DiaryEvent?    @relation(fields: [diaryEventId], references: [id], onDelete: SetNull)
   componentItem ComponentItem? @relation(fields: [componentItemId], references: [id], onDelete: SetNull)
+  intervento    Intervento?    @relation(fields: [interventoId], references: [id], onDelete: Cascade)
   author        User?          @relation(fields: [authorId], references: [id])
 
   @@index([machineId])
+  @@index([interventoId])
 }
 
 model Setting {
@@ -246,4 +285,192 @@ model Document {
   machine Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
 
   @@index([machineId])
+}
+
+// ---- Modulo Service ----
+
+/// Anagrafica cliente condivisa (service + fascicolo). Agganciabile a ERP anagra.an_conto.
+model Customer {
+  id           String   @id @default(cuid())
+  code         String   @unique // C-031, o codice interno
+  name         String
+  city         String?
+  province     String?  // sigla provincia (BS, CR, ...)
+  country      String   @default("Italia")
+  countryCode  String   @default("IT")
+  contractType String?  // Premium | Standard | ...
+  phone        String?
+  email        String?
+  erpConto     Int?     // anagra.an_conto del gestionale ZATO
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sites         Site[]
+  interventi    Intervento[]
+  machines      Machine[]
+  conversations Conversation[]
+}
+
+/// Cantiere / stabilimento di un cliente (con geolocalizzazione per la mappa).
+model Site {
+  id         String   @id @default(cuid())
+  customerId String
+  name       String   // es. "Stabilimento Brescia"
+  city       String?
+  province   String?
+  address    String?
+  lat        Float?
+  lng        Float?
+  status     String   @default("ok") // ok | in_corso | alert
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer   Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  interventi Intervento[]
+  presences  TechPresence[]
+
+  @@index([customerId])
+}
+
+/// Intervento di service in cantiere. Collega il fascicolo macchina (machineId).
+model Intervento {
+  id            String           @id @default(cuid())
+  code          String           @unique // INT-2487
+  title         String
+  description   String?
+  status        InterventoStatus @default(NUOVO)
+  priority      Int              @default(3) // 1 = critico/P1, 2 = alto, 3 = normale
+  channel       String?          // portale | whatsapp | telegram | email | telefono
+  reportedBy    String?          // nome contatto cliente che ha segnalato
+  customerId    String?
+  siteId        String?
+  machineId     String?          // fascicolo macchina coinvolto
+  assignedTechId String?         // tecnico assegnato (User)
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  invoicedAt    DateTime?
+  slaDueAt      DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  customer   Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  site       Site?       @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  machine    Machine?    @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  tech       User?       @relation("InterventoTech", fields: [assignedTechId], references: [id], onDelete: SetNull)
+  rapportino    Rapportino?
+  photos        Photo[]
+  conversations Conversation[]
+
+  @@index([customerId])
+  @@index([machineId])
+  @@index([status])
+}
+
+/// Rapportino di intervento (1:1 con Intervento). Alla chiusura genera un
+/// evento di manutenzione (DiaryEvent) sul fascicolo macchina collegato.
+model Rapportino {
+  id              String    @id @default(cuid())
+  interventoId    String    @unique
+  workDescription String?
+  ricambi         Json      @default("[]") // [{ code, desc, qty, note }]
+  hoursWorked     Float?
+  techName        String?
+  techSignature   String?   // path firma tecnico
+  techSignedAt    DateTime?
+  clientName      String?
+  clientSignature String?   // path firma cliente
+  clientSignedAt  DateTime?
+  hash            String?
+  closed          Boolean   @default(false)
+  diaryEventId    String?   // evento generato nel diario del fascicolo
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  intervento Intervento @relation(fields: [interventoId], references: [id], onDelete: Cascade)
+}
+
+/// Conversazione: portale chat nativo ZATO oppure storico importato
+/// (WhatsApp/Telegram) agganciato a commessa / macchina / intervento.
+model Conversation {
+  id            String   @id @default(cuid())
+  title         String
+  channel       String   @default("native") // native | whatsapp | telegram
+  contactName   String?
+  customerId    String?
+  machineId     String?
+  interventoId  String?
+  lastMessageAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customer   Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  machine    Machine?    @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  intervento Intervento? @relation(fields: [interventoId], references: [id], onDelete: SetNull)
+  messages   Message[]
+
+  @@index([customerId])
+  @@index([machineId])
+  @@index([interventoId])
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  direction      MessageDirection @default(IN)
+  authorName     String
+  body           String?
+  photoPath      String?
+  source         String           @default("native") // native | import
+  sentAt         DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+/// Presenza/timbratura di un tecnico in cantiere (feed dalla web app esterna
+/// delle presenze, o inserimento manuale). Il tecnico timbra su una COMMESSA
+/// (= Machine.job): il cantiere si deriva commessa → macchina → cliente → Site.
+model TechPresence {
+  id         String    @id @default(cuid())
+  externalId String?   @unique // id timbratura nel sistema esterno (dedup sessioni)
+  userId     String?
+  badgeId    String? // matricola timbrata (match con User.badgeId)
+  commessa   String? // job/commessa timbrata
+  siteId     String? // cantiere risolto
+  status     String    @default("on_site") // on_site | off
+  clockIn   DateTime  @default(now())
+  clockOut  DateTime?
+  source    String    @default("manual") // manual | external | erp
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  site Site? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([siteId])
+}
+
+/// Knowledge base ZATO: articoli/procedure/know-how del macromondo aziendale.
+model KnowledgeArticle {
+  id           String   @id @default(cuid())
+  title        String
+  category     String   @default("Generale")
+  tags         String[] @default([])
+  body         String   // markdown / testo
+  pinned       Boolean  @default(false)
+  plantType    String?  // tipologia impianto correlata (opzionale)
+  authorId     String?
+  authorName   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
 }

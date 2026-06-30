@@ -19,6 +19,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       caps={{
         import: can(user.role, "machine.import", perms),
         settings: can(user.role, "settings.manage", perms),
+        service: can(user.role, "service.view", perms),
+        knowledge: can(user.role, "knowledge.view", perms),
       }}
     >
       {children}

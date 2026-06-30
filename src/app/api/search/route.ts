@@ -34,6 +34,25 @@ export async function GET(req: Request) {
   });
   if (exact) return NextResponse.json({ type: "machine", code: exact.code });
 
+  // 1b) intervento per codice (INT-xxxx)
+  const intervento = await prisma.intervento.findFirst({
+    where: { code: { equals: q, mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (intervento) return NextResponse.json({ type: "intervento", id: intervento.id });
+
+  // 1c) cliente per codice (C-xxx) o ragione sociale esatta
+  const customer = await prisma.customer.findFirst({
+    where: {
+      OR: [
+        { code: { equals: q, mode: "insensitive" } },
+        { name: { equals: q, mode: "insensitive" } },
+      ],
+    },
+    select: { id: true },
+  });
+  if (customer) return NextResponse.json({ type: "customer", id: customer.id });
+
   // 2) match parziale su matricola componente
   const partialSerial = await prisma.machine.findMany({
     where: {

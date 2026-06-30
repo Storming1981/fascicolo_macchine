@@ -15,3 +15,9 @@ uploads/*
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+
+# Log di esplorazione ERP
+scripts/*.log
+
+# Dati operatori (PII) — tenere solo in locale
+scripts/operators.csv

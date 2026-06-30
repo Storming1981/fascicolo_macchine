@@ -55,11 +55,66 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   macchine importate questi sono numeri di commessa, per le future saranno
   numeri di ordine di produzione.
 
+### Integrazione gestionale ZATO (ERP — SQL Server, read-only)
+
+- **Server**: `SQLSERVER_*` in `.env` (host 192.168.1.144:1433, DB `ZATO`).
+  Gestionale **Zucchetti AdHoc Revolution** (nomi tabella criptici, colonne con
+  prefisso es. `co_`, `an_`, `lce_`; multi-azienda via `codditt='ZATO'`).
+- **Chiave di join: il Job Number del fascicolo == `commess.co_comme` (intero).**
+  NON è `co_descr1` (lì c'è la descrizione tipo "BLUE DEVIL GF4000RII E #014").
+- Mappatura (vedi `src/lib/erp.ts` e `scripts/erp-*.ts`):
+  - Cliente = `anagra.an_descr1` via `commess.co_conto = anagra.an_conto` (`an_tipo='C'`)
+  - Apertura/chiusura commessa = `commess.co_dtaper` / `co_dtchiu` (+ flag `co_chiusa`);
+    date sentinella 1900/2099 → trattate come null
+  - **Inizio produzione = `MIN(avlavp.lce_start)`**, **Fine = `MAX(avlavp.lce_stop)`**
+    dove `avlavp.lce_commeca = co_comme` (avlavp = avanzamento lavorazioni/timbrature)
+  - Fasi/centri di lavoro = `avlavp` (`lce_desart/deslavo/descent/flfinale`)
+  - Ordini = `testord.td_commeca` / `movord.mo_commeca`; DDT/spedizione = `testmag.tm_commeca`
+- Copertura attuale flotta: **223/249 job** trovati in `commess`, **50** con
+  timbrature in `avlavp`. I 26 mancanti sono job in formato libero/storici
+  ("ordine 72", "144 / 12", ...).
+- **Paese cliente**: `anagra.an_stato` è il codice targa (D, S, TR, RCH…); va
+  mappato via `tabstat` (`tb_codstat → tb_siglaiso` ISO2 + `tb_desstat` nome) e
+  poi passato a `resolveCountry()` (riusa l'anagrafica paesi/bandiere). Il sync
+  aggiorna il paese solo se il codice è riconosciuto (no "XX").
+- **Impianti nuovi / ordini di produzione**: i corpi e i container nuovi NON
+  hanno commessa dedicata → stanno tutti sotto la commessa generica
+  **999999999**; ognuno fa riferimento a un **ordine di produzione** in `avlavp`,
+  identificato dalla tupla `lce_ortipo='H'` / `lce_oranno` / `lce_orserie` /
+  `lce_ornum` (intestazione in `testord` con `td_tipork='H'`). L'utente mette la
+  commessa in jobBody/jobContainer (es. 999999999) e poi **seleziona l'ordine**
+  dalla tendina; ore/date/articoli si calcolano sull'ORDINE, non sulla commessa
+  generica (che aggregherebbe macchine diverse — per questo `getJobData` non
+  calcola l'aggregato per 999999999). `erp.ts`: `getCommessaOrders(commessa)`
+  (lista ordini con articolo principale = max ore), `getOrderData(key)` (ore,
+  date, articoli con `lce_codart`/`lce_desart`), chiavi via `buildOrderKey`/
+  `parseOrderKey`. Campi `Machine`: `erpBodyOrder`, `erpContainerOrder`
+  ("tipork|anno|serie|numero"). API: `GET /api/erp/commessa/[commeca]/orders`.
+  UI: tendina **Ordine Corpo / Ordine Container** nella card ERP + tabella
+  articoli per ordine selezionato.
+- **API**: `GET /api/erp/job/[job]` (dati commessa, `?fasi=1` per il dettaglio
+  timbrature); `GET|POST /api/machines/[id]/erp-sync` (anteprima / sync completo
+  singola macchina); `POST /api/erp/sync-all` (batch, permesso `machine.import`).
+- **Sync** (`src/lib/erpSync.ts`): `syncMachine(id)` / `syncAllMachines()` scrivono
+  nel fascicolo cliente+paese, `erpDescription` (co_descr1), `erpHours` (ore
+  timbrate), `productionStart` e le `MachineMilestone` inizio/fine produzione
+  (`source=GESTIONALE`); i campi assenti nel gestionale non vengono toccati.
+  Nuovi campi su `Machine`: `erpDescription`, `erpHours`, `erpSyncedAt`.
+- **UI**: card **"Dati gestionale (ERP)"** nella scheda Anagrafica (auto-refresh
+  al cambio job, una riga per commessa Vendita/Corpo/Container, colonna Ore,
+  bottone *Applica date*) + scheda **"Gestionale (ERP)"** in Impostazioni con
+  *Sincronizza tutti i fascicoli*. CLI dev: `npm run erp:sync`.
+- Driver: `mssql` (pool singleton in `src/lib/erp.ts`, riuso in dev via globalThis).
+- **Stato**: sync batch eseguito → 170/188 fascicoli aggiornati, 50 con date di
+  produzione+ore. Non esiste ancora un sync **schedulato** (per la pubblicazione
+  web): `syncAllMachines()` è già pronto da agganciare a un cron/agent.
+
 ### Sviluppi futuri (richiesti dal committente)
 
 - Selezione dell'**ordine di riferimento** che compone la commessa di vendita
   da un elenco di ordini imputati a ZATO (sostituirà l'inserimento manuale di
-  jobBody/jobContainer). Predisporre integrazione con l'anagrafica ordini ZATO.
+  jobBody/jobContainer). Predisporre integrazione con l'anagrafica ordini ZATO
+  (tabelle `testord`/`movord` già individuate).
 - `Component` — gruppo componente per macchina (riduttori, motori, pompe, ...)
 - `ComponentItem` — singolo slot/posizione con matricola, brand, note
 - `DiaryEvent` — evento del diario (produzione/collaudo/spedizione/installazione/manutenzione/rottamazione)

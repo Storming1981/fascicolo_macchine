@@ -29,7 +29,28 @@ export default async function MachinePage({
   if (!machine) notFound();
 
   const user = await currentUser();
-  const caps = await userCaps("machine.edit", "machine.intervention", "machine.sign");
+  const caps = await userCaps(
+    "machine.edit",
+    "machine.intervention",
+    "machine.sign",
+    "service.view",
+    "intervento.create",
+    "chat.send"
+  );
+
+  // Dati del modulo Service collegati a questo fascicolo
+  const [serviceInterventi, serviceChats] = await Promise.all([
+    prisma.intervento.findMany({
+      where: { machineId: machine.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, code: true, title: true, status: true, priority: true },
+    }),
+    prisma.conversation.findMany({
+      where: { machineId: machine.id },
+      orderBy: [{ lastMessageAt: "desc" }],
+      select: { id: true, title: true, channel: true, contactName: true, _count: { select: { messages: true } } },
+    }),
+  ]);
   const qrDataUrl = await QRCode.toDataURL(
     `https://fascicolo.zato.it/macchine/${machine.code}`,
     { margin: 1, width: 280, color: { dark: "#0f3b66", light: "#ffffff" } }
@@ -42,10 +63,18 @@ export default async function MachinePage({
     job: machine.job,
     jobBody: machine.jobBody,
     jobContainer: machine.jobContainer,
+    erpBodyOrder: machine.erpBodyOrder,
+    erpContainerOrder: machine.erpContainerOrder,
+    erpStandOrder: machine.erpStandOrder,
+    erpBladesOrder: machine.erpBladesOrder,
+    erpDescription: machine.erpDescription,
+    erpHours: machine.erpHours,
+    erpSyncedAt: machine.erpSyncedAt?.toISOString() ?? null,
     plantType: machine.plantType,
     model: machine.model,
     year: machine.year,
     customer: machine.customer,
+    customerId: machine.customerId,
     country: machine.country,
     countryCode: machine.countryCode,
     site: machine.site,
@@ -134,6 +163,16 @@ export default async function MachinePage({
     <MachineDetail
       machine={data}
       qrDataUrl={qrDataUrl}
+      service={{
+        interventi: serviceInterventi,
+        chats: serviceChats.map((c) => ({
+          id: c.id,
+          title: c.title,
+          channel: c.channel,
+          contactName: c.contactName,
+          messages: c._count.messages,
+        })),
+      }}
       currentUser={{
         id: user!.id,
         name: user!.name,
@@ -145,6 +184,9 @@ export default async function MachinePage({
         edit: caps["machine.edit"],
         intervention: caps["machine.intervention"],
         sign: caps["machine.sign"],
+        service: caps["service.view"],
+        interventoCreate: caps["intervento.create"],
+        chatSend: caps["chat.send"],
       }}
     />
   );

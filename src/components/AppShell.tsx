@@ -13,7 +13,7 @@ export default function AppShell({
 }: {
   user: { name: string; roleLabel: string; email: string };
   machineCount: number;
-  caps: { import: boolean; settings: boolean };
+  caps: { import: boolean; settings: boolean; service: boolean; knowledge: boolean };
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -37,6 +37,10 @@ export default function AppShell({
       const d = await res.json().catch(() => null);
       if (res.ok && d?.type === "machine" && d.code) {
         router.push(`/macchine/${encodeURIComponent(d.code)}`);
+      } else if (res.ok && d?.type === "intervento" && d.id) {
+        router.push(`/service/interventi/${d.id}`);
+      } else if (res.ok && d?.type === "customer" && d.id) {
+        router.push(`/service/clienti/${d.id}`);
       } else {
         router.push(`/macchine?q=${encodeURIComponent(term)}`);
       }
@@ -57,6 +61,24 @@ export default function AppShell({
       items: [
         { href: "/dashboard", label: "Dashboard", icon: "home", show: true },
         { href: "/macchine", label: "Macchine", icon: "machines", badge: true, show: true },
+      ],
+    },
+    {
+      title: "Service",
+      items: [
+        { href: "/service", label: "Panoramica", icon: "home", show: caps.service },
+        { href: "/service/interventi", label: "Interventi", icon: "wrench", show: caps.service },
+        { href: "/service/chat", label: "Chat", icon: "sign", show: caps.service },
+        { href: "/service/pianificazione", label: "Pianificazione", icon: "clock", show: caps.service },
+        { href: "/service/mappa", label: "Mappa cantieri", icon: "pin", show: caps.service },
+        { href: "/service/clienti", label: "Clienti & Cantieri", icon: "people", show: caps.service },
+        { href: "/service/notifiche", label: "Notifiche", icon: "bell", show: caps.service },
+      ],
+    },
+    {
+      title: "Knowledge",
+      items: [
+        { href: "/knowledge", label: "Knowledge ZATO", icon: "doc", show: caps.knowledge },
       ],
     },
     {
@@ -148,10 +170,17 @@ export default function AppShell({
               <div className="who">{user.name}</div>
             </div>
             <div className="user-avatar">{initials(user.name)}</div>
-            <button className="icon-btn" aria-label="Notifiche">
-              <Icon name="bell" size={18} />
-              <span className="dot" />
-            </button>
+            {caps.service ? (
+              <Link className="icon-btn" href="/service/notifiche" aria-label="Notifiche">
+                <Icon name="bell" size={18} />
+                <span className="dot" />
+              </Link>
+            ) : (
+              <button className="icon-btn" aria-label="Notifiche">
+                <Icon name="bell" size={18} />
+                <span className="dot" />
+              </button>
+            )}
             {caps.settings ? (
               <Link className="icon-btn bordered" href="/impostazioni" aria-label="Impostazioni">
                 <Icon name="gear" size={18} />

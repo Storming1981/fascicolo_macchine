@@ -12,15 +12,29 @@ import {
 
 type PlantConfig = { name: string; models: string[] }[];
 
+type SyncSummary = {
+  total: number;
+  matched: number;
+  updated: number;
+  withProduction: number;
+  errors: { code: string; error: string }[];
+};
+
 export default function SettingsClient({
   plantConfig,
   permissions,
+  canSync,
+  erpConfigured,
 }: {
   plantConfig: PlantConfig;
   permissions: PermissionMatrix;
+  canSync: boolean;
+  erpConfigured: boolean;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"plant" | "perms">("plant");
+  const [tab, setTab] = useState<"plant" | "perms" | "erp">("plant");
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<SyncSummary | null>(null);
   const [plants, setPlants] = useState<{ name: string; models: string }[]>(
     plantConfig.map((p) => ({ name: p.name, models: p.models.join("\n") }))
   );
@@ -92,6 +106,26 @@ export default function SettingsClient({
     } else notify("Errore salvataggio", "err");
   }
 
+  async function runSync() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/erp/sync-all", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setSyncResult(d as SyncSummary);
+        notify(`Sincronizzati ${d.updated}/${d.total} fascicoli dal gestionale`);
+        router.refresh();
+      } else {
+        notify(d.error || "Errore sincronizzazione", "err");
+      }
+    } catch {
+      notify("Gestionale non raggiungibile", "err");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div className="view">
       <div className="view-header">
@@ -114,6 +148,14 @@ export default function SettingsClient({
         >
           <Icon name="people" size={14} /> <span>Permessi per ruolo</span>
         </button>
+        {canSync && (
+          <button
+            className={"tab" + (tab === "erp" ? " active" : "")}
+            onClick={() => setTab("erp")}
+          >
+            <Icon name="clock" size={14} /> <span>Gestionale (ERP)</span>
+          </button>
+        )}
       </div>
 
       {tab === "plant" && (
@@ -224,6 +266,85 @@ export default function SettingsClient({
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "erp" && canSync && (
+        <div className="tab-content">
+          <div className="card">
+            <div className="card-header">
+              <h3>Sincronizzazione dal gestionale ZATO</h3>
+              <button
+                className="btn-primary-sm"
+                disabled={syncing || !erpConfigured}
+                onClick={runSync}
+              >
+                <Icon name="clock" size={14} />{" "}
+                {syncing ? "Sincronizzazione…" : "Sincronizza tutti i fascicoli"}
+              </button>
+            </div>
+            {!erpConfigured ? (
+              <p className="muted small">
+                Integrazione gestionale non configurata (variabili{" "}
+                <span className="mono">SQLSERVER_*</span> mancanti).
+              </p>
+            ) : (
+              <>
+                <p className="muted small">
+                  Legge il gestionale (SQL Server) e aggiorna ogni fascicolo i cui job
+                  corrispondono a una commessa: <strong>cliente e paese</strong>,{" "}
+                  <strong>descrizione commessa</strong>, <strong>ore di lavorazione</strong> e{" "}
+                  <strong>inizio/fine produzione</strong> (prima/ultima timbratura, tabella{" "}
+                  <span className="mono">avlavp</span>). Le date di produzione vengono salvate
+                  nel diario con origine <span className="mono">GESTIONALE</span>. I campi
+                  assenti nel gestionale non vengono toccati.
+                </p>
+                {syncing && (
+                  <p className="muted small">
+                    Operazione in corso su tutti i fascicoli, può richiedere qualche
+                    minuto…
+                  </p>
+                )}
+                {syncResult && (
+                  <div className="card no-pad" style={{ marginTop: 12 }}>
+                    <div className="table-wrap">
+                      <table className="data-table">
+                        <tbody>
+                          <tr>
+                            <td>Fascicoli totali</td>
+                            <td style={{ fontWeight: 600 }}>{syncResult.total}</td>
+                          </tr>
+                          <tr>
+                            <td>Trovati nel gestionale</td>
+                            <td style={{ fontWeight: 600 }}>{syncResult.matched}</td>
+                          </tr>
+                          <tr>
+                            <td>Aggiornati</td>
+                            <td style={{ fontWeight: 600 }}>{syncResult.updated}</td>
+                          </tr>
+                          <tr>
+                            <td>Con dati di produzione</td>
+                            <td style={{ fontWeight: 600 }}>{syncResult.withProduction}</td>
+                          </tr>
+                          {syncResult.errors.length > 0 && (
+                            <tr>
+                              <td style={{ color: "var(--danger, #b3261e)" }}>Errori</td>
+                              <td>{syncResult.errors.length}</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                <p className="muted small" style={{ marginTop: 10 }}>
+                  In sviluppo è disponibile anche da terminale:{" "}
+                  <span className="mono">npm run erp:sync</span>. In produzione questa
+                  operazione potrà essere schedulata.
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}

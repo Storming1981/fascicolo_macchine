@@ -1,4 +1,4 @@
-import type { MachineStatus, DiaryPhase, Role } from "@prisma/client";
+import type { MachineStatus, DiaryPhase, Role, InterventoStatus } from "@prisma/client";
 
 export const STATUS_META: Record<MachineStatus, { label: string; color: string }> = {
   PRODUCTION: { label: "In produzione", color: "#1d6fb8" },
@@ -25,6 +25,32 @@ export const PHASE_META: Record<DiaryPhase, { label: string; color: string }> = 
   INSTALLED: { label: "Installazione", color: "#10b981" },
   MAINTENANCE: { label: "Manutenzione", color: "#0ea5a3" },
   SCRAPPED: { label: "Rottamazione", color: "#71717a" },
+};
+
+export const INTERVENTO_STATUS_META: Record<
+  InterventoStatus,
+  { label: string; color: string }
+> = {
+  NUOVO: { label: "Nuovo", color: "#1d6fb8" },
+  PIANIFICATO: { label: "Pianificato", color: "#8b5cf6" },
+  IN_CORSO: { label: "In corso", color: "#2f6aed" },
+  COMPLETATO: { label: "Completato", color: "#10b981" },
+  FATTURATO: { label: "Fatturato", color: "#71717a" },
+};
+
+export const INTERVENTO_STATUS_ORDER: InterventoStatus[] = [
+  "NUOVO",
+  "PIANIFICATO",
+  "IN_CORSO",
+  "COMPLETATO",
+  "FATTURATO",
+];
+
+/** Priorità intervento: 1 = critico (P1), 2 = alto, 3 = normale. */
+export const PRIORITY_META: Record<number, { label: string; short: string; color: string }> = {
+  1: { label: "P1 · Critico", short: "P1", color: "#dc2626" },
+  2: { label: "P2 · Alto", short: "P2", color: "#f59e0b" },
+  3: { label: "P3 · Normale", short: "P3", color: "#64748b" },
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
