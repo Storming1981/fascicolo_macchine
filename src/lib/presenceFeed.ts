@@ -355,45 +355,56 @@ export async function fetchCommessaHours(
   const toDay = to || isoDay(new Date(now.getTime() + 86400000));
   const fromDay = from || isoDay(new Date(now.getFullYear(), now.getMonth() - 18, now.getDate()));
 
-  const url =
-    base +
-    "?" +
-    new URLSearchParams({
-      "search[order_name]": commessa,
-      "search[date_from]": fromDay,
-      "search[date_to]": toDay,
-    }).toString();
-
   const token = process.env.PRESENCE_FEED_TOKEN;
   const cookie = token ? null : await login();
-  const res = await fetch(url, {
-    headers: {
-      accept: "text/html",
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...(cookie ? { cookie } : {}),
-    },
-  });
-  const html = await res.text();
-  const rows = parseStampingsHtml(html).filter((r) => (r.commessa ?? "").trim() === commessa.trim());
+  const headers: Record<string, string> = {
+    accept: "text/html",
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+    ...(cookie ? { cookie } : {}),
+  };
 
   const byDay: Record<string, number> = {};
   const sessions: CommessaHours["sessions"] = [];
   let total = 0;
-  for (const r of rows) {
-    if (!r.startedAt) continue;
-    const endMs = (r.finishedAt ?? now).getTime();
-    const hours = Math.max(0, (endMs - r.startedAt.getTime()) / 3600000);
-    const day = isoDay(r.startedAt);
-    byDay[day] = (byDay[day] ?? 0) + hours;
-    total += hours;
-    sessions.push({
-      day,
-      tech: r.utente,
-      start: r.startedAt.toISOString(),
-      end: r.finishedAt?.toISOString() ?? null,
-      hours: Math.round(hours * 100) / 100,
-    });
+  const seen = new Set<string>(); // id timbratura → evita doppioni tra le pagine
+
+  // La tabella /stampings è paginata (~25 righe/pagina): scorriamo TUTTE le
+  // pagine finché non arrivano più righe nuove (max 200 pagine di sicurezza).
+  for (let page = 1; page <= 200; page++) {
+    const u = new URL(base);
+    u.searchParams.set("search[order_name]", commessa);
+    u.searchParams.set("search[date_from]", fromDay);
+    u.searchParams.set("search[date_to]", toDay);
+    u.searchParams.set("page", String(page));
+
+    const res = await fetch(u.toString(), { headers });
+    if (!res.ok) break;
+    const html = await res.text();
+    const rows = parseStampingsHtml(html).filter((r) => (r.commessa ?? "").trim() === commessa.trim());
+    if (rows.length === 0) break;
+
+    let fresh = 0;
+    for (const r of rows) {
+      if (seen.has(r.externalId)) continue; // pagina ripetuta → stop dopo il ciclo
+      seen.add(r.externalId);
+      fresh++;
+      if (!r.startedAt) continue;
+      const endMs = (r.finishedAt ?? now).getTime();
+      const hours = Math.max(0, (endMs - r.startedAt.getTime()) / 3600000);
+      const day = isoDay(r.startedAt);
+      byDay[day] = (byDay[day] ?? 0) + hours;
+      total += hours;
+      sessions.push({
+        day,
+        tech: r.utente,
+        start: r.startedAt.toISOString(),
+        end: r.finishedAt?.toISOString() ?? null,
+        hours: Math.round(hours * 100) / 100,
+      });
+    }
+    if (fresh === 0) break; // il server ha ignorato "page" (stesse righe) → fine
   }
+
   for (const k of Object.keys(byDay)) byDay[k] = Math.round(byDay[k] * 100) / 100;
   return { total: Math.round(total * 100) / 100, byDay, sessions };
 }
