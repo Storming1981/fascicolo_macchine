@@ -7,6 +7,8 @@ import {
   type PermAction,
   can as canPure,
 } from "./permissions";
+import { mergeNav, type NavVisibility } from "./nav";
+import { mergeAppAccess, type AppAccessMatrix } from "./appAccess";
 import type { Role } from "@prisma/client";
 
 export type PlantConfig = { name: string; models: string[] }[];
@@ -51,6 +53,24 @@ export async function getPermissions(): Promise<PermissionMatrix> {
 
 export async function savePermissions(matrix: PermissionMatrix) {
   await writeSetting("permissions", mergePermissions(matrix));
+}
+
+export async function getNavVisibility(): Promise<NavVisibility> {
+  const stored = await readSetting<NavVisibility>("navVisibility");
+  return mergeNav(stored);
+}
+
+export async function saveNavVisibility(matrix: NavVisibility) {
+  await writeSetting("navVisibility", mergeNav(matrix));
+}
+
+export async function getAppAccess(): Promise<AppAccessMatrix> {
+  const stored = await readSetting<AppAccessMatrix>("appAccess");
+  return mergeAppAccess(stored);
+}
+
+export async function saveAppAccess(matrix: AppAccessMatrix) {
+  await writeSetting("appAccess", mergeAppAccess(matrix));
 }
 
 /** Verifica permesso leggendo la matrice da DB. */

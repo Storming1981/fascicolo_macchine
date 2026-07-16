@@ -6,29 +6,57 @@ import PianificazioneClient, {
   type GanttDay,
   type GanttTech,
   type PendingItem,
+  type MonthDay,
 } from "./PianificazioneClient";
 
 export const dynamic = "force-dynamic";
 
-const DAYS = 14;
 const WEEKDAYS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 const MONTHS = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
+const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 
-export default async function PianificazionePage() {
+type View = "week" | "gantt" | "month";
+
+export default async function PianificazionePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string; date?: string }>;
+}) {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (!(await userCan(user.role, "service.view"))) redirect("/dashboard");
   const canEdit = await userCan(user.role, "intervento.edit");
 
-  // finestra di 14 giorni a partire da oggi
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + DAYS);
+  const sp = await searchParams;
+  const view: View = sp.view === "week" || sp.view === "month" ? sp.view : "gantt";
 
-  const todayIso = start.toISOString().slice(0, 10);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const anchor = sp.date ? new Date(sp.date + "T00:00:00") : new Date(today);
+  anchor.setHours(0, 0, 0, 0);
+
+  // finestra secondo la vista
+  let start: Date;
+  let count: number;
+  if (view === "week") {
+    start = new Date(anchor);
+    start.setDate(anchor.getDate() - ((anchor.getDay() + 6) % 7)); // lunedì
+    count = 7;
+  } else if (view === "month") {
+    const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    start = new Date(first);
+    start.setDate(first.getDate() - ((first.getDay() + 6) % 7)); // lunedì prima del 1°
+    count = 42; // 6 settimane
+  } else {
+    start = sp.date ? new Date(anchor) : new Date(today);
+    count = 14;
+  }
+  const end = new Date(start);
+  end.setDate(start.getDate() + count);
+
+  const todayIso = isoDate(today);
   let prevMonth = -1;
-  const days: GanttDay[] = Array.from({ length: DAYS }, (_, i) => {
+  const daysArr: GanttDay[] = Array.from({ length: count }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     const dow = d.getDay();
@@ -36,11 +64,11 @@ export default async function PianificazionePage() {
     const showMonth = i === 0 || m !== prevMonth;
     prevMonth = m;
     return {
-      iso: d.toISOString().slice(0, 10),
+      iso: isoDate(d),
       dayNum: d.getDate(),
       weekday: WEEKDAYS[dow],
       weekend: dow === 0 || dow === 6,
-      today: d.toISOString().slice(0, 10) === todayIso,
+      today: isoDate(d) === todayIso,
       month: MONTHS[m],
       showMonth,
     };
@@ -62,37 +90,72 @@ export default async function PianificazionePage() {
         assignedTechId: true,
         scheduledStart: true,
         scheduledEnd: true,
+        tech: { select: { name: true } },
+        participants: { select: { id: true } },
       },
     }),
     prisma.intervento.findMany({
-      where: { status: { in: ["NUOVO", "PIANIFICATO"] }, scheduledStart: null },
-      orderBy: { priority: "asc" },
+      where: {
+        status: { in: ["NUOVO", "PIANIFICATO"] },
+        OR: [{ scheduledStart: null }, { scheduledStart: { lt: start } }],
+      },
+      orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
       select: { id: true, code: true, title: true, priority: true, assignedTechId: true, customer: { select: { name: true } } },
     }),
   ]);
 
-  const dayIndex = (iso: string) => days.findIndex((d) => d.iso === iso);
+  const dayIndex = (iso: string) => daysArr.findIndex((d) => d.iso === iso);
 
   const ganttTechs: GanttTech[] = techs.map((t) => {
     const blocks = scheduled
-      .filter((s) => s.assignedTechId === t.id)
+      .filter((s) => s.assignedTechId === t.id || s.participants.some((p) => p.id === t.id))
       .map((s) => {
-        const sIso = s.scheduledStart!.toISOString().slice(0, 10);
-        const eIso = (s.scheduledEnd ?? s.scheduledStart!).toISOString().slice(0, 10);
+        const sIso = isoDate(s.scheduledStart!);
+        const eIso = isoDate(s.scheduledEnd ?? s.scheduledStart!);
         const di = Math.max(0, dayIndex(sIso));
         const dj = eIso ? dayIndex(eIso) : di;
         const len = Math.max(1, (dj < 0 ? di : dj) - di + 1);
-        return { id: s.id, code: s.code, title: s.title, priority: s.priority, day: di, len };
+        const role: "lead" | "member" = s.assignedTechId === t.id ? "lead" : "member";
+        return { id: s.id, code: s.code, title: s.title, priority: s.priority, day: di, len, role };
       })
       .sort((a, b) => a.day - b.day);
-
-    // conflitti: blocchi che si sovrappongono nello stesso giorno
-    const conflict = blocks.some((b, i) =>
-      blocks.some((o, j) => j !== i && b.day < o.day + o.len && o.day < b.day + b.len)
+    // il conflitto conta solo i blocchi da responsabile (quelli che pianifica lui)
+    const lead = blocks.filter((b) => b.role === "lead");
+    const conflict = lead.some((b, i) =>
+      lead.some((o, j) => j !== i && b.day < o.day + o.len && o.day < b.day + b.len)
     );
-
     return { id: t.id, name: t.name, zona: t.zona, blocks, conflict };
   });
+
+  // vista mese: interventi per giorno (espansi sulla durata)
+  let monthDays: MonthDay[] = [];
+  if (view === "month") {
+    const byDay: Record<string, MonthDay["items"]> = {};
+    for (const s of scheduled) {
+      const sIso = isoDate(s.scheduledStart!);
+      const eIso = isoDate(s.scheduledEnd ?? s.scheduledStart!);
+      const cur = new Date(sIso + "T00:00:00");
+      const last = new Date(eIso + "T00:00:00");
+      while (cur <= last) {
+        const iso = isoDate(cur);
+        if (iso >= daysArr[0].iso && iso <= daysArr[count - 1].iso) {
+          (byDay[iso] ??= []).push({
+            id: s.id,
+            code: s.code,
+            title: s.title,
+            priority: s.priority,
+            tech: s.tech?.name ?? null,
+          });
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+    monthDays = daysArr.map((d) => ({
+      ...d,
+      inMonth: new Date(d.iso + "T00:00:00").getMonth() === anchor.getMonth(),
+      items: byDay[d.iso] ?? [],
+    }));
+  }
 
   const pendingItems: PendingItem[] = pending.map((p) => ({
     id: p.id,
@@ -103,18 +166,33 @@ export default async function PianificazionePage() {
     assignedTechId: p.assignedTechId,
   }));
 
-  const label = `${days[0].dayNum} ${MONTHS[start.getMonth()]} — ${days[DAYS - 1].dayNum} ${
-    MONTHS[new Date(days[DAYS - 1].iso).getMonth()]
-  } ${start.getFullYear()}`;
+  // navigazione
+  const shift = (dir: number) => {
+    const r = new Date(anchor);
+    if (view === "month") r.setMonth(anchor.getMonth() + dir);
+    else if (view === "week") r.setDate(anchor.getDate() + dir * 7);
+    else r.setDate(anchor.getDate() + dir * 14);
+    return isoDate(r);
+  };
+
+  const label =
+    view === "month"
+      ? `${["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"][anchor.getMonth()]} ${anchor.getFullYear()}`
+      : `${daysArr[0].dayNum} ${daysArr[0].month} — ${daysArr[count - 1].dayNum} ${daysArr[count - 1].month} ${new Date(daysArr[count - 1].iso + "T00:00:00").getFullYear()}`;
 
   return (
     <PianificazioneClient
-      days={days}
+      view={view}
+      days={daysArr}
+      monthDays={monthDays}
       techs={ganttTechs}
       pending={pendingItems}
       allTechs={techs}
       rangeLabel={label}
       canEdit={canEdit}
+      prevDate={shift(-1)}
+      nextDate={shift(1)}
+      todayIso={todayIso}
     />
   );
 }

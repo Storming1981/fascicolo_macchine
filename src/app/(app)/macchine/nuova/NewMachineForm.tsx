@@ -16,7 +16,13 @@ type PlantConfig = { name: string; models: string[] }[];
 
 const STEPS = ["Identificazione", "Cliente", "Targa tecnica", "Componenti"];
 
-export default function NewMachineForm({ plantConfig }: { plantConfig: PlantConfig }) {
+export default function NewMachineForm({
+  plantConfig,
+  redirectBase = "/macchine",
+}: {
+  plantConfig: PlantConfig;
+  redirectBase?: string;
+}) {
   const router = useRouter();
   const PLANT_TYPES = plantConfig.map((p) => p.name);
   const modelsForPlant = (pt: string) => [
@@ -121,7 +127,7 @@ export default function NewMachineForm({ plantConfig }: { plantConfig: PlantConf
     setBusy(false);
     if (res.ok) {
       const d = await res.json();
-      router.push(`/macchine/${d.code}`);
+      router.push(`${redirectBase}/${d.code}`);
       router.refresh();
     } else {
       const d = await res.json().catch(() => ({}));

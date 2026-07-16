@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { isClosedStatus } from "@/lib/interventoService";
+import { INTERVENTO_TYPE_META } from "@/lib/domain";
 import type { InterventoStatus, Prisma } from "@prisma/client";
 
 const STATUSES: InterventoStatus[] = [
@@ -32,6 +33,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
   if (typeof b.title === "string" && b.title.trim()) data.title = b.title.trim();
   if (typeof b.description === "string") data.description = b.description.trim() || null;
+  if (typeof b.type === "string" && b.type in INTERVENTO_TYPE_META) data.type = b.type;
+  if (typeof b.commessa === "string") data.commessa = b.commessa.trim() || null;
   if ([1, 2, 3].includes(b.priority)) data.priority = b.priority;
   if ("assignedTechId" in b)
     data.tech = b.assignedTechId
@@ -39,6 +42,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       : { disconnect: true };
   if ("machineId" in b)
     data.machine = b.machineId ? { connect: { id: b.machineId } } : { disconnect: true };
+  if (Array.isArray(b.participantIds)) {
+    const ids = (b.participantIds as unknown[])
+      .filter((x): x is string => typeof x === "string" && x.length > 0)
+      // il supervisore non può essere anche partecipante
+      .filter((x) => x !== (b.assignedTechId ?? undefined));
+    data.participants = { set: ids.map((id) => ({ id })) };
+  }
   if (b.scheduledStart !== undefined)
     data.scheduledStart = b.scheduledStart ? new Date(b.scheduledStart) : null;
   if (b.scheduledEnd !== undefined)

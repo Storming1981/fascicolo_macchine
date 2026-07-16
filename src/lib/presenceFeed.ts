@@ -327,6 +327,77 @@ export async function syncOperators(): Promise<{
   return { pages, created, updated, skipped };
 }
 
+const isoDay = (d: Date) => {
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+};
+
+export type CommessaHours = {
+  total: number;
+  byDay: Record<string, number>; // { "YYYY-MM-DD": ore }
+  sessions: { day: string; tech: string | null; start: string | null; end: string | null; hours: number }[];
+};
+
+/**
+ * Ore timbrate su una COMMESSA (codice cantiere) dal timbratore, filtrando
+ * server-side per `search[order_name]` + range date. Somma la durata di TUTTE
+ * le sessioni (tutti i tecnici della squadra) raggruppate per giorno.
+ * `from`/`to` in formato YYYY-MM-DD; default: ultimi 18 mesi → domani.
+ */
+export async function fetchCommessaHours(
+  commessa: string,
+  from?: string,
+  to?: string
+): Promise<CommessaHours> {
+  const base = process.env.PRESENCE_FEED_URL;
+  if (!base) throw new Error("PRESENCE_FEED_URL non configurato");
+  const now = new Date();
+  const toDay = to || isoDay(new Date(now.getTime() + 86400000));
+  const fromDay = from || isoDay(new Date(now.getFullYear(), now.getMonth() - 18, now.getDate()));
+
+  const url =
+    base +
+    "?" +
+    new URLSearchParams({
+      "search[order_name]": commessa,
+      "search[date_from]": fromDay,
+      "search[date_to]": toDay,
+    }).toString();
+
+  const token = process.env.PRESENCE_FEED_TOKEN;
+  const cookie = token ? null : await login();
+  const res = await fetch(url, {
+    headers: {
+      accept: "text/html",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(cookie ? { cookie } : {}),
+    },
+  });
+  const html = await res.text();
+  const rows = parseStampingsHtml(html).filter((r) => (r.commessa ?? "").trim() === commessa.trim());
+
+  const byDay: Record<string, number> = {};
+  const sessions: CommessaHours["sessions"] = [];
+  let total = 0;
+  for (const r of rows) {
+    if (!r.startedAt) continue;
+    const endMs = (r.finishedAt ?? now).getTime();
+    const hours = Math.max(0, (endMs - r.startedAt.getTime()) / 3600000);
+    const day = isoDay(r.startedAt);
+    byDay[day] = (byDay[day] ?? 0) + hours;
+    total += hours;
+    sessions.push({
+      day,
+      tech: r.utente,
+      start: r.startedAt.toISOString(),
+      end: r.finishedAt?.toISOString() ?? null,
+      hours: Math.round(hours * 100) / 100,
+    });
+  }
+  for (const k of Object.keys(byDay)) byDay[k] = Math.round(byDay[k] * 100) / 100;
+  return { total: Math.round(total * 100) / 100, byDay, sessions };
+}
+
 export async function syncStampings(): Promise<{
   fetched: number;
   open: number;

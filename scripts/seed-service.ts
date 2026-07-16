@@ -146,7 +146,7 @@ async function main() {
 
   // 6) Pianificazione demo: scheduledStart agli interventi con tecnico
   const daPianificare = await prisma.intervento.findMany({
-    where: { assignedTechId: { not: null }, scheduledStart: null },
+    where: { status: { not: "NUOVO" }, assignedTechId: { not: null }, scheduledStart: null },
     orderBy: { priority: "asc" },
   });
   const dayByTech: Record<string, number> = {};

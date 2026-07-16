@@ -5,6 +5,10 @@ import {
   savePlantConfig,
   getPermissions,
   savePermissions,
+  getNavVisibility,
+  saveNavVisibility,
+  getAppAccess,
+  saveAppAccess,
   userCan,
 } from "@/lib/settings";
 
@@ -16,6 +20,8 @@ export async function GET() {
   return NextResponse.json({
     plantConfig: await getPlantConfig(),
     permissions: await getPermissions(),
+    navVisibility: await getNavVisibility(),
+    appAccess: await getAppAccess(),
   });
 }
 
@@ -41,6 +47,12 @@ export async function PATCH(req: Request) {
   }
   if (b.permissions && typeof b.permissions === "object") {
     await savePermissions(b.permissions);
+  }
+  if (b.navVisibility && typeof b.navVisibility === "object") {
+    await saveNavVisibility(b.navVisibility);
+  }
+  if (b.appAccess && typeof b.appAccess === "object") {
+    await saveAppAccess(b.appAccess);
   }
   return NextResponse.json({ ok: true });
 }

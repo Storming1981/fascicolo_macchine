@@ -31,7 +31,17 @@ const config: sql.config = {
 
 const globalForErp = globalThis as unknown as {
   erpPool?: Promise<sql.ConnectionPool>;
+  erpSql?: typeof sql;
 };
+
+/**
+ * Istanza UNICA del modulo mssql condivisa fra tutti i contesti (server API,
+ * instrumentation/poller, ecc.). Necessaria perché con Turbopack/HMR il modulo
+ * può essere caricato più volte: se il pool è creato da un'istanza e i tipi
+ * (`SQL.Int`) vengono da un'altra, tedious lancia
+ * "parameter.type.validate is not a function". Usare SEMPRE `SQL.*` a runtime.
+ */
+const SQL: typeof sql = (globalForErp.erpSql ??= sql);
 
 /** Commessa "generica" usata dal gestionale per gli impianti nuovi. */
 export const GENERIC_COMMESSA = 999999999;
@@ -45,7 +55,7 @@ async function getPool(): Promise<sql.ConnectionPool> {
     throw new Error("Gestionale non configurato (variabili SQLSERVER_* mancanti)");
   }
   if (!globalForErp.erpPool) {
-    const pool = new sql.ConnectionPool(config);
+    const pool = new SQL.ConnectionPool(config);
     // Se la connessione fallisce, azzera il singleton per ritentare al prossimo giro
     pool.on("error", () => {
       globalForErp.erpPool = undefined;
@@ -127,7 +137,7 @@ export async function getJobData(job: string): Promise<ErpJobData> {
 
   const com = await pool
     .request()
-    .input("c", sql.Int, commeca)
+    .input("c", SQL.Int, commeca)
     .query<{
       co_conto: number;
       co_descr1: string | null;
@@ -150,7 +160,7 @@ export async function getJobData(job: string): Promise<ErpJobData> {
   if (c.co_conto && c.co_conto !== 0) {
     const cli = await pool
       .request()
-      .input("conto", sql.Int, c.co_conto)
+      .input("conto", SQL.Int, c.co_conto)
       .query<{
         an_descr1: string | null;
         iso2: string | null;
@@ -178,7 +188,7 @@ export async function getJobData(job: string): Promise<ErpJobData> {
       : (
           await pool
             .request()
-            .input("c", sql.Int, commeca)
+            .input("c", SQL.Int, commeca)
             .query<{ n: number; min_s: Date | null; max_e: Date | null; ore: number | null }>(`
               SELECT COUNT(*) AS n, MIN(lce_start) AS min_s, MAX(lce_stop) AS max_e,
                      SUM(lce_tempese) AS ore
@@ -220,8 +230,8 @@ export async function getJobFasi(job: string, limit = 200): Promise<ErpFaseRow[]
   const pool = await getPool();
   const r = await pool
     .request()
-    .input("c", sql.Int, commeca)
-    .input("lim", sql.Int, limit)
+    .input("c", SQL.Int, commeca)
+    .input("lim", SQL.Int, limit)
     .query<{
       lce_desart: string | null;
       lce_deslavo: string | null;
@@ -296,7 +306,7 @@ export async function getCommessaOrders(commessa: string): Promise<ErpOrder[]> {
 
   const r = await pool
     .request()
-    .input("c", sql.Int, commeca)
+    .input("c", SQL.Int, commeca)
     .query<{
       lce_ortipo: string;
       lce_oranno: number;
@@ -322,7 +332,7 @@ export async function getCommessaOrders(commessa: string): Promise<ErpOrder[]> {
   // Articolo principale (max ore) per ciascun ordine
   const mains = await pool
     .request()
-    .input("c", sql.Int, commeca)
+    .input("c", SQL.Int, commeca)
     .query<{
       lce_ortipo: string;
       lce_oranno: number;
@@ -402,10 +412,10 @@ export async function getOrderData(orderKey: string): Promise<ErpOrderData | nul
 
   const agg = await pool
     .request()
-    .input("t", sql.VarChar, k.tipork)
-    .input("y", sql.Int, k.anno)
-    .input("s", sql.VarChar, k.serie)
-    .input("n", sql.Int, k.num)
+    .input("t", SQL.VarChar, k.tipork)
+    .input("y", SQL.Int, k.anno)
+    .input("s", SQL.VarChar, k.serie)
+    .input("n", SQL.Int, k.num)
     .query<{ n: number; ore: number | null; s: Date | null; e: Date | null }>(`
       SELECT COUNT(*) AS n, SUM(lce_tempese) AS ore, MIN(lce_start) AS s, MAX(lce_stop) AS e
       FROM avlavp
@@ -424,10 +434,10 @@ export async function getOrderData(orderKey: string): Promise<ErpOrderData | nul
 
   const arts = await pool
     .request()
-    .input("t", sql.VarChar, k.tipork)
-    .input("y", sql.Int, k.anno)
-    .input("s", sql.VarChar, k.serie)
-    .input("n", sql.Int, k.num)
+    .input("t", SQL.VarChar, k.tipork)
+    .input("y", SQL.Int, k.anno)
+    .input("s", SQL.VarChar, k.serie)
+    .input("n", SQL.Int, k.num)
     .query<{
       lce_codart: string | null;
       lce_desart: string | null;
@@ -480,8 +490,8 @@ export async function searchErpCustomers(q: string, limit = 20): Promise<ErpCust
   const pool = await getPool();
   const r = await pool
     .request()
-    .input("q", sql.VarChar, `%${term}%`)
-    .input("lim", sql.Int, limit)
+    .input("q", SQL.VarChar, `%${term}%`)
+    .input("lim", SQL.Int, limit)
     .query<{
       an_conto: number;
       an_descr1: string | null;
@@ -506,6 +516,29 @@ export async function searchErpCustomers(q: string, limit = 20): Promise<ErpCust
   }));
 }
 
+export type ErpArticle = { code: string; description: string };
+
+/** Ricerca articoli/ricambi nel gestionale (tabella artico) per codice o descrizione. */
+export async function searchErpArticles(q: string, limit = 20): Promise<ErpArticle[]> {
+  const term = q.trim();
+  if (term.length < 2) return [];
+  const pool = await getPool();
+  const r = await pool
+    .request()
+    .input("q", SQL.VarChar, `%${term}%`)
+    .input("lim", SQL.Int, limit)
+    .query<{ ar_codart: string | null; ar_descr: string | null }>(`
+      SELECT TOP (@lim) ar_codart, ar_descr
+      FROM artico
+      WHERE codditt = 'ZATO' AND (ar_codart LIKE @q OR ar_descr LIKE @q)
+      ORDER BY ar_codart ASC;
+    `);
+  return r.recordset.map((x) => ({
+    code: (x.ar_codart ?? "").trim(),
+    description: (x.ar_descr ?? "").trim(),
+  }));
+}
+
 export type ErpCustomerDetail = {
   conto: number;
   name: string;
@@ -527,7 +560,7 @@ export async function getErpCustomerByConto(conto: number): Promise<ErpCustomerD
   const run = async (cols: string) =>
     pool
       .request()
-      .input("conto", sql.Int, conto)
+      .input("conto", SQL.Int, conto)
       .query<Record<string, string | null>>(`
         SELECT TOP 1 ${cols}
         FROM anagra a
@@ -567,7 +600,7 @@ export async function getErpCustomerForJob(job: string): Promise<ErpCustomerDeta
   const pool = await getPool();
   const com = await pool
     .request()
-    .input("c", sql.Int, commeca)
+    .input("c", SQL.Int, commeca)
     .query<{ co_conto: number }>(`SELECT TOP 1 co_conto FROM commess WHERE co_comme = @c;`);
   const conto = com.recordset[0]?.co_conto;
   if (!conto) return null;

@@ -23,7 +23,7 @@ type ServiceData = {
 };
 
 type Item = { id: string; position: number; label: string; serial: string | null; note: string | null };
-type Comp = { id: string; groupId: string; brand: string | null; extra: Record<string, string> | null; items: Item[] };
+type Comp = { id: string; groupId: string; label: string | null; brand: string | null; extra: Record<string, string> | null; items: Item[] };
 type Diary = {
   id: string; phase: string; type: string; title: string; note: string | null;
   date: string; actorName: string; oldSerial: string | null; newSerial: string | null;
@@ -179,6 +179,7 @@ export default function MachineDetail({
       {tab === "componenti" && (
         <TabComponenti
           machine={machine}
+          canEdit={caps.intervention}
           onReplace={caps.intervention ? (c) => setIntervention(c) : undefined}
           onDone={refresh}
           notify={notify}
@@ -1024,11 +1025,13 @@ function OrderPicker({
 /* ── Tab Componenti ─────────────────────────────────────── */
 function TabComponenti({
   machine,
+  canEdit,
   onReplace,
   onDone,
   notify,
 }: {
   machine: Machine;
+  canEdit?: boolean;
   onReplace?: (c: { groupId: string; itemId: string; itemLabel: string; oldSerial: string }) => void;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
@@ -1036,11 +1039,44 @@ function TabComponenti({
   const [open, setOpen] = useState<string | null>(machine.components[0]?.groupId ?? null);
   const photoRef = useRef<HTMLInputElement>(null);
   const [target, setTarget] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const totalSerials = machine.components.reduce(
     (a, c) => a + c.items.filter((i) => i.serial).length,
     0
   );
+
+  // gruppi custom = quelli non presenti nel catalogo
+  const customComps = machine.components.filter(
+    (c) => !COMPONENT_GROUPS.some((g) => g.id === c.groupId)
+  );
+
+  async function addField(componentId: string, label: string) {
+    const res = await fetch(`/api/machines/${machine.id}/component-item`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ componentId, label }),
+    });
+    if (res.ok) {
+      onDone();
+      notify("Campo aggiunto");
+    } else notify("Errore", "err");
+  }
+  async function deleteField(itemId: string) {
+    const res = await fetch(`/api/machines/${machine.id}/component-item?itemId=${itemId}`, { method: "DELETE" });
+    if (res.ok) {
+      onDone();
+      notify("Campo rimosso");
+    } else notify("Errore", "err");
+  }
+  async function deleteComponent(componentId: string) {
+    if (!confirm("Eliminare questo componente personalizzato e tutti i suoi campi?")) return;
+    const res = await fetch(`/api/machines/${machine.id}/component?componentId=${componentId}`, { method: "DELETE" });
+    if (res.ok) {
+      onDone();
+      notify("Componente eliminato");
+    } else notify("Errore", "err");
+  }
 
   async function uploadItemPhoto(files: FileList | null) {
     if (!files || !files.length || !target) return;
@@ -1070,6 +1106,13 @@ function TabComponenti({
           <span className="dot-sep"> · </span>
           <span className="muted">Matricole censite:</span> <strong>{totalSerials}</strong>
         </div>
+        {canEdit && (
+          <div className="cmp-actions">
+            <button className="btn-primary-sm" onClick={() => setAddOpen(true)}>
+              <Icon name="plus" size={14} /> Aggiungi componente
+            </button>
+          </div>
+        )}
       </div>
 
       <input
@@ -1134,8 +1177,14 @@ function TabComponenti({
                         {c.items.map((it) => (
                           <tr key={it.id}>
                             <td>{it.label}</td>
-                            <td className="mono">
-                              {it.serial || <span className="muted">—</span>}
+                            <td>
+                              <SlotSerialCell
+                                machineId={machine.id}
+                                item={it}
+                                canEdit={!!canEdit}
+                                onDone={onDone}
+                                notify={notify}
+                              />
                             </td>
                             <td>
                               <button
@@ -1189,7 +1238,301 @@ function TabComponenti({
             </div>
           );
         })}
+
+        {/* Componenti personalizzati (custom) */}
+        {customComps.map((c) => {
+          const isOpen = open === c.groupId;
+          const filled = c.items.filter((i) => i.serial).length;
+          return (
+            <div key={c.groupId} className={"cmp-row" + (isOpen ? " open" : "")}>
+              <button className="cmp-row-head" onClick={() => setOpen(isOpen ? null : c.groupId)}>
+                <span className="cmp-icon">
+                  <Icon name="box" size={20} />
+                </span>
+                <div className="cmp-name">
+                  <div className="cmp-label">{c.label || "Componente"}</div>
+                  <div className="cmp-en mono">PERSONALIZZATO</div>
+                </div>
+                <div className="cmp-brand">{c.brand || "—"}</div>
+                <div className="cmp-count">
+                  <span className={"cmp-count-pill " + (filled === c.items.length && filled > 0 ? "full" : filled > 0 ? "partial" : "")}>
+                    {filled} / {c.items.length}
+                  </span>
+                </div>
+                <Icon name={isOpen ? "chev-down" : "chev-right"} size={16} />
+              </button>
+              {isOpen && (
+                <div className="cmp-row-body">
+                  <div className="table-wrap">
+                    <table className="cmp-table">
+                      <thead>
+                        <tr>
+                          <th>Campo</th>
+                          <th>Matricola / Valore</th>
+                          <th>Foto</th>
+                          {canEdit && <th />}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {c.items.map((it) => (
+                          <tr key={it.id}>
+                            <td>{it.label}</td>
+                            <td>
+                              <SlotSerialCell machineId={machine.id} item={it} canEdit={!!canEdit} onDone={onDone} notify={notify} />
+                            </td>
+                            <td>
+                              <button
+                                className="thumb-empty"
+                                title="Carica foto"
+                                onClick={() => {
+                                  setTarget(it.id);
+                                  setTimeout(() => photoRef.current?.click(), 0);
+                                }}
+                              >
+                                <Icon name="camera" size={16} />
+                              </button>
+                            </td>
+                            {canEdit && (
+                              <td>
+                                <button className="icon-btn sm" title="Rimuovi campo" onClick={() => deleteField(it.id)}>
+                                  <Icon name="trash" size={14} />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {canEdit && (
+                    <div className="cmp-custom-actions">
+                      <button
+                        className="btn-ghost-sm"
+                        onClick={() => {
+                          const l = prompt("Nome del nuovo campo (es. Sensore, Valvola…)");
+                          if (l && l.trim()) addField(c.id, l.trim());
+                        }}
+                      >
+                        <Icon name="plus" size={13} /> Aggiungi campo
+                      </button>
+                      <button className="btn-ghost-sm danger" onClick={() => deleteComponent(c.id)}>
+                        <Icon name="trash" size={13} /> Elimina componente
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {addOpen && (
+        <AddComponentModal
+          machineId={machine.id}
+          onClose={() => setAddOpen(false)}
+          onDone={() => {
+            setAddOpen(false);
+            onDone();
+            notify("Componente creato");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* Modale: crea un componente personalizzato con i suoi campi */
+function AddComponentModal({
+  machineId,
+  onClose,
+  onDone,
+}: {
+  machineId: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [brand, setBrand] = useState("");
+  const [fields, setFields] = useState<string[]>(["Matricola"]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const setField = (i: number, v: string) => setFields((s) => s.map((x, idx) => (idx === i ? v : x)));
+  const addField = () => setFields((s) => [...s, ""]);
+  const delField = (i: number) => setFields((s) => s.filter((_, idx) => idx !== i));
+
+  async function save() {
+    if (!label.trim()) {
+      setErr("Inserisci il nome del componente.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    const res = await fetch(`/api/machines/${machineId}/component`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, brand, fields: fields.map((f) => f.trim()).filter(Boolean) }),
+    });
+    setBusy(false);
+    if (res.ok) onDone();
+    else {
+      const d = await res.json().catch(() => null);
+      setErr(d?.error ?? "Errore nel salvataggio.");
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Nuovo componente</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Chiudi">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        <div className="modal-body">
+          <label className="field">
+            <span className="field-label">Nome componente *</span>
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Es. Sensore di prossimità" autoFocus />
+          </label>
+          <label className="field">
+            <span className="field-label">Marca / Fornitore</span>
+            <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Es. SICK" />
+          </label>
+          <div className="field">
+            <span className="field-label">Campi da compilare</span>
+            {fields.map((f, i) => (
+              <div key={i} className="slot-serial" style={{ marginBottom: 6 }}>
+                <input value={f} onChange={(e) => setField(i, e.target.value)} placeholder={`Campo ${i + 1}`} style={{ flex: 1 }} />
+                {fields.length > 1 && (
+                  <button className="icon-btn sm" onClick={() => delField(i)} aria-label="Rimuovi">
+                    <Icon name="trash" size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button className="btn-ghost-sm" onClick={addField} style={{ marginTop: 4 }}>
+              <Icon name="plus" size={13} /> Aggiungi campo
+            </button>
+          </div>
+          {err && <div className="form-error">{err}</div>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn-ghost" onClick={onClose} disabled={busy}>
+            Annulla
+          </button>
+          <button className="btn-primary" onClick={save} disabled={busy}>
+            {busy ? "Salvataggio…" : "Crea componente"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Cella matricola: inline-editabile + lettura da foto (OCR) da tablet/telefono */
+function SlotSerialCell({
+  machineId,
+  item,
+  canEdit,
+  onDone,
+  notify,
+}: {
+  machineId: string;
+  item: Item;
+  canEdit: boolean;
+  onDone: () => void;
+  notify: (m: string, k?: "ok" | "err") => void;
+}) {
+  const [val, setVal] = useState(item.serial ?? "");
+  const [busy, setBusy] = useState<null | "save" | "ocr">(null);
+  const camRef = useRef<HTMLInputElement>(null);
+  const dirty = val.trim() !== (item.serial ?? "");
+
+  async function save() {
+    setBusy("save");
+    try {
+      const res = await fetch(`/api/machines/${machineId}/component-item`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id, serial: val }),
+      });
+      if (res.ok) {
+        onDone();
+        notify("Matricola salvata");
+      } else notify("Errore salvataggio matricola", "err");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function fromPhoto(files: FileList | null) {
+    if (!files?.length) return;
+    const file = files[0];
+    setBusy("ocr");
+    try {
+      // 1) OCR della matricola
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await fetch("/api/vision/serial", { method: "POST", body: fd });
+      const d = await res.json().catch(() => null);
+      // 2) salva comunque la foto sullo slot
+      const fd2 = new FormData();
+      fd2.append("photos", file);
+      fd2.append("category", "componente");
+      fd2.append("componentItemId", item.id);
+      fetch(`/api/machines/${machineId}/photos`, { method: "POST", body: fd2 }).then(() => onDone());
+      if (res.ok && d?.serial) {
+        setVal(d.serial);
+        notify("Matricola letta dalla foto — verifica e salva");
+      } else {
+        notify(d?.error || "Matricola non riconosciuta nella foto", "err");
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!canEdit) return <span className="mono">{item.serial || <span className="muted">—</span>}</span>;
+
+  return (
+    <div className="slot-serial">
+      <input
+        className="mono"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        placeholder="matricola…"
+      />
+      <button
+        type="button"
+        className="icon-btn sm"
+        title="Leggi matricola da foto"
+        onClick={() => camRef.current?.click()}
+        disabled={busy !== null}
+      >
+        <Icon name="camera" size={15} />
+      </button>
+      {dirty && (
+        <button
+          type="button"
+          className="icon-btn sm slot-save"
+          title="Salva matricola"
+          onClick={save}
+          disabled={busy !== null}
+        >
+          <Icon name="check" size={15} />
+        </button>
+      )}
+      {busy === "ocr" && <span className="muted small">lettura…</span>}
+      <input
+        ref={camRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => fromPhoto(e.target.files)}
+      />
     </div>
   );
 }
@@ -1209,6 +1552,7 @@ function TabFoto({
   const [cat, setCat] = useState("all");
   const [uploadCat, setUploadCat] = useState("produzione");
   const fileRef = useRef<HTMLInputElement>(null);
+  const camRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
   const filtered = cat === "all" ? machine.photos : machine.photos.filter((p) => p.category === cat);
@@ -1264,9 +1608,20 @@ function TabFoto({
               </option>
             ))}
           </select>
-          <button className="btn-primary-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
-            <Icon name="camera" size={14} /> Carica foto
+          <button className="btn-primary-sm" disabled={busy} onClick={() => camRef.current?.click()}>
+            <Icon name="camera" size={14} /> Scatta foto
           </button>
+          <button className="btn-ghost-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+            <Icon name="image" size={14} /> Dalla libreria
+          </button>
+          <input
+            ref={camRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(e) => upload(e.target.files)}
+          />
           <input
             ref={fileRef}
             type="file"

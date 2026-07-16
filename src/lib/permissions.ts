@@ -10,6 +10,7 @@ export type PermAction =
   | "users.manage"
   | "settings.manage"
   | "service.view"
+  | "intervento.viewAll"
   | "intervento.create"
   | "intervento.edit"
   | "intervento.sign"
@@ -17,7 +18,8 @@ export type PermAction =
   | "chat.send"
   | "chat.import"
   | "knowledge.view"
-  | "knowledge.manage";
+  | "knowledge.manage"
+  | "checklist.manage";
 
 export const PERM_ACTIONS: { key: PermAction; label: string }[] = [
   { key: "machine.create", label: "Creare fascicoli macchina" },
@@ -28,6 +30,7 @@ export const PERM_ACTIONS: { key: PermAction; label: string }[] = [
   { key: "users.manage", label: "Gestire operatori" },
   { key: "settings.manage", label: "Gestire impostazioni" },
   { key: "service.view", label: "Accedere al modulo Service" },
+  { key: "intervento.viewAll", label: "Vedere tutti gli interventi (non solo i propri)" },
   { key: "intervento.create", label: "Creare interventi di service" },
   { key: "intervento.edit", label: "Modificare / assegnare interventi" },
   { key: "intervento.sign", label: "Firmare rapportini di intervento" },
@@ -36,6 +39,7 @@ export const PERM_ACTIONS: { key: PermAction; label: string }[] = [
   { key: "chat.import", label: "Importare storico chat WhatsApp/Telegram" },
   { key: "knowledge.view", label: "Consultare la Knowledge base" },
   { key: "knowledge.manage", label: "Creare / modificare articoli Knowledge" },
+  { key: "checklist.manage", label: "Compilare / gestire le check list di cantiere" },
 ];
 
 export const ALL_ROLES = Object.keys(ROLE_LABEL) as Role[];
@@ -44,6 +48,30 @@ export type PermissionMatrix = Record<string, Partial<Record<PermAction, boolean
 
 /** Matrice permessi di default per ruolo. ADMIN ha sempre tutto. */
 export const DEFAULT_PERMISSIONS: PermissionMatrix = {
+  // Responsabile cantieri: come l'amministratore (tutti i permessi), ma ruolo
+  // modificabile. Unico (con ADMIN) a poter gestire le check list di cantiere.
+  RESPONSABILE_CANTIERI: Object.fromEntries(
+    [
+      "machine.create",
+      "machine.edit",
+      "machine.intervention",
+      "machine.sign",
+      "machine.import",
+      "users.manage",
+      "settings.manage",
+      "service.view",
+      "intervento.viewAll",
+      "intervento.create",
+      "intervento.edit",
+      "intervento.sign",
+      "customer.manage",
+      "chat.send",
+      "chat.import",
+      "knowledge.view",
+      "knowledge.manage",
+      "checklist.manage",
+    ].map((k) => [k, true])
+  ) as Partial<Record<PermAction, boolean>>,
   ADMIN: {
     "machine.create": true,
     "machine.edit": true,
@@ -62,6 +90,7 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     "users.manage": false,
     "settings.manage": false,
     "service.view": true,
+    "intervento.viewAll": true,
     "intervento.create": true,
     "intervento.edit": true,
     "intervento.sign": true,
@@ -71,27 +100,29 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     "knowledge.view": true,
     "knowledge.manage": true,
   },
-  MONTATORE: { "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
-  CABLATORE: { "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
-  PROGRAMMATORE: { "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
+  MONTATORE: { "machine.create": true, "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
+  CABLATORE: { "machine.create": true, "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
+  PROGRAMMATORE: { "machine.create": true, "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
   COLLAUDATORE: {
+    "machine.create": true,
     "machine.intervention": true,
     "machine.sign": true,
     "machine.edit": true,
     "service.view": true,
+    "intervento.viewAll": true,
     "intervento.sign": true,
     "knowledge.view": true,
   },
+  // Tecnico di campo: accede al Service ma vede SOLO i propri interventi
+  // (intervento.viewAll assente). NON modifica i "Dati intervento"
+  // (intervento.edit assente); può solo compilare/firmare i rapportini
+  // (intervento.sign). Può creare/aggiornare fascicoli macchina dall'app Fascicolo.
   TECNICO_CAMPO: {
+    "machine.create": true,
     "machine.intervention": true,
     "machine.sign": true,
-    "machine.edit": true,
     "service.view": true,
-    "intervento.create": true,
-    "intervento.edit": true,
     "intervento.sign": true,
-    "chat.send": true,
-    "chat.import": true,
     "knowledge.view": true,
   },
   LOGISTICA: { "machine.edit": true, "service.view": true, "knowledge.view": true },

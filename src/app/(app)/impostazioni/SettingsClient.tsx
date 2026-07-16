@@ -9,6 +9,8 @@ import {
   type PermissionMatrix,
   type PermAction,
 } from "@/lib/permissions";
+import { NAV_ITEMS, type NavVisibility, type NavKey } from "@/lib/nav";
+import type { AppAccessMatrix, AppProfile } from "@/lib/appAccess";
 
 type PlantConfig = { name: string; models: string[] }[];
 
@@ -23,16 +25,22 @@ type SyncSummary = {
 export default function SettingsClient({
   plantConfig,
   permissions,
+  navVisibility,
+  appAccess,
   canSync,
   erpConfigured,
 }: {
   plantConfig: PlantConfig;
   permissions: PermissionMatrix;
+  navVisibility: NavVisibility;
+  appAccess: AppAccessMatrix;
   canSync: boolean;
   erpConfigured: boolean;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"plant" | "perms" | "erp">("plant");
+  const [tab, setTab] = useState<"plant" | "perms" | "nav" | "erp">("plant");
+  const [navm, setNavm] = useState<NavVisibility>(JSON.parse(JSON.stringify(navVisibility)));
+  const [appm, setAppm] = useState<AppAccessMatrix>(JSON.parse(JSON.stringify(appAccess)));
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncSummary | null>(null);
   const [plants, setPlants] = useState<{ name: string; models: string }[]>(
@@ -106,6 +114,24 @@ export default function SettingsClient({
     } else notify("Errore salvataggio", "err");
   }
 
+  function toggleNav(role: string, key: NavKey) {
+    setNavm((s) => ({ ...s, [role]: { ...s[role], [key]: !s[role]?.[key] } }));
+  }
+
+  async function saveNav() {
+    setBusy(true);
+    const res = await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ navVisibility: navm, appAccess: appm }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      notify("Menu e accessi salvati");
+      router.refresh();
+    } else notify("Errore salvataggio", "err");
+  }
+
   async function runSync() {
     setSyncing(true);
     setSyncResult(null);
@@ -147,6 +173,12 @@ export default function SettingsClient({
           onClick={() => setTab("perms")}
         >
           <Icon name="people" size={14} /> <span>Permessi per ruolo</span>
+        </button>
+        <button
+          className={"tab" + (tab === "nav" ? " active" : "")}
+          onClick={() => setTab("nav")}
+        >
+          <Icon name="menu" size={14} /> <span>Menu &amp; Navigazione</span>
         </button>
         {canSync && (
           <button
@@ -267,6 +299,98 @@ export default function SettingsClient({
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {tab === "nav" && (
+        <div className="tab-content">
+          <div className="cmp-toolbar">
+            <div className="cmp-summary muted">
+              Definisci l&apos;<strong>app di partenza</strong> per ruolo e quali
+              <strong> menu</strong> vede ogni ruolo. L&apos;amministratore vede sempre tutto.
+            </div>
+            <div className="cmp-actions">
+              <button className="btn-primary-sm" disabled={busy} onClick={saveNav}>
+                <Icon name="check" size={14} /> Salva menu e accessi
+              </button>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div className="card-header">
+              <h3>App di partenza per ruolo</h3>
+            </div>
+            <p className="muted small" style={{ marginTop: -4 }}>
+              «Desktop completo» = applicazione con sidebar sul PC; su tablet/telefono passa
+              automaticamente alla versione Campo. «Solo Campo» = sempre e solo l&apos;app
+              mobile/tablet (operativi).
+            </p>
+            <div className="app-access-grid">
+              {ALL_ROLES.map((role) => {
+                const isAdmin = role === "ADMIN";
+                const val: AppProfile = isAdmin ? "desktop" : appm[role] ?? "field";
+                return (
+                  <div key={role} className="app-access-row">
+                    <span style={{ fontWeight: 500 }}>{ROLE_LABEL[role]}</span>
+                    <select
+                      value={val}
+                      disabled={isAdmin}
+                      onChange={(e) => setAppm((s) => ({ ...s, [role]: e.target.value as AppProfile }))}
+                    >
+                      <option value="desktop">Desktop completo</option>
+                      <option value="field">Solo Campo</option>
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="card no-pad">
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Ruolo</th>
+                    {NAV_ITEMS.map((n) => (
+                      <th key={n.key} style={{ textAlign: "center" }}>
+                        {n.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ALL_ROLES.map((role) => {
+                    const isAdmin = role === "ADMIN";
+                    return (
+                      <tr key={role}>
+                        <td style={{ fontWeight: 500 }}>{ROLE_LABEL[role]}</td>
+                        {NAV_ITEMS.map((n) => {
+                          const onv = isAdmin ? true : !!navm[role]?.[n.key];
+                          return (
+                            <td key={n.key} style={{ textAlign: "center" }}>
+                              <button
+                                className={"check-box" + (onv ? " on" : "")}
+                                style={{ margin: "0 auto" }}
+                                disabled={isAdmin}
+                                onClick={() => toggleNav(role, n.key)}
+                                aria-label={n.label}
+                              >
+                                {onv && <Icon name="check" size={12} />}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="muted small" style={{ marginTop: 10 }}>
+            Import Dati e Impostazioni restano legati ai permessi «Import massivo» e
+            «Gestire impostazioni».
+          </p>
         </div>
       )}
 

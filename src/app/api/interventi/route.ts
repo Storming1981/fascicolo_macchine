@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { nextInterventoCode } from "@/lib/interventoService";
+import { INTERVENTO_TYPE_META, DEFAULT_INTERVENTO_TYPE } from "@/lib/domain";
 import type { InterventoStatus, Prisma } from "@prisma/client";
 
 const STATUSES: InterventoStatus[] = [
@@ -53,6 +54,8 @@ export async function POST(req: Request) {
   const code = await nextInterventoCode();
   const priority = [1, 2, 3].includes(b.priority) ? b.priority : 3;
   const status: InterventoStatus = STATUSES.includes(b.status) ? b.status : "NUOVO";
+  const type =
+    typeof b.type === "string" && b.type in INTERVENTO_TYPE_META ? b.type : DEFAULT_INTERVENTO_TYPE;
 
   const intervento = await prisma.intervento.create({
     data: {
@@ -60,6 +63,7 @@ export async function POST(req: Request) {
       title: b.title.trim(),
       description: typeof b.description === "string" ? b.description.trim() || null : null,
       status,
+      type,
       priority,
       channel: typeof b.channel === "string" ? b.channel.trim() || null : null,
       reportedBy: typeof b.reportedBy === "string" ? b.reportedBy.trim() || null : null,

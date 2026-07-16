@@ -5,19 +5,41 @@ import Link from "next/link";
 import Icon from "./Icon";
 import { initials } from "@/lib/domain";
 
+type NavKey =
+  | "dashboard"
+  | "macchine"
+  | "persone"
+  | "service"
+  | "interventi"
+  | "chat"
+  | "pianificazione"
+  | "mappa"
+  | "clienti"
+  | "notifiche"
+  | "knowledge";
+
 export default function AppShell({
   user,
   machineCount,
+  nav,
+  canCampo,
   caps,
   children,
 }: {
   user: { name: string; roleLabel: string; email: string };
   machineCount: number;
-  caps: { import: boolean; settings: boolean; service: boolean; knowledge: boolean };
+  nav: Record<NavKey, boolean>;
+  canCampo: boolean;
+  caps: { import: boolean; settings: boolean; service: boolean };
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  function goCampo() {
+    document.cookie = "shell=campo; path=/; max-age=31536000; samesite=lax";
+    router.push("/campo");
+  }
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
 
@@ -59,31 +81,31 @@ export default function AppShell({
     {
       title: "Fascicolo",
       items: [
-        { href: "/dashboard", label: "Dashboard", icon: "home", show: true },
-        { href: "/macchine", label: "Macchine", icon: "machines", badge: true, show: true },
+        { href: "/dashboard", label: "Dashboard", icon: "home", show: nav.dashboard },
+        { href: "/macchine", label: "Macchine", icon: "machines", badge: true, show: nav.macchine },
       ],
     },
     {
       title: "Service",
       items: [
-        { href: "/service", label: "Panoramica", icon: "home", show: caps.service },
-        { href: "/service/interventi", label: "Interventi", icon: "wrench", show: caps.service },
-        { href: "/service/chat", label: "Chat", icon: "sign", show: caps.service },
-        { href: "/service/pianificazione", label: "Pianificazione", icon: "clock", show: caps.service },
-        { href: "/service/mappa", label: "Mappa cantieri", icon: "pin", show: caps.service },
-        { href: "/service/clienti", label: "Clienti & Cantieri", icon: "people", show: caps.service },
-        { href: "/service/notifiche", label: "Notifiche", icon: "bell", show: caps.service },
+        { href: "/service", label: "Panoramica", icon: "home", show: caps.service && nav.service },
+        { href: "/service/interventi", label: "Interventi", icon: "wrench", show: caps.service && nav.interventi },
+        { href: "/service/chat", label: "Chat", icon: "sign", show: caps.service && nav.chat },
+        { href: "/service/pianificazione", label: "Pianificazione", icon: "clock", show: caps.service && nav.pianificazione },
+        { href: "/service/mappa", label: "Mappa cantieri", icon: "pin", show: caps.service && nav.mappa },
+        { href: "/service/clienti", label: "Clienti & Cantieri", icon: "people", show: caps.service && nav.clienti },
+        { href: "/service/notifiche", label: "Notifiche", icon: "bell", show: caps.service && nav.notifiche },
       ],
     },
     {
       title: "Knowledge",
       items: [
-        { href: "/knowledge", label: "Knowledge ZATO", icon: "doc", show: caps.knowledge },
+        { href: "/knowledge", label: "Knowledge ZATO", icon: "doc", show: nav.knowledge },
       ],
     },
     {
       title: "Registro",
-      items: [{ href: "/persone", label: "Persone & Firme", icon: "people", show: true }],
+      items: [{ href: "/persone", label: "Persone & Firme", icon: "people", show: nav.persone }],
     },
     {
       title: "Amministrazione",
@@ -142,6 +164,11 @@ export default function AppShell({
               <div className="user-role">{user.email}</div>
             </div>
           </div>
+          {canCampo && (
+            <button className="logout-btn" onClick={goCampo} title="Passa alla versione mobile/tablet">
+              <Icon name="remote" size={15} /> Versione Campo
+            </button>
+          )}
           <button className="logout-btn" onClick={logout}>
             <Icon name="logout" size={15} /> Esci
           </button>

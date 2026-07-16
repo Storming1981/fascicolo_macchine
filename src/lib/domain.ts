@@ -46,6 +46,39 @@ export const INTERVENTO_STATUS_ORDER: InterventoStatus[] = [
   "FATTURATO",
 ];
 
+/**
+ * Tipologia intervento (targhettizzazione): colore usato con alpha per tinte
+ * tenui sulle card (kanban/lista) e come chip nella scheda. Campo String su
+ * Intervento per poter estendere l'elenco senza migrazioni.
+ */
+export const INTERVENTO_TYPE_META: Record<string, { label: string; color: string }> = {
+  INSTALLAZIONE: { label: "Installazione", color: "#ca8a04" }, // giallo
+  MANUTENZIONE: { label: "Manutenzione", color: "#2563eb" }, // blu
+  RIPARAZIONE: { label: "Riparazione", color: "#ea580c" }, // arancio
+  SOSTITUZIONE: { label: "Sostituzione ricambi", color: "#db2777" }, // rosa
+  COLLAUDO: { label: "Collaudo / Completamento", color: "#7c3aed" }, // viola
+  FORMAZIONE: { label: "Formazione / Sicurezza", color: "#16a34a" }, // verde
+  TAGLIO: { label: "Taglio / Demolizione", color: "#0891b2" }, // ciano
+  ALTRO: { label: "Altro", color: "#64748b" }, // grigio
+};
+
+export const INTERVENTO_TYPE_ORDER = [
+  "INSTALLAZIONE",
+  "MANUTENZIONE",
+  "RIPARAZIONE",
+  "SOSTITUZIONE",
+  "COLLAUDO",
+  "FORMAZIONE",
+  "TAGLIO",
+  "ALTRO",
+] as const;
+
+export const DEFAULT_INTERVENTO_TYPE = "MANUTENZIONE";
+
+export function interventoTypeMeta(type: string | null | undefined) {
+  return INTERVENTO_TYPE_META[type ?? ""] ?? INTERVENTO_TYPE_META[DEFAULT_INTERVENTO_TYPE];
+}
+
 /** Priorità intervento: 1 = critico (P1), 2 = alto, 3 = normale. */
 export const PRIORITY_META: Record<number, { label: string; short: string; color: string }> = {
   1: { label: "P1 · Critico", short: "P1", color: "#dc2626" },
@@ -55,6 +88,7 @@ export const PRIORITY_META: Record<number, { label: string; short: string; color
 
 export const ROLE_LABEL: Record<Role, string> = {
   ADMIN: "Amministratore",
+  RESPONSABILE_CANTIERI: "Responsabile cantieri",
   CAPO_OFFICINA: "Capo officina",
   MONTATORE: "Operatore montaggio",
   CABLATORE: "Cablatore elettrico",

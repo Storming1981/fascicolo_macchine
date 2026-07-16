@@ -6,6 +6,10 @@ import Icon from "@/components/Icon";
 import {
   INTERVENTO_STATUS_META,
   INTERVENTO_STATUS_ORDER,
+  INTERVENTO_TYPE_META,
+  INTERVENTO_TYPE_ORDER,
+  DEFAULT_INTERVENTO_TYPE,
+  interventoTypeMeta,
   PRIORITY_META,
   initials,
 } from "@/lib/domain";
@@ -16,6 +20,7 @@ export type InterventoRow = {
   code: string;
   title: string;
   status: InterventoStatus;
+  type: string;
   priority: number;
   channel: string | null;
   customer: string | null;
@@ -254,6 +259,7 @@ function Ticket({
   onDragEnd?: () => void;
 }) {
   const prio = PRIORITY_META[i.priority] ?? PRIORITY_META[3];
+  const tmeta = interventoTypeMeta(i.type);
   return (
     <div
       className={"ticket" + (busy ? " busy" : "") + (dragging ? " dragging" : "") + (draggable ? " draggable" : "")}
@@ -263,6 +269,7 @@ function Ticket({
         onDragStart?.();
       }}
       onDragEnd={onDragEnd}
+      style={{ borderLeft: `4px solid ${tmeta.color}`, background: tmeta.color + "0b" }}
     >
       <div className="ticket-top">
         <Link href={`/service/interventi/${i.id}`} className="ticket-id mono" draggable={false}>
@@ -272,6 +279,9 @@ function Ticket({
           {prio.label}
         </span>
       </div>
+      <span className="type-chip" style={{ background: tmeta.color + "1f", color: tmeta.color }}>
+        {tmeta.label}
+      </span>
       <Link href={`/service/interventi/${i.id}`} className="ticket-title" draggable={false}>
         {i.title}
       </Link>
@@ -329,6 +339,7 @@ function Lista({ interventi }: { interventi: InterventoRow[] }) {
           <tr>
             <th>Codice</th>
             <th>Titolo</th>
+            <th>Tipo</th>
             <th>Cliente · Cantiere</th>
             <th>Macchina</th>
             <th>Stato</th>
@@ -340,8 +351,9 @@ function Lista({ interventi }: { interventi: InterventoRow[] }) {
           {interventi.map((i) => {
             const meta = INTERVENTO_STATUS_META[i.status];
             const prio = PRIORITY_META[i.priority] ?? PRIORITY_META[3];
+            const tmeta = interventoTypeMeta(i.type);
             return (
-              <tr key={i.id}>
+              <tr key={i.id} style={{ boxShadow: `inset 3px 0 0 ${tmeta.color}` }}>
                 <td className="mono muted">
                   <Link href={`/service/interventi/${i.id}`} className="link-strong">
                     {i.code}
@@ -351,6 +363,11 @@ function Lista({ interventi }: { interventi: InterventoRow[] }) {
                   <Link href={`/service/interventi/${i.id}`} style={{ color: "inherit" }}>
                     {i.title}
                   </Link>
+                </td>
+                <td>
+                  <span className="type-chip" style={{ background: tmeta.color + "1f", color: tmeta.color }}>
+                    {tmeta.label}
+                  </span>
                 </td>
                 <td>
                   <div>{i.customer ?? "—"}</div>
@@ -394,6 +411,7 @@ function NewInterventoModal({
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
+  const [type, setType] = useState<string>(DEFAULT_INTERVENTO_TYPE);
   const [priority, setPriority] = useState(3);
   const [customerId, setCustomerId] = useState("");
   const [machineId, setMachineId] = useState("");
@@ -424,6 +442,7 @@ function NewInterventoModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
+          type,
           priority,
           customerId: customerId || undefined,
           machineId: machineId || undefined,
@@ -464,6 +483,21 @@ function NewInterventoModal({
               placeholder="Es. Sostituzione martelli mulino M3"
               autoFocus
             />
+          </label>
+
+          <label className="field">
+            <span className="field-label">Tipo intervento</span>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              style={{ borderLeft: `4px solid ${interventoTypeMeta(type).color}` }}
+            >
+              {INTERVENTO_TYPE_ORDER.map((t) => (
+                <option key={t} value={t}>
+                  {INTERVENTO_TYPE_META[t].label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="field">

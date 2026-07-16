@@ -9,6 +9,7 @@ datasource db {
 
 enum Role {
   ADMIN
+  RESPONSABILE_CANTIERI
   CAPO_OFFICINA
   MONTATORE
   CABLATORE
@@ -76,6 +77,8 @@ model User {
   phone          String?  // telefono dipendente
   photo          String?  @db.Text // foto profilo (dataURL)
   reparto        String?  // reparto (timbratore): PRO, APV, UTE…
+  siteManager    Boolean  @default(false) // responsabile di cantiere
+  appAccess      String?  // override guscio: "desktop" | "field" (null = default ruolo)
   createdAt      DateTime @default(now())
 
   diaryEvents    DiaryEvent[]
@@ -84,6 +87,7 @@ model User {
   collauduFatti  Collaudo[]   @relation("CollaudoCompiler")
   collauduAppr   Collaudo[]   @relation("CollaudoApprover")
   interventiAssegnati Intervento[] @relation("InterventoTech")
+  interventiPartecipati Intervento[] @relation("InterventoParticipants")
   presences      TechPresence[]
 }
 
@@ -178,7 +182,8 @@ model MachineMilestone {
 model Component {
   id        String  @id @default(cuid())
   machineId String
-  groupId   String // gearboxes, hyd_motors, ...
+  groupId   String // gearboxes, hyd_motors, ... oppure "custom-<uuid>"
+  label     String? // nome del gruppo per i componenti CUSTOM (non a catalogo)
   brand     String?
   extra     Json?
   machine   Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
@@ -340,13 +345,15 @@ model Intervento {
   title         String
   description   String?
   status        InterventoStatus @default(NUOVO)
+  type          String           @default("MANUTENZIONE") // INSTALLAZIONE | MANUTENZIONE | RIPARAZIONE | SOSTITUZIONE | COLLAUDO | FORMAZIONE | TAGLIO | ALTRO
   priority      Int              @default(3) // 1 = critico/P1, 2 = alto, 3 = normale
   channel       String?          // portale | whatsapp | telegram | email | telefono
   reportedBy    String?          // nome contatto cliente che ha segnalato
+  commessa      String?          // commessa cantiere 9 cifre (codice parlante) → timbratore
   customerId    String?
   siteId        String?
   machineId     String?          // fascicolo macchina coinvolto
-  assignedTechId String?         // tecnico assegnato (User)
+  assignedTechId String?         // responsabile di cantiere / supervisore (User)
   scheduledStart DateTime?
   scheduledEnd   DateTime?
   startedAt     DateTime?
@@ -359,8 +366,10 @@ model Intervento {
   customer   Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
   site       Site?       @relation(fields: [siteId], references: [id], onDelete: SetNull)
   machine    Machine?    @relation(fields: [machineId], references: [id], onDelete: SetNull)
-  tech       User?       @relation("InterventoTech", fields: [assignedTechId], references: [id], onDelete: SetNull)
-  rapportino    Rapportino?
+  tech         User?     @relation("InterventoTech", fields: [assignedTechId], references: [id], onDelete: SetNull)
+  participants  User[]    @relation("InterventoParticipants") // tecnici partecipanti (squadra)
+  rapportini    Rapportino[]
+  checklists    InterventoChecklist[]
   photos        Photo[]
   conversations Conversation[]
 
@@ -373,7 +382,8 @@ model Intervento {
 /// evento di manutenzione (DiaryEvent) sul fascicolo macchina collegato.
 model Rapportino {
   id              String    @id @default(cuid())
-  interventoId    String    @unique
+  interventoId    String
+  date            DateTime  @default(now()) // giorno del rapportino (uno per giornata)
   workDescription String?
   ricambi         Json      @default("[]") // [{ code, desc, qty, note }]
   hoursWorked     Float?
@@ -390,6 +400,52 @@ model Rapportino {
   updatedAt       DateTime  @updatedAt
 
   intervento Intervento @relation(fields: [interventoId], references: [id], onDelete: Cascade)
+  revisions  RapportinoRevision[]
+
+  @@index([interventoId])
+}
+
+/// Log delle modifiche a un rapportino GIÀ FIRMATO/CHIUSO: ogni edit salva lo
+/// stato precedente (snapshot) per poter risalire a chi/cosa/quando è cambiato.
+model RapportinoRevision {
+  id           String   @id @default(cuid())
+  rapportinoId String
+  editedById   String?
+  editedByName String
+  editedAt     DateTime @default(now())
+  snapshot     Json     // stato PRECEDENTE: { date, workDescription, ricambi, hoursWorked, techName, clientName }
+  note         String?  // motivo/nota della modifica
+
+  rapportino Rapportino @relation(fields: [rapportinoId], references: [id], onDelete: Cascade)
+
+  @@index([rapportinoId])
+}
+
+/// Check list di cantiere per intervento (AMBIENTE / SICUREZZA). Compilata dal
+/// responsabile di cantiere; alla chiusura (firma + data) genera un PDF.
+model InterventoChecklist {
+  id           String    @id @default(cuid())
+  interventoId String
+  type         String // AMBIENTE | SICUREZZA
+  answers      Json      @default("{}") // { itemKey: "SI" | "NO" | "NA" }
+  fields       Json      @default("{}") // campi testata + note libere
+  compilerName String?
+  compilerId   String?
+  compilerSignature String? // path firma responsabile
+  clientName   String?
+  clientSignature String?
+  compiledAt   DateTime?
+  closed       Boolean   @default(false)
+  pdfPath      String?
+  hash         String?
+  revisions    Json      @default("[]") // storico correzioni post-chiusura [{ at, byName, note? }]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  intervento Intervento @relation(fields: [interventoId], references: [id], onDelete: Cascade)
+
+  @@unique([interventoId, type])
+  @@index([interventoId])
 }
 
 /// Conversazione: portale chat nativo ZATO oppure storico importato

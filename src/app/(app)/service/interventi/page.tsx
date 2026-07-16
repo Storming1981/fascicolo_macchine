@@ -13,9 +13,17 @@ export default async function InterventiPage() {
 
   const canCreate = await userCan(user.role, "intervento.create");
   const canEdit = await userCan(user.role, "intervento.edit");
+  const canViewAll = await userCan(user.role, "intervento.viewAll");
+
+  // Tecnico di campo (senza viewAll): vede solo gli interventi di cui è
+  // responsabile o partecipante.
+  const scopeWhere = canViewAll
+    ? {}
+    : { OR: [{ assignedTechId: user.id }, { participants: { some: { id: user.id } } }] };
 
   const [rows, techs, customerRows] = await Promise.all([
     prisma.intervento.findMany({
+      where: scopeWhere,
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
       include: {
         customer: { select: { name: true } },
@@ -52,6 +60,7 @@ export default async function InterventiPage() {
     code: i.code,
     title: i.title,
     status: i.status,
+    type: i.type,
     priority: i.priority,
     channel: i.channel,
     customer: i.customer?.name ?? null,

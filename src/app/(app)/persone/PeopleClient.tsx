@@ -20,6 +20,8 @@ type U = {
   phone: string | null;
   photo: string | null;
   reparto: string | null;
+  siteManager: boolean;
+  appAccess: string | null;
   signs: number;
   last: string | null;
 };
@@ -237,6 +239,11 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
                         <div className="user-avatar small">{initials(u.name)}</div>
                       )}
                       <span>{u.name}</span>
+                      {u.siteManager && (
+                        <span className="prio-chip" style={{ background: "#0ea5a322", color: "#0a7d70" }} title="Responsabile di cantiere">
+                          <Icon name="pin" size={11} /> Resp. cantiere
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="mono small">{u.email}</td>
@@ -430,6 +437,8 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
     password: "",
   });
   const [photo, setPhoto] = useState<string | null>(user.photo);
+  const [siteManager, setSiteManager] = useState(user.siteManager);
+  const [appAccess, setAppAccess] = useState<string>(user.appAccess ?? "");
   const [saving, setSaving] = useState(false);
   const [e, setE] = useState<string | null>(null);
   const set = (k: keyof typeof f, v: string) => setF((s) => ({ ...s, [k]: v }));
@@ -457,6 +466,8 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
         matricola: f.matricola,
         badgeId: f.badgeId,
         zona: f.zona,
+        siteManager,
+        appAccess: appAccess || "",
       };
       if (photo !== user.photo) body.photo = photo ?? "";
       if (f.pin && /^\d{4,6}$/.test(f.pin)) body.pin = f.pin;
@@ -548,6 +559,20 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
             <div className="form-row">
               <label>Zona operativa</label>
               <input className="input" value={f.zona} onChange={(ev) => set("zona", ev.target.value)} placeholder="Nord-Ovest…" />
+            </div>
+            <div className="form-row">
+              <label>Accesso app</label>
+              <select className="input" value={appAccess} onChange={(ev) => setAppAccess(ev.target.value)}>
+                <option value="">Predefinito dal ruolo</option>
+                <option value="desktop">Desktop completo</option>
+                <option value="field">Solo Campo (mobile/tablet)</option>
+              </select>
+            </div>
+            <div className="form-row" style={{ justifyContent: "flex-end" }}>
+              <label className="flex-inline" style={{ gap: 8, cursor: "pointer" }}>
+                <input type="checkbox" checked={siteManager} onChange={(ev) => setSiteManager(ev.target.checked)} />
+                <span>Responsabile di cantiere</span>
+              </label>
             </div>
             <div className="form-row">
               <label>Nuovo PIN firma (opzionale)</label>

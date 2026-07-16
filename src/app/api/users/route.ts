@@ -6,6 +6,7 @@ import type { Role } from "@prisma/client";
 
 const ROLES: Role[] = [
   "ADMIN",
+  "RESPONSABILE_CANTIERI",
   "CAPO_OFFICINA",
   "MONTATORE",
   "CABLATORE",
@@ -110,6 +111,9 @@ export async function PATCH(req: Request) {
   }
   if (typeof b.phone === "string") data.phone = b.phone.trim() || null;
   if (typeof b.reparto === "string") data.reparto = b.reparto.trim() || null;
+  if (typeof b.siteManager === "boolean") data.siteManager = b.siteManager;
+  if (typeof b.appAccess === "string")
+    data.appAccess = b.appAccess === "desktop" || b.appAccess === "field" ? b.appAccess : null;
   if (typeof b.photo === "string") data.photo = b.photo.startsWith("data:image") ? b.photo : b.photo === "" ? null : undefined;
 
   if (Object.keys(data).length === 0)
