@@ -73,6 +73,7 @@ export async function loadInterventoDetail(id: string) {
     techId: intervento.assignedTechId,
     participants: intervento.participants.map((p) => ({ id: p.id, name: p.name })),
     scheduledStart: intervento.scheduledStart?.toISOString() ?? null,
+    scheduledEnd: intervento.scheduledEnd?.toISOString() ?? null,
     completedAt: intervento.completedAt?.toISOString() ?? null,
     checklists: intervento.checklists.map((c) => ({
       type: c.type,

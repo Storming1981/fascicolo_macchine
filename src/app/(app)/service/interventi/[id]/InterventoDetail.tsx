@@ -67,6 +67,7 @@ type Data = {
   techId: string | null;
   participants: { id: string; name: string }[];
   scheduledStart: string | null;
+  scheduledEnd: string | null;
   completedAt: string | null;
   photos: { id: string; path: string; caption: string | null }[];
   rapportini: Rapportino[];
@@ -264,7 +265,7 @@ export default function InterventoDetail({
             <Field label="Cantiere">{data.siteName ?? "—"}</Field>
             <Field label="Segnalato da">{data.reportedBy ?? "—"}</Field>
             <div className="field">
-              <span className="field-label">Programmato (data intervento)</span>
+              <span className="field-label">Programmato — Inizio</span>
               {canEdit ? (
                 <input
                   type="datetime-local"
@@ -275,6 +276,22 @@ export default function InterventoDetail({
                 />
               ) : (
                 <span>{data.scheduledStart ? new Date(data.scheduledStart).toLocaleString("it-IT") : "—"}</span>
+              )}
+            </div>
+
+            <div className="field">
+              <span className="field-label">Programmato — Fine</span>
+              {canEdit ? (
+                <input
+                  type="datetime-local"
+                  value={toLocalInput(data.scheduledEnd)}
+                  min={toLocalInput(data.scheduledStart) || undefined}
+                  onChange={(e) =>
+                    patch({ scheduledEnd: e.target.value ? new Date(e.target.value).toISOString() : null })
+                  }
+                />
+              ) : (
+                <span>{data.scheduledEnd ? new Date(data.scheduledEnd).toLocaleString("it-IT") : "—"}</span>
               )}
             </div>
 

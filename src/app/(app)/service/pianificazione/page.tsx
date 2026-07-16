@@ -13,7 +13,13 @@ export const dynamic = "force-dynamic";
 
 const WEEKDAYS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 const MONTHS = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
-const isoDate = (d: Date) => d.toISOString().slice(0, 10);
+// Data locale YYYY-MM-DD (NON UTC): le colonne del Gantt e le date pianificate
+// devono coincidere nel fuso locale, altrimenti a mezzanotte l'ISO UTC scala di
+// un giorno e i blocchi finiscono nella colonna sbagliata.
+const isoDate = (d: Date) => {
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+};
 
 type View = "week" | "gantt" | "month";
 
