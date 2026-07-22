@@ -73,6 +73,33 @@ export async function saveAppAccess(matrix: AppAccessMatrix) {
   await writeSetting("appAccess", mergeAppAccess(matrix));
 }
 
+/**
+ * Account Google aziendale (unico) usato per inviare i rapportini via Gmail.
+ * I token sono cifrati (vedi src/lib/crypto.ts) e non escono mai verso il client.
+ */
+export type GoogleAccount = {
+  email: string;
+  refreshToken: string; // cifrato
+  accessToken: string | null; // cifrato
+  expiresAt: number | null; // epoch ms di scadenza dell'access token
+  scope: string | null;
+  connectedByName: string | null;
+  connectedAt: string; // ISO
+};
+
+export async function getGoogleAccount(): Promise<GoogleAccount | null> {
+  const stored = await readSetting<GoogleAccount>("googleAccount");
+  return stored && typeof stored.refreshToken === "string" && stored.refreshToken ? stored : null;
+}
+
+export async function saveGoogleAccount(acc: GoogleAccount) {
+  await writeSetting("googleAccount", acc);
+}
+
+export async function clearGoogleAccount() {
+  await prisma.setting.deleteMany({ where: { key: "googleAccount" } });
+}
+
 /** Verifica permesso leggendo la matrice da DB. */
 export async function userCan(role: Role, action: PermAction): Promise<boolean> {
   if (role === "ADMIN") return true;

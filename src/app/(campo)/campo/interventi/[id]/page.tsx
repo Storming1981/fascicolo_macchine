@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { loadInterventoDetail } from "@/lib/interventoDetailLoader";
+import { isGoogleConfigured, resolveSenderEmail } from "@/lib/google";
 import InterventoDetail from "@/app/(app)/service/interventi/[id]/InterventoDetail";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,8 @@ export default async function CampoInterventoPage({
 
   const canEdit = await userCan(user.role, "intervento.edit");
   const canSign = await userCan(user.role, "intervento.sign");
+  const googleConfigured = isGoogleConfigured();
+  const googleSender = googleConfigured ? await resolveSenderEmail(user.id) : null;
 
   return (
     <InterventoDetail
@@ -39,6 +42,8 @@ export default async function CampoInterventoPage({
       canEdit={canEdit}
       canSign={canSign}
       canChecklist={false}
+      googleConfigured={googleConfigured}
+      googleSender={googleSender}
       campo
       backHref="/campo/interventi"
       machineBase="/campo/macchine"

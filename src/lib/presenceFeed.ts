@@ -335,6 +335,7 @@ const isoDay = (d: Date) => {
 export type CommessaHours = {
   total: number;
   byDay: Record<string, number>; // { "YYYY-MM-DD": ore }
+  byDayOperator: Record<string, Record<string, number>>; // { "YYYY-MM-DD": { operatore: ore } }
   sessions: { day: string; tech: string | null; start: string | null; end: string | null; hours: number }[];
 };
 
@@ -364,6 +365,7 @@ export async function fetchCommessaHours(
   };
 
   const byDay: Record<string, number> = {};
+  const byDayOperator: Record<string, Record<string, number>> = {};
   const sessions: CommessaHours["sessions"] = [];
   let total = 0;
   const seen = new Set<string>(); // id timbratura → evita doppioni tra le pagine
@@ -393,6 +395,10 @@ export async function fetchCommessaHours(
       const hours = Math.max(0, (endMs - r.startedAt.getTime()) / 3600000);
       const day = isoDay(r.startedAt);
       byDay[day] = (byDay[day] ?? 0) + hours;
+      const op = (r.utente ?? "").trim();
+      if (op) {
+        (byDayOperator[day] ??= {})[op] = (byDayOperator[day][op] ?? 0) + hours;
+      }
       total += hours;
       sessions.push({
         day,
@@ -406,7 +412,10 @@ export async function fetchCommessaHours(
   }
 
   for (const k of Object.keys(byDay)) byDay[k] = Math.round(byDay[k] * 100) / 100;
-  return { total: Math.round(total * 100) / 100, byDay, sessions };
+  for (const day of Object.keys(byDayOperator))
+    for (const op of Object.keys(byDayOperator[day]))
+      byDayOperator[day][op] = Math.round(byDayOperator[day][op] * 100) / 100;
+  return { total: Math.round(total * 100) / 100, byDay, byDayOperator, sessions };
 }
 
 export async function syncStampings(): Promise<{

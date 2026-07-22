@@ -1,0 +1,20 @@
+node_modules
+.next
+.git
+.gitignore
+npm-debug.log*
+
+# segreti e dati locali: NON devono finire nell'immagine
+.env
+.env.local
+.env*.local
+uploads
+scripts/operators.csv
+
+# materiale di riferimento e sviluppo (non serve in produzione)
+File riferimento
+*.md
+!README.md
+.vscode
+.idea
+.claude

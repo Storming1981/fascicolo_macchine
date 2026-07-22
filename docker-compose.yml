@@ -1,0 +1,55 @@
+# Deploy produzione — machines.zatospa.it
+#
+# Ipotesi (concordate):
+#  - PostgreSQL installato DIRETTAMENTE sulla VPS (non in container)
+#  - reverse proxy (nginx/traefik/caddy) già presente sulla VPS
+#
+# Con `network_mode: host` il container raggiunge Postgres su localhost senza
+# dover toccare postgresql.conf / pg_hba.conf, e l'app resta in ascolto SOLO su
+# 127.0.0.1:3000 (non esposta a Internet): la pubblica il tuo reverse proxy.
+
+services:
+  app:
+    build:
+      context: .
+      target: runner
+    image: machines-zato:latest
+    container_name: machines-zato
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      # ascolto solo su loopback: ci arriva soltanto il reverse proxy locale
+      HOSTNAME: 127.0.0.1
+      PORT: "3000"
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      # foto, firme, PDF rapportini/checklist, documenti — DA BACKUPPARE
+      - /srv/machines-zato/uploads:/data/uploads
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # Servizio "una tantum" (non parte con `up`): schema DB, seed e script di
+  # manutenzione. Ha sorgenti e node_modules completi.
+  #   docker compose run --rm tools npx prisma db push
+  #   docker compose run --rm tools npm run db:seed
+  tools:
+    build:
+      context: .
+      target: builder
+    image: machines-zato-tools:latest
+    network_mode: host
+    env_file:
+      - .env.production
+    profiles: ["tools"]
+    command: ["npx", "prisma", "db", "push"]

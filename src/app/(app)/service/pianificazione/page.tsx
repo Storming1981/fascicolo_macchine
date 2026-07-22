@@ -7,6 +7,7 @@ import PianificazioneClient, {
   type GanttTech,
   type PendingItem,
   type MonthDay,
+  type InterventoRow,
 } from "./PianificazioneClient";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ type View = "week" | "gantt" | "month";
 export default async function PianificazionePage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; date?: string }>;
+  searchParams: Promise<{ view?: string; date?: string; group?: string }>;
 }) {
   const user = await currentUser();
   if (!user) redirect("/login");
@@ -35,6 +36,7 @@ export default async function PianificazionePage({
 
   const sp = await searchParams;
   const view: View = sp.view === "week" || sp.view === "month" ? sp.view : "gantt";
+  const group: "tecnici" | "cantieri" = sp.group === "cantieri" ? "cantieri" : "tecnici";
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -97,7 +99,8 @@ export default async function PianificazionePage({
         scheduledStart: true,
         scheduledEnd: true,
         tech: { select: { name: true } },
-        participants: { select: { id: true } },
+        participants: { select: { id: true, name: true } },
+        customer: { select: { name: true } },
       },
     }),
     prisma.intervento.findMany({
@@ -112,6 +115,32 @@ export default async function PianificazionePage({
 
   const dayIndex = (iso: string) => daysArr.findIndex((d) => d.iso === iso);
 
+  // Conflitti: un tecnico (responsabile O partecipante) su due interventi con
+  // date sovrapposte. Chiave "<interventoId>|<techId>".
+  const conflictKey = new Set<string>();
+  {
+    const byTech = new Map<string, { id: string; start: number; end: number }[]>();
+    for (const s of scheduled) {
+      const st = s.scheduledStart!.getTime();
+      const en = (s.scheduledEnd ?? s.scheduledStart!).getTime();
+      const team = new Set([s.assignedTechId, ...s.participants.map((p) => p.id)].filter((x): x is string => !!x));
+      for (const techId of team) {
+        const arr = byTech.get(techId) ?? [];
+        arr.push({ id: s.id, start: st, end: en });
+        byTech.set(techId, arr);
+      }
+    }
+    for (const [techId, arr] of byTech) {
+      for (let i = 0; i < arr.length; i++)
+        for (let j = i + 1; j < arr.length; j++) {
+          if (arr[i].start < arr[j].end && arr[j].start < arr[i].end) {
+            conflictKey.add(`${arr[i].id}|${techId}`);
+            conflictKey.add(`${arr[j].id}|${techId}`);
+          }
+        }
+    }
+  }
+
   const ganttTechs: GanttTech[] = techs.map((t) => {
     const blocks = scheduled
       .filter((s) => s.assignedTechId === t.id || s.participants.some((p) => p.id === t.id))
@@ -119,17 +148,16 @@ export default async function PianificazionePage({
         const sIso = isoDate(s.scheduledStart!);
         const eIso = isoDate(s.scheduledEnd ?? s.scheduledStart!);
         const di = Math.max(0, dayIndex(sIso));
-        const dj = eIso ? dayIndex(eIso) : di;
-        const len = Math.max(1, (dj < 0 ? di : dj) - di + 1);
+        const rawDj = dayIndex(eIso);
+        const dj = rawDj < 0 ? daysArr.length - 1 : rawDj;
+        const len = Math.max(1, dj - di + 1);
         const role: "lead" | "member" = s.assignedTechId === t.id ? "lead" : "member";
         return { id: s.id, code: s.code, title: s.title, priority: s.priority, day: di, len, role };
       })
       .sort((a, b) => a.day - b.day);
-    // il conflitto conta solo i blocchi da responsabile (quelli che pianifica lui)
-    const lead = blocks.filter((b) => b.role === "lead");
-    const conflict = lead.some((b, i) =>
-      lead.some((o, j) => j !== i && b.day < o.day + o.len && o.day < b.day + b.len)
-    );
+    // conflitto: il tecnico è su due interventi sovrapposti (come responsabile
+    // o partecipante) — usa il calcolo per data reale (conflictKey).
+    const conflict = blocks.some((b) => conflictKey.has(`${b.id}|${t.id}`));
     return { id: t.id, name: t.name, zona: t.zona, blocks, conflict };
   });
 
@@ -163,6 +191,35 @@ export default async function PianificazionePage({
     }));
   }
 
+  // Vista "per cantiere": una riga per intervento pianificato, con la squadra.
+  const interventiRows: InterventoRow[] = scheduled
+    .map((s) => {
+      const sIso = isoDate(s.scheduledStart!);
+      const eIso = isoDate(s.scheduledEnd ?? s.scheduledStart!);
+      const di = Math.max(0, dayIndex(sIso));
+      const rawDj = dayIndex(eIso);
+      const dj = rawDj < 0 ? daysArr.length - 1 : rawDj; // fine oltre la finestra → bordo
+      const len = Math.max(1, dj - di + 1);
+      return {
+        id: s.id,
+        code: s.code,
+        title: s.title,
+        priority: s.priority,
+        customer: s.customer?.name ?? null,
+        day: di,
+        len,
+        supervisorId: s.assignedTechId,
+        supervisorName: s.tech?.name ?? null,
+        supervisorConflict: s.assignedTechId ? conflictKey.has(`${s.id}|${s.assignedTechId}`) : false,
+        participants: s.participants.map((p) => ({
+          id: p.id,
+          name: p.name,
+          conflict: conflictKey.has(`${s.id}|${p.id}`),
+        })),
+      };
+    })
+    .sort((a, b) => a.day - b.day || a.priority - b.priority);
+
   const pendingItems: PendingItem[] = pending.map((p) => ({
     id: p.id,
     code: p.code,
@@ -189,9 +246,11 @@ export default async function PianificazionePage({
   return (
     <PianificazioneClient
       view={view}
+      group={group}
       days={daysArr}
       monthDays={monthDays}
       techs={ganttTechs}
+      interventiRows={interventiRows}
       pending={pendingItems}
       allTechs={techs}
       rangeLabel={label}

@@ -35,17 +35,31 @@ type Revision = {
     clientName?: string | null;
   } | null;
 };
+type OperatorHours = { name: string; matricola?: string | null; hours: number };
+type Timbratura = { name: string; start: string; end: string };
+// riga in tabella: uid stabile + `orig` = valore originale del timbratore (per evidenziare le modifiche)
+type SessionRow = Timbratura & { uid: string; orig?: Timbratura };
+type StoredTimbratura = Timbratura & { orig?: Timbratura };
+type Attachment = { id: string; path: string; filename: string; mime: string; kind: string };
 type Rapportino = {
   id: string;
   date: string;
   workDescription: string | null;
+  issues: string | null;
   ricambi: Ricambio[];
   hoursWorked: number | null;
+  plantHours: number | null;
+  hoursByOperator: OperatorHours[];
+  timbrature: StoredTimbratura[];
+  attachments: Attachment[];
+  pdfPath: string | null;
   techName: string | null;
   techSignature: string | null;
   clientName: string | null;
   clientSignature: string | null;
   closed: boolean;
+  sentAt: string | null;
+  sentTo: string | null;
   diaryEventId: string | null;
   hash: string | null;
   revisions: Revision[];
@@ -62,6 +76,7 @@ type Data = {
   channel: string | null;
   reportedBy: string | null;
   customerName: string | null;
+  customerEmail: string | null;
   siteName: string | null;
   machine: { id: string; code: string; job: string; model: string } | null;
   techId: string | null;
@@ -72,6 +87,19 @@ type Data = {
   photos: { id: string; path: string; caption: string | null }[];
   rapportini: Rapportino[];
   checklists: ChecklistState[];
+  documents: InterventoDoc[];
+};
+type InterventoDoc = {
+  id: string;
+  name: string;
+  path: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  category: string;
+  source: string;
+  userName: string | null;
+  uploadedByName: string | null;
+  createdAt: string;
 };
 type ChecklistState = {
   type: string;
@@ -97,6 +125,8 @@ export default function InterventoDetail({
   canEdit,
   canSign,
   canChecklist = false,
+  googleConfigured = false,
+  googleSender = null,
   campo = false,
   backHref = "/service/interventi",
   machineBase = "/macchine",
@@ -109,6 +139,8 @@ export default function InterventoDetail({
   canEdit: boolean;
   canSign: boolean;
   canChecklist?: boolean;
+  googleConfigured?: boolean;
+  googleSender?: string | null;
   campo?: boolean;
   backHref?: string;
   machineBase?: string;
@@ -139,7 +171,7 @@ export default function InterventoDetail({
   const [adding, setAdding] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState<ChecklistType | null>(null);
 
-  const totHours = data.rapportini.reduce((n, r) => n + (r.hoursWorked ?? 0), 0);
+  const totHours = Math.round(data.rapportini.reduce((n, r) => n + (r.hoursWorked ?? 0), 0) * 100) / 100;
 
   // Commesse suggerite: codice parlante derivato dal job macchina (base 7 cifre
   // + suffisso 01 installazione / 02 completamento / 04 riparazioni) + quelle
@@ -164,14 +196,39 @@ export default function InterventoDetail({
     patch({ participantIds: ids, assignedTechId: data.techId });
   }
 
-  // Ore timbrate sulla commessa (per giorno + totale) dal timbratore
+  // Ore timbrate sulla commessa dal timbratore: totale, per operatore e SESSIONI
   const [oreByDay, setOreByDay] = useState<Record<string, number>>({});
+  const [oreByDayOperator, setOreByDayOperator] = useState<Record<string, Record<string, number>>>({});
+  const [sessionsByDay, setSessionsByDay] = useState<Record<string, Timbratura[]>>({});
   const [oreTotal, setOreTotal] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+
+  // sessioni {day, tech, start(ISO), end(ISO)} → { "YYYY-MM-DD": [{name, start:"HH:MM", end:"HH:MM"}] }
+  const buildSessionsByDay = (
+    sessions: { day: string; tech: string | null; start: string | null; end: string | null }[]
+  ): Record<string, Timbratura[]> => {
+    const toHM = (iso: string | null) => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime())
+        ? ""
+        : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    };
+    const out: Record<string, Timbratura[]> = {};
+    for (const s of sessions ?? []) {
+      (out[s.day] ??= []).push({ name: s.tech ?? "—", start: toHM(s.start), end: toHM(s.end) });
+    }
+    for (const day of Object.keys(out))
+      out[day].sort((a, b) => a.name.localeCompare(b.name) || a.start.localeCompare(b.start));
+    return out;
+  };
+
   useEffect(() => {
     const c = (data.commessa ?? "").trim();
     if (!c) {
       setOreByDay({});
+      setOreByDayOperator({});
+      setSessionsByDay({});
       setOreTotal(null);
       return;
     }
@@ -181,6 +238,8 @@ export default function InterventoDetail({
       .then((d) => {
         if (alive && d) {
           setOreByDay(d.byDay ?? {});
+          setOreByDayOperator(d.byDayOperator ?? {});
+          setSessionsByDay(buildSessionsByDay(d.sessions ?? []));
           setOreTotal(typeof d.total === "number" ? d.total : null);
         }
       })
@@ -197,6 +256,7 @@ export default function InterventoDetail({
       const d = await res.json().catch(() => null);
       if (res.ok && d) {
         setOreByDay(d.byDay ?? {});
+        setOreByDayOperator(d.byDayOperator ?? {});
         setOreTotal(typeof d.total === "number" ? d.total : null);
       } else {
         alert(d?.error ?? "Errore nella sincronizzazione ore.");
@@ -509,6 +569,13 @@ export default function InterventoDetail({
                 machineBase={machineBase}
                 photos={data.photos}
                 oreByDay={oreByDay}
+                oreByDayOperator={oreByDayOperator}
+                sessionsByDay={sessionsByDay}
+                interventoCode={data.code}
+                interventoTitle={data.title}
+                customerEmail={data.customerEmail}
+                googleConfigured={googleConfigured}
+                googleSender={googleSender}
                 currentUserName={currentUserName}
                 canSign={canSign}
                 defaultOpen={!r.closed}
@@ -553,7 +620,7 @@ export default function InterventoDetail({
                       </span>
                     )}
                   </div>
-                  <Icon name={def.type === "AMBIENTE" ? "drop" : "flag"} size={22} color="var(--muted)" />
+                  <Icon name="flag" size={22} color="var(--muted)" />
                 </div>
                 <div className="checklist-tile-actions">
                   {st?.closed && st.pdfPath && (
@@ -578,6 +645,14 @@ export default function InterventoDetail({
           })}
         </div>
       </section>
+
+      {/* Documenti dell'intervento */}
+      <DocumentiCard
+        interventoId={data.id}
+        documents={data.documents}
+        canEdit={canEdit && !campo}
+        onDone={() => router.refresh()}
+      />
 
       {checklistOpen && (
         <ChecklistModal
@@ -609,6 +684,13 @@ export default function InterventoDetail({
                 machineBase={machineBase}
                 photos={[]}
                 oreByDay={oreByDay}
+                oreByDayOperator={oreByDayOperator}
+                sessionsByDay={sessionsByDay}
+                interventoCode={data.code}
+                interventoTitle={data.title}
+                customerEmail={data.customerEmail}
+                googleConfigured={googleConfigured}
+                googleSender={googleSender}
                 currentUserName={currentUserName}
                 canSign={canSign}
                 defaultOpen
@@ -653,6 +735,13 @@ function RapportinoDay({
   machineBase = "/macchine",
   photos,
   oreByDay,
+  oreByDayOperator,
+  sessionsByDay,
+  interventoCode,
+  interventoTitle,
+  customerEmail,
+  googleConfigured,
+  googleSender,
   currentUserName,
   canSign,
   defaultOpen,
@@ -666,6 +755,13 @@ function RapportinoDay({
   machineBase?: string;
   photos: { id: string; path: string; caption: string | null }[];
   oreByDay: Record<string, number>;
+  oreByDayOperator: Record<string, Record<string, number>>;
+  sessionsByDay: Record<string, Timbratura[]>;
+  interventoCode: string;
+  interventoTitle: string;
+  customerEmail: string | null;
+  googleConfigured: boolean;
+  googleSender: string | null;
   currentUserName: string;
   canSign: boolean;
   defaultOpen: boolean;
@@ -682,27 +778,73 @@ function RapportinoDay({
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(rapportino ? rapportino.date.slice(0, 10) : today);
   const [workDescription, setWorkDescription] = useState(rapportino?.workDescription ?? "");
+  const [issues, setIssues] = useState(rapportino?.issues ?? "");
   const [ricambi, setRicambi] = useState<Ricambio[]>(
     rapportino?.ricambi?.length ? rapportino.ricambi : [{ code: "", desc: "", qty: "", note: "" }]
   );
-  const [hours, setHours] = useState(rapportino?.hoursWorked != null ? String(rapportino.hoursWorked) : "");
+  // timbrature: una riga per sessione entrata/uscita; le ore si ricalcolano
+  const uidRef = useRef(0);
+  const nextUid = () => `s${uidRef.current++}`;
+  const initialSessions: SessionRow[] = rapportino?.timbrature?.length
+    ? rapportino.timbrature.map((t) => ({ uid: nextUid(), name: t.name, start: t.start, end: t.end, orig: t.orig }))
+    : rapportino?.hoursByOperator?.length // vecchi rapportini: una riga per operatore senza orari
+      ? rapportino.hoursByOperator.map((o) => ({ uid: nextUid(), name: o.name, start: "", end: "" }))
+      : [];
+  const [sessions, setSessions] = useState<SessionRow[]>(initialSessions);
   const [techName, setTechName] = useState(rapportino?.techName ?? currentUserName);
   const [clientName, setClientName] = useState(rapportino?.clientName ?? "");
+  const [plantHours, setPlantHours] = useState(
+    rapportino?.plantHours != null ? String(rapportino.plantHours) : ""
+  );
   const [editNote, setEditNote] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [attErr, setAttErr] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const techSig = useRef<SignaturePadHandle>(null);
   const clientSig = useRef<SignaturePadHandle>(null);
   const [busy, setBusy] = useState<"draft" | "close" | "edit" | null>(null);
+  const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // composizione email (invio con Gmail)
+  const [compose, setCompose] = useState(false);
+  const [mailTo, setMailTo] = useState(customerEmail ?? "");
+  const [mailCc, setMailCc] = useState("");
+  const [mailSub, setMailSub] = useState("");
+  const [mailTxt, setMailTxt] = useState("");
+  const [mailErr, setMailErr] = useState<string | null>(null);
+  const [mailWithAtt, setMailWithAtt] = useState(true);
 
-  // ore timbrate su questo giorno (dalla commessa dell'intervento)
-  const oreGiorno = oreByDay[date];
-  // prefill automatico se il campo è vuoto e il timbratore ha ore per il giorno
+  // sessioni timbrate quel giorno (dal timbratore) per il precompilamento
+  const sessGiorno = sessionsByDay[date];
+  // ore di una sessione da "HH:MM"
+  const rowHours = (s: Timbratura): number => {
+    const m = (v: string) => {
+      const p = v.match(/^(\d{1,2}):(\d{2})$/);
+      return p ? Number(p[1]) * 60 + Number(p[2]) : null;
+    };
+    const a = m(s.start);
+    const b = m(s.end);
+    return a != null && b != null && b > a ? Math.round(((b - a) / 60) * 100) / 100 : 0;
+  };
+  const totOperators = Math.round(sessions.reduce((n, s) => n + rowHours(s), 0) * 100) / 100;
+
+  // Costruisce le righe dalle sessioni del timbratore, memorizzando l'originale in `orig`.
+  const rowsFromTimbratore = (src: Timbratura[]): SessionRow[] =>
+    src.map((s) => ({
+      uid: nextUid(),
+      name: s.name,
+      start: s.start,
+      end: s.end,
+      orig: { name: s.name, start: s.start, end: s.end },
+    }));
+
+  // Le timbrature sono SOLA LETTURA: si allineano sempre a quelle del timbratore
+  // per la giornata scelta (finché il rapportino non è chiuso).
   useEffect(() => {
-    if (!readOnly && (hours === "" || hours == null) && oreGiorno != null) setHours(String(oreGiorno));
+    if (readOnly) return;
+    if (sessGiorno && sessGiorno.length) setSessions(rowsFromTimbratore(sessGiorno));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [oreGiorno, date, readOnly]);
+  }, [date, readOnly, JSON.stringify(sessGiorno ?? null)]);
 
   const setRic = (i: number, k: keyof Ricambio, v: string) =>
     setRicambi((rs) => rs.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -715,13 +857,22 @@ function RapportinoDay({
     if (rapportino) fd.set("rapportinoId", rapportino.id);
     fd.set("date", date);
     fd.set("workDescription", workDescription);
+    fd.set("issues", issues);
     fd.set("ricambi", JSON.stringify(ricambi.filter((r) => r.code.trim() || r.desc.trim())));
-    fd.set("hoursWorked", hours);
+    fd.set(
+      "timbrature",
+      JSON.stringify(
+        sessions
+          .map((s) => ({ name: s.name.trim(), start: s.start.trim(), end: s.end.trim(), orig: s.orig }))
+          .filter((s) => s.name || s.start || s.end)
+      ) // (l'uid resta lato client; `orig` = timbratura originale del timbratore)
+    );
+    fd.set("plantHours", plantHours);
     fd.set("techName", techName);
     fd.set("clientName", clientName);
     if (techSig.current && !techSig.current.isEmpty()) fd.set("techSignature", techSig.current.toDataURL() ?? "");
     if (clientSig.current && !clientSig.current.isEmpty()) fd.set("clientSignature", clientSig.current.toDataURL() ?? "");
-    for (const f of files) fd.append("photos", f);
+    for (const f of files) fd.append("attachments", f);
     if (kind === "close") fd.set("finalize", "1");
     if (kind === "edit") fd.set("editNote", editNote);
 
@@ -747,12 +898,61 @@ function RapportinoDay({
     onDone();
   }
 
+  async function removeAttachment(attId: string) {
+    if (!rapportino) return;
+    setAttErr(null);
+    const res = await fetch(
+      `/api/interventi/${interventoId}/rapportino/${rapportino.id}/attachment?attId=${attId}`,
+      { method: "DELETE" }
+    );
+    if (res.ok) onDone();
+    else setAttErr("Impossibile eliminare l'allegato.");
+  }
+
+  const pdfUrl = rapportino ? `/api/interventi/${interventoId}/rapportino/${rapportino.id}/pdf` : "";
+  const giorno = new Date(date + "T00:00:00").toLocaleDateString("it-IT");
+  const mailSubject = `Rapportino ${interventoCode} — ${giorno}`;
+  const mailBody =
+    `Buongiorno,\n\nin allegato il rapportino dell'intervento ${interventoCode} ` +
+    `(${interventoTitle}) del ${giorno}.\n\nCordiali saluti,\nZATO Service`;
+
+  /** Invio via Gmail (account aziendale): modale di composizione. */
+  async function sendViaGmail() {
+    if (!rapportino) return;
+    setMailErr(null);
+    setSending(true);
+    try {
+      const res = await fetch(`/api/interventi/${interventoId}/rapportino/${rapportino.id}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: mailTo,
+          cc: mailCc,
+          subject: mailSub,
+          body: mailTxt,
+          includeAttachments: mailWithAtt,
+        }),
+      });
+      const d = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMailErr(d?.error ?? "Invio non riuscito.");
+        return;
+      }
+      setCompose(false);
+      onDone();
+    } finally {
+      setSending(false);
+    }
+  }
+
   const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("it-IT", {
     weekday: "short",
     day: "2-digit",
     month: "short",
   });
   const revisions = rapportino?.revisions ?? [];
+  // vecchi rapportini: nessuna sessione ma ore aggregate per operatore
+  const roLegacyOps = rapportino?.hoursByOperator ?? [];
 
   return (
     <div className={"rap-day" + (hideHeader ? " bare" : "")}>
@@ -794,28 +994,87 @@ function RapportinoDay({
           )}
 
           {!readOnly && (
-            <div className="sig-row">
-              <div className="field">
-                <span className="field-label">Data giornata</span>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-              <div className="field">
-                <span className="field-label">Ore lavorate</span>
-                <input value={hours} onChange={(e) => setHours(e.target.value)} placeholder="es. 2.5" />
-                {oreGiorno != null && (
-                  <button
-                    type="button"
-                    className="btn-ghost-sm"
-                    style={{ marginTop: 6 }}
-                    onClick={() => setHours(String(oreGiorno))}
-                    title="Ore timbrate su questa commessa in questo giorno"
-                  >
-                    <Icon name="clock" size={12} /> Timbratore: {oreGiorno} h
-                  </button>
-                )}
-              </div>
+            <div className="field" style={{ maxWidth: 260 }}>
+              <span className="field-label">Data giornata</span>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           )}
+
+          {/* Ore per operatore — timbrature lette dal timbratore (SOLA LETTURA) */}
+          <div className="field">
+            <span className="field-label">Ore per operatore (timbrature)</span>
+            {sessions.length > 0 ? (
+              <table className="op-table ro">
+                <thead>
+                  <tr>
+                    <th>Operatore</th>
+                    <th style={{ width: 84 }}>Entrata</th>
+                    <th style={{ width: 84 }}>Uscita</th>
+                    <th style={{ width: 60 }}>Ore</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessions.map((s) => (
+                    <tr key={s.uid}>
+                      <td>{s.name || "—"}</td>
+                      <td className="mono">{s.start || "—"}</td>
+                      <td className="mono">{s.end || "—"}</td>
+                      <td className="mono">{rowHours(s).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : roLegacyOps.length ? (
+              // vecchi rapportini: solo aggregato per operatore
+              <table className="op-table ro">
+                <thead>
+                  <tr>
+                    <th>Operatore</th>
+                    <th style={{ width: 90 }}>Ore</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {roLegacyOps.map((o, i) => (
+                    <tr key={i}>
+                      <td>{o.name}</td>
+                      <td className="mono">{o.hours}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="readout muted">
+                {rapportino?.hoursWorked != null
+                  ? `${rapportino.hoursWorked} h`
+                  : "Nessuna timbratura per questa giornata"}
+              </div>
+            )}
+            <div className="muted small" style={{ marginTop: 6 }}>
+              Totale giornata: <strong>{rapportino?.hoursWorked ?? totOperators} h</strong>
+              {!readOnly && " · dati letti dal timbratore (non modificabili)"}
+            </div>
+          </div>
+
+          <div className="field">
+            <span className="field-label">Ore operative impianto (contaore macchina)</span>
+            {readOnly ? (
+              <div className="readout">
+                {rapportino?.plantHours != null ? `${rapportino.plantHours} h` : "—"}
+              </div>
+            ) : (
+              <>
+                <input
+                  value={plantHours}
+                  onChange={(e) => setPlantHours(e.target.value)}
+                  placeholder="es. 12450"
+                  inputMode="decimal"
+                />
+                <div className="muted small">
+                  Lettura del contaore dell&apos;impianto: storicizza l&apos;intervento rispetto alle ore macchina.
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="field">
             <span className="field-label">Attività eseguita</span>
@@ -825,6 +1084,17 @@ function RapportinoDay({
               disabled={readOnly}
               onChange={(e) => setWorkDescription(e.target.value)}
               placeholder="Descrivi l'intervento della giornata…"
+            />
+          </div>
+
+          <div className="field">
+            <span className="field-label">Problematiche</span>
+            <textarea
+              rows={3}
+              value={issues}
+              disabled={readOnly}
+              onChange={(e) => setIssues(e.target.value)}
+              placeholder="Problemi o mancanze rilevate in cantiere (materiali, accessi, sicurezza, ritardi…)"
             />
           </div>
 
@@ -883,26 +1153,70 @@ function RapportinoDay({
             )}
           </div>
 
-          {photos.length > 0 && (
-            <div className="field">
-              <span className="field-label">Foto cantiere</span>
-              <div className="photo-grid-sm">
-                {photos.map((p) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <a key={p.id} href={p.path} target="_blank" rel="noreferrer">
-                    <img src={p.path} alt={p.caption ?? ""} />
-                  </a>
+          {/* Allegati (foto + file) del rapportino */}
+          <div className="field">
+            <span className="field-label">Allegati</span>
+            {(rapportino?.attachments?.length ?? 0) > 0 && (
+              <div className="att-grid">
+                {rapportino!.attachments.map((a) => (
+                  <div key={a.id} className="att-item">
+                    {a.kind === "image" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <a href={a.path} target="_blank" rel="noreferrer" title={a.filename}>
+                        <img src={a.path} alt={a.filename} />
+                      </a>
+                    ) : (
+                      <a href={a.path} target="_blank" rel="noreferrer" className="att-file" title={a.filename}>
+                        <Icon name="doc" size={20} />
+                        <span>{a.filename}</span>
+                      </a>
+                    )}
+                    {!readOnly && (
+                      <button className="att-del" onClick={() => removeAttachment(a.id)} aria-label="Elimina allegato">
+                        <Icon name="x" size={12} />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
-          {!readOnly && (
-            <div className="field">
-              <span className="field-label">Aggiungi foto</span>
-              <input type="file" accept="image/*" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
-              {files.length > 0 && <div className="muted small">{files.length} foto da caricare</div>}
-            </div>
-          )}
+            )}
+            {readOnly && (rapportino?.attachments?.length ?? 0) === 0 && <div className="readout">Nessun allegato</div>}
+            {!readOnly && (
+              <div className="att-actions">
+                <label className="btn-ghost-sm att-pick">
+                  <Icon name="camera" size={13} /> Scatta foto
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    hidden
+                    onChange={(e) => {
+                      setFiles((f) => [...f, ...Array.from(e.target.files ?? [])]);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <label className="btn-ghost-sm att-pick">
+                  <Icon name="upload" size={13} /> Carica file
+                  <input
+                    type="file"
+                    multiple
+                    hidden
+                    onChange={(e) => {
+                      setFiles((f) => [...f, ...Array.from(e.target.files ?? [])]);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {files.length > 0 && (
+                  <span className="muted small">
+                    {files.length} da caricare — salva la giornata per confermare
+                  </span>
+                )}
+              </div>
+            )}
+            {attErr && <div className="form-error">{attErr}</div>}
+          </div>
 
           <div className="sig-row">
             <div className="field">
@@ -995,6 +1309,134 @@ function RapportinoDay({
             </div>
           )}
 
+          {/* PDF: scarica / invia (per rapportini salvati) */}
+          {rapportino && (
+            <div className="rap-pdf-actions">
+              <a className="btn-ghost-sm" href={`${pdfUrl}?dl=1`}>
+                <Icon name="download" size={13} /> Scarica PDF
+              </a>
+              <a className="btn-ghost-sm" href={pdfUrl} target="_blank" rel="noreferrer">
+                <Icon name="doc" size={13} /> Anteprima
+              </a>
+              {googleConfigured && (
+                <button
+                  className="btn-primary-sm"
+                  type="button"
+                  onClick={() => {
+                    setMailTo(customerEmail ?? "");
+                    setMailSub(mailSubject);
+                    setMailTxt(mailBody);
+                    setMailErr(null);
+                    setCompose(true);
+                  }}
+                >
+                  <Icon name="upload" size={13} /> Invia via email
+                </button>
+              )}
+              {rapportino.sentAt && (
+                <span className="muted small">
+                  <Icon name="check" size={12} /> Inviato a {rapportino.sentTo} il{" "}
+                  {new Date(rapportino.sentAt).toLocaleString("it-IT")}
+                </span>
+              )}
+              {!rapportino.closed && (
+                <span className="muted small">Salva/chiudi la giornata per un PDF definitivo.</span>
+              )}
+            </div>
+          )}
+
+          {/* Modale di composizione email */}
+          {compose && rapportino && (
+            <div className="modal-backdrop" onClick={() => setCompose(false)}>
+              <div className="modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                  <h2>Invia rapportino</h2>
+                  <button className="icon-btn" onClick={() => setCompose(false)} aria-label="Chiudi">
+                    <Icon name="x" size={18} />
+                  </button>
+                </div>
+                <div className="modal-body">
+                  {googleSender ? (
+                    <div className="field">
+                      <span className="field-label">Da</span>
+                      <div className="readout" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span>{googleSender}</span>
+                        <a className="btn-ghost-sm" href="/api/google/auth?target=me" title="Collega o cambia la tua casella Gmail">
+                          <Icon name="gear" size={12} /> Cambia
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="info-banner" style={{ marginBottom: 4 }}>
+                      <Icon name="clock" size={15} />
+                      <span>
+                        Nessuna casella Gmail collegata. Collega la tua per inviare dal tuo indirizzo:{" "}
+                        <a className="link-strong" href="/api/google/auth?target=me">
+                          Collega la tua Gmail
+                        </a>
+                        .
+                      </span>
+                    </div>
+                  )}
+                  <div className="field">
+                    <span className="field-label">A</span>
+                    <input
+                      value={mailTo}
+                      onChange={(e) => setMailTo(e.target.value)}
+                      placeholder="cliente@azienda.it (separa con virgola per più destinatari)"
+                    />
+                  </div>
+                  <div className="field">
+                    <span className="field-label">Cc (facoltativo)</span>
+                    <input value={mailCc} onChange={(e) => setMailCc(e.target.value)} placeholder="altro@azienda.it" />
+                  </div>
+                  <div className="field">
+                    <span className="field-label">Oggetto</span>
+                    <input value={mailSub} onChange={(e) => setMailSub(e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <span className="field-label">Messaggio</span>
+                    <textarea rows={6} value={mailTxt} onChange={(e) => setMailTxt(e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <span className="field-label">Allegati</span>
+                    <div className="readout">
+                      <Icon name="doc" size={13} /> rapportino-{interventoCode}-{date}.pdf
+                    </div>
+                    {(rapportino.attachments?.length ?? 0) > 0 && (
+                      <label className="att-check">
+                        <input
+                          type="checkbox"
+                          checked={mailWithAtt}
+                          onChange={(e) => setMailWithAtt(e.target.checked)}
+                        />
+                        Allega anche foto/allegati ({rapportino.attachments.length})
+                      </label>
+                    )}
+                  </div>
+                  {mailErr && <div className="form-error">{mailErr}</div>}
+                  <div className="rapportino-actions">
+                    <button
+                      className="btn-ghost"
+                      onClick={() => setCompose(false)}
+                      disabled={sending}
+                      style={{ marginRight: "auto" }}
+                    >
+                      Annulla
+                    </button>
+                    <button
+                      className="btn-primary"
+                      onClick={sendViaGmail}
+                      disabled={sending || !mailTo.trim() || !googleSender}
+                    >
+                      <Icon name="upload" size={15} /> {sending ? "Invio…" : "Invia email"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Azioni */}
           {canSign && (
             <div className="rapportino-actions">
@@ -1054,6 +1496,134 @@ function RapportinoDay({
         </div>
       )}
     </div>
+  );
+}
+
+/* ── Card documenti dell'intervento ──────────────────────────
+   Allegati caricati a mano + (in prospettiva) i documenti dei tecnici
+   partecipanti letti dal loro fascicolo TeamSystem via API. */
+const DOC_CATEGORIES: { key: string; label: string }[] = [
+  { key: "allegato", label: "Allegato generico" },
+  { key: "sicurezza", label: "Sicurezza" },
+  { key: "formazione", label: "Formazione / Abilitazioni" },
+  { key: "dpi", label: "DPI" },
+  { key: "altro", label: "Altro" },
+];
+
+function DocumentiCard({
+  interventoId,
+  documents,
+  canEdit,
+  onDone,
+}: {
+  interventoId: string;
+  documents: InterventoDoc[];
+  canEdit: boolean;
+  onDone: () => void;
+}) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const uploaded = documents.filter((d) => d.source !== "TEAMSYSTEM");
+  const fromTs = documents.filter((d) => d.source === "TEAMSYSTEM");
+  const fmtSize = (n: number | null) =>
+    n == null ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+
+  async function upload() {
+    if (!files.length) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      for (const f of files) fd.append("files", f);
+      const res = await fetch(`/api/interventi/${interventoId}/documents`, { method: "POST", body: fd });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        setErr(d?.error ?? "Errore nel caricamento.");
+        return;
+      }
+      setFiles([]);
+      onDone();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(docId: string) {
+    if (!confirm("Eliminare questo documento?")) return;
+    const res = await fetch(`/api/interventi/${interventoId}/documents?docId=${docId}`, { method: "DELETE" });
+    if (res.ok) onDone();
+  }
+
+  const DocRow = ({ d, deletable }: { d: InterventoDoc; deletable: boolean }) => (
+    <li className="doc-row">
+      <Icon name="doc" size={16} color="var(--muted)" />
+      <a href={d.path} target="_blank" rel="noreferrer" className="doc-name">
+        {d.name}
+      </a>
+      {d.category !== "allegato" && (
+        <span className="type-chip" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+          {DOC_CATEGORIES.find((c) => c.key === d.category)?.label ?? d.category}
+        </span>
+      )}
+      {d.userName && <span className="muted small">· {d.userName}</span>}
+      <span style={{ flex: 1 }} />
+      <span className="muted small">
+        {fmtSize(d.sizeBytes)} · {new Date(d.createdAt).toLocaleDateString("it-IT")}
+      </span>
+      {deletable && (
+        <button className="icon-btn sm" onClick={() => remove(d.id)} aria-label="Elimina">
+          <Icon name="trash" size={14} />
+        </button>
+      )}
+    </li>
+  );
+
+  return (
+    <section className="card" style={{ marginTop: 16 }}>
+      <div className="card-header">
+        <h3>Documenti</h3>
+        <span className="muted small">{documents.length} file</span>
+      </div>
+
+      {canEdit && (
+        <div className="doc-upload">
+          <input type="file" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
+          <button className="btn-primary-sm" onClick={upload} disabled={busy || !files.length}>
+            <Icon name="upload" size={13} /> {busy ? "Caricamento…" : `Carica${files.length ? ` (${files.length})` : ""}`}
+          </button>
+        </div>
+      )}
+      {err && <div className="form-error">{err}</div>}
+
+      {uploaded.length === 0 ? (
+        <div className="muted small">Nessun documento allegato.</div>
+      ) : (
+        <ul className="doc-list">
+          {uploaded.map((d) => (
+            <DocRow key={d.id} d={d} deletable={canEdit} />
+          ))}
+        </ul>
+      )}
+
+      {/* Documenti dei tecnici dal fascicolo TeamSystem */}
+      <div className="field" style={{ marginTop: 14 }}>
+        <span className="field-label">Documenti dei tecnici (fascicolo TeamSystem)</span>
+        {fromTs.length > 0 ? (
+          <ul className="doc-list">
+            {fromTs.map((d) => (
+              <DocRow key={d.id} d={d} deletable={false} />
+            ))}
+          </ul>
+        ) : (
+          <div className="muted small">
+            Integrazione non ancora configurata: qui compariranno automaticamente i documenti
+            (idoneità, formazione, DPI) dei tecnici partecipanti letti dal fascicolo TeamSystem.
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -1191,7 +1761,7 @@ function ChecklistModal({
           <div className="sig-row">
             <div className="field">
               <span className="field-label">
-                {def.type === "SICUREZZA" ? "Firma Preposto / Responsabile" : "Firma operatore ZATO"}
+                Firma Preposto / Responsabile
               </span>
               <SignaturePad ref={respSig} height={110} />
               <button className="btn-ghost-sm" type="button" onClick={() => respSig.current?.clear()}>

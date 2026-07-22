@@ -7,7 +7,7 @@ import { CHECKLIST_DEFS, type ChecklistType } from "@/lib/checklistInterventi";
 import { generateChecklistPdf } from "@/lib/checklistPdf";
 import type { Prisma } from "@prisma/client";
 
-const TYPES: ChecklistType[] = ["AMBIENTE", "SICUREZZA"];
+const TYPES: ChecklistType[] = ["AMBIENTE_SICUREZZA"];
 
 /**
  * Salva (bozza) o CHIUDE (firma + data → PDF) una check list di cantiere di un
@@ -93,8 +93,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const now = new Date();
   const hash = sha256(`${id}|${type}|${user.name}|${now.toISOString()}`);
 
-  // Testata autocompilata (solo AMBIENTE): ditta + indirizzo dall'anagrafica,
-  // date dalle date pianificate dell'intervento.
+  // Testata autocompilata: indirizzo dall'anagrafica cantiere/cliente e date
+  // dalle date pianificate dell'intervento.
   const fmtDate = (d: Date | null) => (d ? d.toLocaleDateString("it-IT") : "—");
   const addr =
     [intervento.site?.address, [intervento.site?.city, intervento.site?.province].filter(Boolean).join(" ")]
@@ -106,7 +106,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     "—";
   // Solo le date sotto la testata (ditta/indirizzo sono già nella riga cliente).
   const autoHeader =
-    type === "AMBIENTE"
+    type === "AMBIENTE_SICUREZZA"
       ? [
           { label: "Data inizio intervento", value: fmtDate(intervento.scheduledStart) },
           { label: "Data fine intervento", value: fmtDate(intervento.scheduledEnd) },

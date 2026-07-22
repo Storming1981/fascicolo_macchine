@@ -9,6 +9,15 @@ const isoDay = (d: Date) => {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 };
 
+/** ISO → "HH:MM" in ora locale del server (= ora italiana). */
+const hhmm = (iso: string | null): string => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
 /**
  * Sincronizza le ore dei rapportini di un intervento dal timbratore, usando la
  * COMMESSA dell'intervento. Per ogni rapportino imposta hoursWorked = ore
@@ -44,7 +53,27 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     const day = isoDay(r.date);
     const h = hours.byDay[day];
     if (h == null) continue;
-    if (r.hoursWorked === h) continue;
+
+    // sessioni entrata/uscita timbrate quel giorno su questa commessa
+    // (orig = valore del timbratore, per evidenziare eventuali modifiche manuali)
+    const timbrature = hours.sessions
+      .filter((s) => s.day === day)
+      .map((s) => {
+        const name = s.tech ?? "—";
+        const start = hhmm(s.start);
+        const end = hhmm(s.end);
+        return { name, start, end, orig: { name, start, end } };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name) || a.start.localeCompare(b.start));
+
+    // aggregato per operatore + totale (dal timbratore)
+    const perOp = hours.byDayOperator[day] ?? {};
+    const operators = Object.entries(perOp)
+      .map(([name, ore]) => ({ name, matricola: null, hours: Math.round(ore * 100) / 100 }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const total = operators.length
+      ? Math.round(operators.reduce((n, o) => n + o.hours, 0) * 100) / 100
+      : h;
 
     if (r.closed) {
       // modifica di un rapportino firmato → logga lo stato precedente
@@ -53,21 +82,32 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
           rapportinoId: r.id,
           editedById: user.id,
           editedByName: user.name,
-          note: `Sincronizzazione ore dal timbratore (${r.hoursWorked ?? "—"} → ${h} h)`,
+          note: `Sincronizzazione timbrature (${r.hoursWorked ?? "—"} → ${total} h)`,
           snapshot: {
             date: r.date.toISOString(),
             workDescription: r.workDescription,
             ricambi: r.ricambi,
             hoursWorked: r.hoursWorked,
+            hoursByOperator: r.hoursByOperator,
+            timbrature: r.timbrature,
             techName: r.techName,
             clientName: r.clientName,
           },
         },
       });
     }
-    await prisma.rapportino.update({ where: { id: r.id }, data: { hoursWorked: h } });
+    await prisma.rapportino.update({
+      where: { id: r.id },
+      data: { hoursWorked: total, hoursByOperator: operators, timbrature },
+    });
     updated++;
   }
 
-  return NextResponse.json({ ok: true, updated, total: hours.total, byDay: hours.byDay });
+  return NextResponse.json({
+    ok: true,
+    updated,
+    total: hours.total,
+    byDay: hours.byDay,
+    byDayOperator: hours.byDayOperator,
+  });
 }

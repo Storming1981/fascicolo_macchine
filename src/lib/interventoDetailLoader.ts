@@ -8,16 +8,20 @@ export async function loadInterventoDetail(id: string) {
   const intervento = await prisma.intervento.findUnique({
     where: { id },
     include: {
-      customer: { select: { id: true, name: true } },
+      customer: { select: { id: true, name: true, email: true } },
       site: { select: { id: true, name: true, city: true } },
       machine: { select: { id: true, code: true, job: true, model: true } },
       tech: { select: { id: true, name: true } },
       participants: { select: { id: true, name: true } },
       rapportini: {
         orderBy: { date: "asc" },
-        include: { revisions: { orderBy: { editedAt: "desc" } } },
+        include: {
+          revisions: { orderBy: { editedAt: "desc" } },
+          attachments: { orderBy: { createdAt: "asc" } },
+        },
       },
       checklists: true,
+      documents: { orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true } } } },
       photos: { orderBy: { createdAt: "desc" } },
     },
   });
@@ -61,6 +65,7 @@ export async function loadInterventoDetail(id: string) {
     channel: intervento.channel,
     reportedBy: intervento.reportedBy,
     customerName: intervento.customer?.name ?? null,
+    customerEmail: intervento.customer?.email ?? null,
     siteName: intervento.site?.name ?? null,
     machine: intervento.machine
       ? {
@@ -86,18 +91,51 @@ export async function loadInterventoDetail(id: string) {
       fields: (c.fields as Record<string, string>) ?? {},
       revisionsCount: Array.isArray(c.revisions) ? (c.revisions as unknown[]).length : 0,
     })),
+    documents: intervento.documents.map((d) => ({
+      id: d.id,
+      name: d.name,
+      path: d.path,
+      mimeType: d.mimeType,
+      sizeBytes: d.sizeBytes,
+      category: d.category,
+      source: d.source,
+      userName: d.user?.name ?? null,
+      uploadedByName: d.uploadedByName,
+      createdAt: d.createdAt.toISOString(),
+    })),
     photos: intervento.photos.map((p) => ({ id: p.id, path: p.path, caption: p.caption })),
     rapportini: intervento.rapportini.map((r) => ({
       id: r.id,
       date: r.date.toISOString(),
       workDescription: r.workDescription,
+      issues: r.issues,
       ricambi: (r.ricambi as { code: string; desc: string; qty: string; note: string }[]) ?? [],
       hoursWorked: r.hoursWorked,
+      plantHours: r.plantHours,
+      hoursByOperator:
+        (r.hoursByOperator as { name: string; matricola?: string | null; hours: number }[]) ?? [],
+      timbrature:
+        (r.timbrature as {
+          name: string;
+          start: string;
+          end: string;
+          orig?: { name: string; start: string; end: string };
+        }[]) ?? [],
+      attachments: r.attachments.map((a) => ({
+        id: a.id,
+        path: a.path,
+        filename: a.filename,
+        mime: a.mime,
+        kind: a.kind,
+      })),
+      pdfPath: r.pdfPath,
       techName: r.techName,
       techSignature: r.techSignature,
       clientName: r.clientName,
       clientSignature: r.clientSignature,
       closed: r.closed,
+      sentAt: r.sentAt?.toISOString() ?? null,
+      sentTo: r.sentTo,
       diaryEventId: r.diaryEventId,
       hash: r.hash,
       revisions: r.revisions.map((rev) => ({

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import { ROLE_LABEL } from "@/lib/domain";
@@ -29,6 +29,10 @@ export default function SettingsClient({
   appAccess,
   canSync,
   erpConfigured,
+  googleConfigured,
+  googleMe,
+  googleCompany,
+  currentUserEmail,
 }: {
   plantConfig: PlantConfig;
   permissions: PermissionMatrix;
@@ -36,9 +40,15 @@ export default function SettingsClient({
   appAccess: AppAccessMatrix;
   canSync: boolean;
   erpConfigured: boolean;
+  googleConfigured: boolean;
+  googleMe: { email: string; connectedAt: string } | null;
+  googleCompany: { email: string; connectedAt: string; connectedByName: string | null } | null;
+  currentUserEmail: string;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"plant" | "perms" | "nav" | "erp">("plant");
+  const [tab, setTab] = useState<"plant" | "perms" | "nav" | "erp" | "google">("plant");
+  const [gBusy, setGBusy] = useState<"test" | "unlink-me" | "unlink-company" | null>(null);
+  const [testTo, setTestTo] = useState(currentUserEmail);
   const [navm, setNavm] = useState<NavVisibility>(JSON.parse(JSON.stringify(navVisibility)));
   const [appm, setAppm] = useState<AppAccessMatrix>(JSON.parse(JSON.stringify(appAccess)));
   const [syncing, setSyncing] = useState(false);
@@ -56,6 +66,52 @@ export default function SettingsClient({
     setToast({ msg, kind });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // Esito del ritorno dal consenso Google (/impostazioni?google=ok|err)
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const g = sp.get("google");
+    if (!g) return;
+    setTab("google");
+    if (g === "ok") notify(`Account Google collegato: ${sp.get("email") ?? ""}`);
+    else notify(sp.get("msg") || "Collegamento Google non riuscito", "err");
+    window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function googleTest() {
+    setGBusy("test");
+    try {
+      const res = await fetch("/api/google/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testTo }),
+      });
+      const d = await res.json().catch(() => null);
+      if (res.ok) notify(`Mail di prova inviata a ${d?.to ?? testTo} (da ${d?.from ?? "?"})`);
+      else notify(d?.error ?? "Invio di prova fallito", "err");
+    } finally {
+      setGBusy(null);
+    }
+  }
+
+  async function googleUnlink(target: "me" | "company") {
+    const msg =
+      target === "me"
+        ? "Scollegare la tua casella Gmail? Tornerai a inviare dalla casella aziendale (se disponibile)."
+        : "Scollegare la casella aziendale? Chi non ha collegato la propria non potrà più inviare.";
+    if (!confirm(msg)) return;
+    setGBusy(target === "me" ? "unlink-me" : "unlink-company");
+    try {
+      const res = await fetch(`/api/google/account?target=${target}`, { method: "DELETE" });
+      if (res.ok) {
+        notify("Casella scollegata");
+        router.refresh();
+      } else notify("Errore nello scollegamento", "err");
+    } finally {
+      setGBusy(null);
+    }
+  }
 
   function setPlantName(i: number, name: string) {
     setPlants((s) => s.map((p, idx) => (idx === i ? { ...p, name } : p)));
@@ -188,6 +244,12 @@ export default function SettingsClient({
             <Icon name="clock" size={14} /> <span>Gestionale (ERP)</span>
           </button>
         )}
+        <button
+          className={"tab" + (tab === "google" ? " active" : "")}
+          onClick={() => setTab("google")}
+        >
+          <Icon name="upload" size={14} /> <span>Account Google</span>
+        </button>
       </div>
 
       {tab === "plant" && (
@@ -470,6 +532,155 @@ export default function SettingsClient({
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === "google" && (
+        <div className="tab-content">
+          {!googleConfigured ? (
+            <div className="card">
+              <div className="card-header">
+                <h3>Invio email non configurato</h3>
+              </div>
+              <p className="muted small">
+                Integrazione Google non configurata: mancano le variabili{" "}
+                <span className="mono">GOOGLE_CLIENT_ID</span>, <span className="mono">GOOGLE_CLIENT_SECRET</span> e{" "}
+                <span className="mono">GOOGLE_REDIRECT_URI</span> nel file <span className="mono">.env</span>.
+              </p>
+              <p className="muted small" style={{ marginTop: 10 }}>
+                Da creare in <strong>Google Cloud Console</strong>: abilita la <strong>Gmail API</strong>, imposta la
+                schermata consenso su <strong>Internal</strong> (Workspace ZATO) con gli scope{" "}
+                <span className="mono">gmail.send</span> e <span className="mono">userinfo.email</span>, quindi crea un{" "}
+                <strong>ID client OAuth 2.0</strong> di tipo <em>Applicazione web</em> con URI di reindirizzamento{" "}
+                <span className="mono">{"<dominio>"}/api/google/callback</span>.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* La mia casella (personale) */}
+              <div className="card">
+                <div className="card-header">
+                  <h3>La mia casella Gmail</h3>
+                  {!googleMe && (
+                    <a className="btn-primary-sm" href="/api/google/auth?target=me">
+                      <Icon name="upload" size={14} /> Collega la tua Gmail
+                    </a>
+                  )}
+                </div>
+                {!googleMe ? (
+                  <p className="muted small">
+                    Collega il tuo account Google per inviare i rapportini <strong>dal tuo indirizzo</strong> (le
+                    risposte dei clienti arriveranno a te). Se non lo colleghi, userai la casella aziendale.
+                  </p>
+                ) : (
+                  <>
+                    <div className="card no-pad" style={{ marginTop: 4 }}>
+                      <div className="table-wrap">
+                        <table className="data-table">
+                          <tbody>
+                            <tr>
+                              <td>Indirizzo collegato</td>
+                              <td style={{ fontWeight: 600 }}>{googleMe.email}</td>
+                            </tr>
+                            <tr>
+                              <td>Data collegamento</td>
+                              <td>{new Date(googleMe.connectedAt).toLocaleString("it-IT")}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="cmp-toolbar" style={{ marginTop: 12 }}>
+                      <div className="cmp-summary" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className="muted small">Invia una prova a:</span>
+                        <input
+                          value={testTo}
+                          onChange={(e) => setTestTo(e.target.value)}
+                          placeholder="indirizzo@esempio.it"
+                          style={{ minWidth: 220 }}
+                        />
+                      </div>
+                      <div className="cmp-actions">
+                        <button className="btn-ghost-sm" onClick={googleTest} disabled={gBusy !== null}>
+                          <Icon name="upload" size={13} /> {gBusy === "test" ? "Invio…" : "Invia prova"}
+                        </button>
+                        <a className="btn-ghost-sm" href="/api/google/auth?target=me">
+                          <Icon name="clock" size={13} /> Ricollega
+                        </a>
+                        <button
+                          className="btn-ghost-sm danger"
+                          onClick={() => googleUnlink("me")}
+                          disabled={gBusy !== null}
+                        >
+                          <Icon name="trash" size={13} /> {gBusy === "unlink-me" ? "Scollego…" : "Scollega"}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Casella aziendale (fallback) — solo chi gestisce le impostazioni */}
+              <div className="card" style={{ marginTop: 12 }}>
+                <div className="card-header">
+                  <h3>Casella aziendale (fallback)</h3>
+                  {!googleCompany && (
+                    <a className="btn-ghost-sm" href="/api/google/auth?target=company">
+                      <Icon name="upload" size={14} /> Collega casella aziendale
+                    </a>
+                  )}
+                </div>
+                {!googleCompany ? (
+                  <p className="muted small">
+                    Account unico (es. <span className="mono">service@zato.it</span>) usato da chi non ha collegato la
+                    propria casella. Collegalo una volta sola.
+                  </p>
+                ) : (
+                  <>
+                    <div className="card no-pad" style={{ marginTop: 4 }}>
+                      <div className="table-wrap">
+                        <table className="data-table">
+                          <tbody>
+                            <tr>
+                              <td>Indirizzo aziendale</td>
+                              <td style={{ fontWeight: 600 }}>{googleCompany.email}</td>
+                            </tr>
+                            <tr>
+                              <td>Collegato da</td>
+                              <td>{googleCompany.connectedByName ?? "—"}</td>
+                            </tr>
+                            <tr>
+                              <td>Data collegamento</td>
+                              <td>{new Date(googleCompany.connectedAt).toLocaleString("it-IT")}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="cmp-toolbar" style={{ marginTop: 12 }}>
+                      <div className="cmp-summary" />
+                      <div className="cmp-actions">
+                        <a className="btn-ghost-sm" href="/api/google/auth?target=company">
+                          <Icon name="clock" size={13} /> Ricollega
+                        </a>
+                        <button
+                          className="btn-ghost-sm danger"
+                          onClick={() => googleUnlink("company")}
+                          disabled={gBusy !== null}
+                        >
+                          <Icon name="trash" size={13} /> {gBusy === "unlink-company" ? "Scollego…" : "Scollega"}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+                <p className="muted small" style={{ marginTop: 10 }}>
+                  I token sono salvati <strong>cifrati</strong> nel database e non lasciano mai il server. Il rinnovo
+                  dell&apos;accesso è automatico: non serve rifare il login.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       )}
 

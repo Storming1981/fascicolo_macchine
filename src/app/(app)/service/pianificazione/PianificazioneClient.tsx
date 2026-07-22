@@ -42,13 +42,28 @@ export type PendingItem = {
   customer: string | null;
   assignedTechId: string | null;
 };
+export type InterventoRow = {
+  id: string;
+  code: string;
+  title: string;
+  priority: number;
+  customer: string | null;
+  day: number;
+  len: number;
+  supervisorId: string | null;
+  supervisorName: string | null;
+  supervisorConflict: boolean;
+  participants: { id: string; name: string; conflict: boolean }[];
+};
 type Tech = { id: string; name: string; zona: string | null };
 
 export default function PianificazioneClient({
   view,
+  group,
   days,
   monthDays,
   techs,
+  interventiRows,
   pending,
   allTechs,
   rangeLabel,
@@ -58,9 +73,11 @@ export default function PianificazioneClient({
   todayIso,
 }: {
   view: "week" | "gantt" | "month";
+  group: "tecnici" | "cantieri";
   days: GanttDay[];
   monthDays: MonthDay[];
   techs: GanttTech[];
+  interventiRows: InterventoRow[];
   pending: PendingItem[];
   allTechs: Tech[];
   rangeLabel: string;
@@ -73,8 +90,8 @@ export default function PianificazioneClient({
   const colW = `calc(100% / ${days.length})`;
   const conflicts = techs.filter((t) => t.conflict);
 
-  const go = (v: string, date?: string) =>
-    router.push(`/service/pianificazione?view=${v}${date ? `&date=${date}` : ""}`);
+  const go = (v: string, date?: string, g: string = group) =>
+    router.push(`/service/pianificazione?view=${v}&group=${g}${date ? `&date=${date}` : ""}`);
 
   const [live, setLive] = useState<LiveTech[]>([]);
   const [showTimbra, setShowTimbra] = useState(false);
@@ -238,6 +255,17 @@ export default function PianificazioneClient({
             </button>
           ))}
         </div>
+        <div className="view-switch" title="Raggruppa per">
+          {([["tecnici", "Per tecnico"], ["cantieri", "Per cantiere"]] as const).map(([g, l]) => (
+            <button
+              key={g}
+              className={"view-switch-btn" + (group === g ? " active" : "")}
+              onClick={() => go(view === "month" && g === "cantieri" ? "gantt" : view, undefined, g)}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
         <span className="flex-inline" style={{ gap: 8, marginLeft: "auto" }}>
           <button className="btn-ghost-sm" onClick={() => go(view, prevDate)} title="Precedente">‹</button>
           <button className="btn-ghost-sm" onClick={() => go(view, todayIso)}>Oggi</button>
@@ -248,6 +276,15 @@ export default function PianificazioneClient({
 
       {view === "month" ? (
         <MonthCalendar days={monthDays} />
+      ) : group === "cantieri" ? (
+        <CantieriGantt
+          rows={interventiRows}
+          days={days}
+          colW={colW}
+          allTechs={allTechs}
+          canEdit={canEdit}
+          onChanged={() => router.refresh()}
+        />
       ) : (
         <>
       <div className="gantt-toolbar">
@@ -526,6 +563,237 @@ export default function PianificazioneClient({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Vista "per cantiere": righe = interventi, si trascinano i tecnici ── */
+function CantieriGantt({
+  rows,
+  days,
+  colW,
+  allTechs,
+  canEdit,
+  onChanged,
+}: {
+  rows: InterventoRow[];
+  days: GanttDay[];
+  colW: string;
+  allTechs: Tech[];
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const [over, setOver] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function patchIntervento(id: string, body: Record<string, unknown>) {
+    setBusy(true);
+    try {
+      await fetch(`/api/interventi/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+  // Il tecnico è già su un altro cantiere in date sovrapposte?
+  function overlaps(row: InterventoRow, techId: string) {
+    return rows.some(
+      (r) =>
+        r.id !== row.id &&
+        (r.supervisorId === techId || r.participants.some((p) => p.id === techId)) &&
+        r.day < row.day + row.len &&
+        row.day < r.day + r.len
+    );
+  }
+  function assign(row: InterventoRow, techId: string) {
+    if (techId === row.supervisorId || row.participants.some((p) => p.id === techId)) return;
+    if (
+      overlaps(row, techId) &&
+      !confirm(
+        "⚠ Conflitto: questo tecnico è già assegnato a un altro cantiere in date sovrapposte. Assegnarlo comunque?"
+      )
+    )
+      return;
+    if (!row.supervisorId) patchIntervento(row.id, { assignedTechId: techId });
+    else
+      patchIntervento(row.id, {
+        assignedTechId: row.supervisorId,
+        participantIds: [...row.participants.map((p) => p.id), techId],
+      });
+  }
+  const removeParticipant = (row: InterventoRow, techId: string) =>
+    patchIntervento(row.id, {
+      assignedTechId: row.supervisorId,
+      participantIds: row.participants.filter((p) => p.id !== techId).map((p) => p.id),
+    });
+  const setSupervisor = (row: InterventoRow, techId: string) =>
+    patchIntervento(row.id, {
+      assignedTechId: techId || null,
+      participantIds: row.participants.filter((p) => p.id !== techId).map((p) => p.id),
+    });
+
+  const techList = q.trim()
+    ? allTechs.filter((t) => t.name.toLowerCase().includes(q.trim().toLowerCase()))
+    : allTechs;
+
+  return (
+    <div className="cantieri-view">
+      {canEdit && (
+        <div className="tech-palette">
+          <div className="tech-palette-head">
+            <Icon name="people" size={14} /> Trascina un tecnico su un cantiere
+            <input
+              className="tech-palette-search"
+              placeholder="Cerca tecnico…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+          <div className="tech-chips-scroll">
+            {techList.map((t) => (
+              <div
+                key={t.id}
+                className="tech-drag-chip"
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData("text/tech", t.id)}
+                title={t.zona ?? ""}
+              >
+                <span className="tech-avatar sm">{initials(t.name)}</span>
+                {t.name}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="gantt">
+        <div className="gantt-head">
+          <div className="gantt-corner">Cantiere / Intervento</div>
+          <div className="gantt-days">
+            {days.map((d) => (
+              <div key={d.iso} className={"gantt-day" + (d.today ? " today" : "") + (d.weekend ? " weekend" : "")}>
+                <div>{d.weekday}</div>
+                <div className="num mono">{d.dayNum}</div>
+                {d.showMonth && <div className="gmonth">{d.month}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {rows.length === 0 && <div className="cantieri-empty muted small">Nessun intervento pianificato nel periodo.</div>}
+
+        {rows.map((row) => {
+          const prio = PRIORITY_META[row.priority] ?? PRIORITY_META[3];
+          const rowConflict = row.supervisorConflict || row.participants.some((p) => p.conflict);
+          return (
+            <div
+              className={"cantiere-row" + (over === row.id ? " drop-target" : "") + (rowConflict ? " has-conflict" : "")}
+              key={row.id}
+            >
+              <div className="cantiere-label">
+                <Link href={`/service/interventi/${row.id}`} className="cantiere-title">
+                  <span className="mono muted">{row.code}</span> {row.title}
+                </Link>
+                {rowConflict && (
+                  <span className="conflict-badge" title="Un tecnico è su due cantieri sovrapposti">
+                    <Icon name="flag" size={11} /> Conflitto tecnico
+                  </span>
+                )}
+                {row.customer && <div className="muted small">{row.customer}</div>}
+                <div className="cantiere-team">
+                  <div className="team-line">
+                    <span className="team-role">Resp.</span>
+                    {canEdit ? (
+                      <select
+                        className={"team-sup" + (row.supervisorConflict ? " conflict" : "")}
+                        value={row.supervisorId ?? ""}
+                        onChange={(e) => setSupervisor(row, e.target.value)}
+                        disabled={busy}
+                        title={row.supervisorConflict ? "Responsabile su un altro cantiere sovrapposto" : ""}
+                      >
+                        <option value="">— Da assegnare —</option>
+                        {allTechs.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={"team-chip lead" + (row.supervisorConflict ? " conflict" : "")}>
+                        {row.supervisorName ?? "—"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="team-line">
+                    <span className="team-role">Team</span>
+                    <div className="team-chips">
+                      {row.participants.length === 0 && <span className="muted small">nessuno</span>}
+                      {row.participants.map((p) => (
+                        <span
+                          key={p.id}
+                          className={"team-chip" + (p.conflict ? " conflict" : "")}
+                          title={p.conflict ? "Tecnico su un altro cantiere sovrapposto" : ""}
+                        >
+                          {p.conflict && <Icon name="flag" size={10} />}
+                          {p.name}
+                          {canEdit && (
+                            <button aria-label="Rimuovi" onClick={() => removeParticipant(row, p.id)}>
+                              <Icon name="x" size={11} />
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div
+                className="gantt-cells"
+                onDragOver={
+                  canEdit
+                    ? (e) => {
+                        e.preventDefault();
+                        if (over !== row.id) setOver(row.id);
+                      }
+                    : undefined
+                }
+                onDragLeave={() => setOver((o) => (o === row.id ? null : o))}
+                onDrop={
+                  canEdit
+                    ? (e) => {
+                        e.preventDefault();
+                        setOver(null);
+                        const techId = e.dataTransfer.getData("text/tech");
+                        if (techId) assign(row, techId);
+                      }
+                    : undefined
+                }
+              >
+                {days.map((d) => (
+                  <div key={d.iso} className={"gantt-cell" + (d.today ? " today" : "") + (d.weekend ? " weekend" : "")} />
+                ))}
+                <Link
+                  href={`/service/interventi/${row.id}`}
+                  className="gantt-block"
+                  style={{
+                    left: `calc(${row.day} * ${colW} + 3px)`,
+                    width: `calc(${row.len} * ${colW} - 6px)`,
+                    background: prio.color,
+                  }}
+                  title={`${row.code} · ${row.title}`}
+                >
+                  <span className="gantt-block-title">{row.title}</span>
+                </Link>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

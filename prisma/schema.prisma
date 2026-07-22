@@ -88,7 +88,24 @@ model User {
   collauduAppr   Collaudo[]   @relation("CollaudoApprover")
   interventiAssegnati Intervento[] @relation("InterventoTech")
   interventiPartecipati Intervento[] @relation("InterventoParticipants")
+  interventoDocs InterventoDocument[] @relation("InterventoDocUser")
   presences      TechPresence[]
+  googleToken    GoogleToken?
+}
+
+/// Token OAuth Google PERSONALE di un utente, per inviare le email dalla propria
+/// casella Gmail. I token sono cifrati (src/lib/crypto.ts). La casella aziendale
+/// (fallback) è invece nel Setting `googleAccount`.
+model GoogleToken {
+  userId       String    @id
+  email        String    // indirizzo Gmail collegato
+  refreshToken String    // cifrato
+  accessToken  String?   // cifrato
+  expiresAt    DateTime? // scadenza access token
+  scope        String?
+  connectedAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Machine {
@@ -370,6 +387,7 @@ model Intervento {
   participants  User[]    @relation("InterventoParticipants") // tecnici partecipanti (squadra)
   rapportini    Rapportino[]
   checklists    InterventoChecklist[]
+  documents     InterventoDocument[]
   photos        Photo[]
   conversations Conversation[]
 
@@ -385,8 +403,13 @@ model Rapportino {
   interventoId    String
   date            DateTime  @default(now()) // giorno del rapportino (uno per giornata)
   workDescription String?
+  issues          String?   // problematiche / mancanze rilevate in cantiere nella giornata
   ricambi         Json      @default("[]") // [{ code, desc, qty, note }]
-  hoursWorked     Float?
+  hoursWorked     Float?    // totale giornata (somma delle timbrature) — derivato
+  plantHours      Float?    // ore operative dell'impianto (contaore macchina) al momento dell'intervento
+  hoursByOperator Json      @default("[]") // [{ name, matricola?, hours }] aggregato — derivato
+  timbrature      Json      @default("[]") // [{ name, start:"HH:MM", end:"HH:MM" }] sessioni entrata/uscita
+  pdfPath         String?   // PDF firmato archiviato alla chiusura
   techName        String?
   techSignature   String?   // path firma tecnico
   techSignedAt    DateTime?
@@ -395,14 +418,34 @@ model Rapportino {
   clientSignedAt  DateTime?
   hash            String?
   closed          Boolean   @default(false)
+  sentAt          DateTime? // ultimo invio email del PDF
+  sentTo          String?   // destinatari dell'ultimo invio
   diaryEventId    String?   // evento generato nel diario del fascicolo
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  intervento Intervento @relation(fields: [interventoId], references: [id], onDelete: Cascade)
-  revisions  RapportinoRevision[]
+  intervento  Intervento @relation(fields: [interventoId], references: [id], onDelete: Cascade)
+  revisions   RapportinoRevision[]
+  attachments RapportinoAttachment[]
 
   @@index([interventoId])
+}
+
+/// Allegato di un rapportino: foto (scattata/caricata) o file di qualsiasi tipo.
+model RapportinoAttachment {
+  id             String   @id @default(cuid())
+  rapportinoId   String
+  path           String   // path pubblico /uploads/...
+  filename       String   // nome originale
+  mime           String
+  size           Int
+  kind           String   @default("file") // "image" | "file"
+  uploadedByName String?
+  createdAt      DateTime @default(now())
+
+  rapportino Rapportino @relation(fields: [rapportinoId], references: [id], onDelete: Cascade)
+
+  @@index([rapportinoId])
 }
 
 /// Log delle modifiche a un rapportino GIÀ FIRMATO/CHIUSO: ogni edit salva lo
@@ -419,6 +462,30 @@ model RapportinoRevision {
   rapportino Rapportino @relation(fields: [rapportinoId], references: [id], onDelete: Cascade)
 
   @@index([rapportinoId])
+}
+
+/// Documenti allegati a un intervento: caricati a mano oppure recuperati dal
+/// fascicolo del tecnico su TeamSystem (source = TEAMSYSTEM, userId valorizzato).
+model InterventoDocument {
+  id             String   @id @default(cuid())
+  interventoId   String
+  name           String
+  path           String // /uploads/...
+  mimeType       String?
+  sizeBytes      Int?
+  category       String   @default("allegato") // allegato | sicurezza | formazione | dpi | altro
+  source         String   @default("UPLOAD") // UPLOAD | TEAMSYSTEM
+  externalId     String? // id del documento nel fascicolo TeamSystem
+  userId         String? // tecnico a cui il documento si riferisce
+  uploadedById   String?
+  uploadedByName String?
+  createdAt      DateTime @default(now())
+
+  intervento Intervento @relation(fields: [interventoId], references: [id], onDelete: Cascade)
+  user       User?      @relation("InterventoDocUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([interventoId])
+  @@index([userId])
 }
 
 /// Check list di cantiere per intervento (AMBIENTE / SICUREZZA). Compilata dal

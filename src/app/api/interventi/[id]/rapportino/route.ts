@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
-import { saveFile, saveDataUrl, sha256 } from "@/lib/uploads";
+import { saveFile, saveDataUrl, saveBytes, sha256 } from "@/lib/uploads";
+import { renderRapportinoPdf } from "@/lib/rapportinoRender";
 
 type RicambioLine = { code: string; desc: string; qty: string; note: string };
+type OperatorLine = { name: string; matricola: string | null; hours: number };
+type TimbraturaLine = { name: string; start: string; end: string; orig?: { name: string; start: string; end: string } };
 
 function parseRicambi(raw: string): RicambioLine[] {
   try {
@@ -20,6 +23,138 @@ function parseRicambi(raw: string): RicambioLine[] {
       .filter((r) => r.code || r.desc);
   } catch {
     return [];
+  }
+}
+
+/** (Ri)genera il PDF del rapportino e ne salva una copia archiviata (pdfPath). */
+async function regenRapportinoPdf(rapportinoId: string, scope: string): Promise<string | null> {
+  try {
+    const out = await renderRapportinoPdf(rapportinoId);
+    if (!out) return null;
+    const pdfPath = await saveBytes(out.bytes, scope, `rapportino-${rapportinoId}.pdf`);
+    await prisma.rapportino.update({ where: { id: rapportinoId }, data: { pdfPath } });
+    return pdfPath;
+  } catch {
+    return null; // la mancata generazione PDF non deve bloccare la chiusura
+  }
+}
+
+/** Righe ore per operatore: [{ name, matricola?, hours }]. */
+function parseOperators(raw: string): OperatorLine[] {
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((r) => {
+        const h = Number(String(r.hours ?? "").replace(",", "."));
+        return {
+          name: String(r.name ?? "").trim(),
+          matricola: r.matricola != null ? String(r.matricola).trim() || null : null,
+          hours: Number.isFinite(h) ? Math.round(h * 100) / 100 : 0,
+        };
+      })
+      .filter((r) => r.name || r.hours > 0);
+  } catch {
+    return [];
+  }
+}
+
+const HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
+/** Righe timbrature: [{ name, start:"HH:MM", end:"HH:MM" }]. */
+function parseTimbrature(raw: string): TimbraturaLine[] {
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((r) => {
+        const row: TimbraturaLine = {
+          name: String(r.name ?? "").trim(),
+          start: HHMM.test(String(r.start ?? "")) ? String(r.start) : "",
+          end: HHMM.test(String(r.end ?? "")) ? String(r.end) : "",
+        };
+        // preserva la timbratura originale del timbratore (per evidenziare le modifiche)
+        const o = r.orig;
+        if (o && (o.name != null || o.start != null || o.end != null))
+          row.orig = { name: String(o.name ?? ""), start: String(o.start ?? ""), end: String(o.end ?? "") };
+        return row;
+      })
+      .filter((r) => r.name || r.start || r.end);
+  } catch {
+    return [];
+  }
+}
+
+const toMin = (hhmm: string): number | null => {
+  const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+
+/** Da timbrature calcola totale e aggregato per operatore. */
+function hoursFromTimbrature(rows: TimbraturaLine[]): { total: number; byOperator: OperatorLine[] } {
+  const byName = new Map<string, number>();
+  let total = 0;
+  for (const r of rows) {
+    const s = toMin(r.start);
+    const e = toMin(r.end);
+    const h = s != null && e != null && e > s ? Math.round(((e - s) / 60) * 100) / 100 : 0;
+    total += h;
+    const key = r.name || "—";
+    byName.set(key, Math.round(((byName.get(key) ?? 0) + h) * 100) / 100);
+  }
+  return {
+    total: Math.round(total * 100) / 100,
+    byOperator: [...byName.entries()].map(([name, hours]) => ({ name, matricola: null, hours })),
+  };
+}
+
+type SavedAtt = { id: string; path: string; kind: string };
+/** Salva i file del campo multipart `attachments` come RapportinoAttachment. */
+async function saveAttachments(
+  rapportinoId: string,
+  form: FormData,
+  uploadedByName: string,
+  scope: string
+): Promise<SavedAtt[]> {
+  const files = form.getAll("attachments").filter((f): f is File => f instanceof File && f.size > 0);
+  const out: SavedAtt[] = [];
+  for (const f of files) {
+    const saved = await saveFile(f, scope);
+    const kind = (f.type || "").startsWith("image/") ? "image" : "file";
+    const rec = await prisma.rapportinoAttachment.create({
+      data: {
+        rapportinoId,
+        path: saved.path,
+        filename: f.name || "allegato",
+        mime: f.type || "application/octet-stream",
+        size: saved.size,
+        kind,
+        uploadedByName,
+      },
+    });
+    out.push({ id: rec.id, path: rec.path, kind: rec.kind });
+  }
+  return out;
+}
+
+/** Rispecchia gli allegati immagine nel diario del fascicolo (una Photo per foto). */
+async function mirrorImagesToDiary(
+  atts: SavedAtt[],
+  args: { interventoId: string; machineId: string | null; diaryEventId: string; caption: string; authorName: string; authorId: string }
+) {
+  for (const a of atts) {
+    if (a.kind !== "image") continue;
+    await prisma.photo.create({
+      data: {
+        interventoId: args.interventoId,
+        machineId: args.machineId,
+        diaryEventId: args.diaryEventId,
+        path: a.path,
+        category: "intervento",
+        caption: args.caption,
+        authorName: args.authorName,
+        authorId: args.authorId,
+      },
+    });
   }
 }
 
@@ -49,9 +184,31 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const rapportinoId = String(form.get("rapportinoId") || "").trim() || null;
   const dateStr = String(form.get("date") || "").trim();
   const workDescription = String(form.get("workDescription") || "").trim() || null;
+  // problematiche / mancanze rilevate in cantiere nella giornata
+  const issues = String(form.get("issues") || "").trim() || null;
   const ricambi = parseRicambi(String(form.get("ricambi") || "[]"));
+  const timbrature = parseTimbrature(String(form.get("timbrature") || "[]"));
+  const operatorsLegacy = parseOperators(String(form.get("hoursByOperator") || "[]"));
   const hoursRaw = String(form.get("hoursWorked") || "").trim();
-  const hoursWorked = hoursRaw ? Number(hoursRaw.replace(",", ".")) : null;
+  // Ore/aggregato derivati dalle timbrature (entrata/uscita); fallback: righe
+  // operatore legacy, poi campo singolo.
+  let operators: OperatorLine[];
+  let hoursWorked: number | null;
+  if (timbrature.length) {
+    const agg = hoursFromTimbrature(timbrature);
+    operators = agg.byOperator;
+    hoursWorked = agg.total;
+  } else if (operatorsLegacy.length) {
+    operators = operatorsLegacy;
+    hoursWorked = Math.round(operatorsLegacy.reduce((n, o) => n + o.hours, 0) * 100) / 100;
+  } else {
+    operators = [];
+    hoursWorked = hoursRaw ? Number(hoursRaw.replace(",", ".")) : null;
+  }
+  // Ore operative dell'impianto (contaore macchina) dichiarate dal tecnico
+  const plantRaw = String(form.get("plantHours") || "").trim();
+  const plantParsed = plantRaw ? Number(plantRaw.replace(",", ".")) : null;
+  const plantHours = plantParsed != null && !Number.isNaN(plantParsed) ? plantParsed : null;
   const techName = String(form.get("techName") || user.name).trim();
   const clientName = String(form.get("clientName") || "").trim() || null;
   const techSigData = String(form.get("techSignature") || "");
@@ -83,8 +240,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const fields = {
     date,
     workDescription,
+    issues,
     ricambi,
     hoursWorked: hoursWorked != null && !Number.isNaN(hoursWorked) ? hoursWorked : null,
+    plantHours,
+    hoursByOperator: operators,
+    timbrature,
     techName,
     techSignature: techSigPath,
     techSignedAt: techSigPath ? existing?.techSignedAt ?? now : null,
@@ -104,8 +265,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         snapshot: {
           date: existing.date.toISOString(),
           workDescription: existing.workDescription,
+          issues: existing.issues,
           ricambi: existing.ricambi,
           hoursWorked: existing.hoursWorked,
+          plantHours: existing.plantHours,
+          hoursByOperator: existing.hoursByOperator,
+          timbrature: existing.timbrature,
           techName: existing.techName,
           clientName: existing.clientName,
         },
@@ -130,44 +295,24 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         },
       }).catch(() => null);
     }
-    // le eventuali nuove foto vanno comunque agganciate al fascicolo/evento
-    const files0 = form.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
-    for (const f of files0) {
-      const saved = await saveFile(f, scope);
-      await prisma.photo.create({
-        data: {
-          interventoId: id,
-          machineId: intervento.machine?.id ?? null,
-          diaryEventId: existing.diaryEventId,
-          path: saved.path,
-          category: "intervento",
-          caption: intervento.title,
-          authorName: techName,
-          authorId: user.id,
-        },
-      });
-    }
-    return NextResponse.json({ ok: true, edited: true, rapportinoId: rapportino.id });
-  }
-
-  // Foto → create, raccogli gli id per collegarle poi al diario
-  const files = form.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
-  const newPhotoIds: string[] = [];
-  for (const f of files) {
-    const saved = await saveFile(f, scope);
-    const p = await prisma.photo.create({
-      data: {
+    // nuovi allegati; le immagini vanno anche nel diario del fascicolo
+    const atts = await saveAttachments(existing.id, form, techName, scope);
+    if (existing.diaryEventId)
+      await mirrorImagesToDiary(atts, {
         interventoId: id,
         machineId: intervento.machine?.id ?? null,
-        path: saved.path,
-        category: "intervento",
+        diaryEventId: existing.diaryEventId,
         caption: intervento.title,
         authorName: techName,
         authorId: user.id,
-      },
-    });
-    newPhotoIds.push(p.id);
+      });
+    // rapportino firmato modificato → rigenera il PDF archiviato
+    const pdfPath = await regenRapportinoPdf(rapportino.id, scope);
+    return NextResponse.json({ ok: true, edited: true, rapportinoId: rapportino.id, pdfPath });
   }
+
+  // Allegati (foto/file) del rapportino
+  await saveAttachments(rapportino.id, form, techName, scope);
 
   if (!finalize) return NextResponse.json({ ok: true, finalized: false, rapportinoId: rapportino.id });
 
@@ -204,16 +349,33 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       },
     });
 
-    if (newPhotoIds.length)
-      await prisma.photo.updateMany({
-        where: { id: { in: newPhotoIds } },
-        data: { machineId: intervento.machine.id, diaryEventId: event.id },
-      });
+    // rispecchia nel diario tutte le foto allegate al rapportino
+    const imgs = await prisma.rapportinoAttachment.findMany({
+      where: { rapportinoId: rapportino.id, kind: "image" },
+      select: { id: true, path: true, kind: true },
+    });
+    await mirrorImagesToDiary(imgs, {
+      interventoId: id,
+      machineId: intervento.machine.id,
+      diaryEventId: event.id,
+      caption: intervento.title,
+      authorName: techName,
+      authorId: user.id,
+    });
   }
 
   await prisma.rapportino.update({ where: { id: rapportino.id }, data: { closed: true, hash, diaryEventId } });
 
-  return NextResponse.json({ ok: true, finalized: true, rapportinoId: rapportino.id, linkedToMachine: !!intervento.machine?.id });
+  // PDF archiviato del rapportino firmato
+  const pdfPath = await regenRapportinoPdf(rapportino.id, scope);
+
+  return NextResponse.json({
+    ok: true,
+    finalized: true,
+    rapportinoId: rapportino.id,
+    linkedToMachine: !!intervento.machine?.id,
+    pdfPath,
+  });
 }
 
 /** Elimina un rapportino giornaliero (solo se in bozza). */

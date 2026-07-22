@@ -64,6 +64,32 @@ export async function readUploadAsDataUrl(publicPath: string | null | undefined)
   }
 }
 
+/** Rilegge un file salvato (/uploads/...) come byte grezzi + mime (per allegati email). */
+export async function readUploadBytes(
+  publicPath: string | null | undefined
+): Promise<{ bytes: Buffer; mime: string } | null> {
+  if (!publicPath || !publicPath.startsWith("/uploads/")) return null;
+  try {
+    const rel = publicPath.replace(/^\/uploads\//, "");
+    const file = path.join(ROOT, rel);
+    const bytes = await fs.readFile(file);
+    const ext = path.extname(file).toLowerCase().replace(".", "");
+    const mime =
+      ext === "jpg" || ext === "jpeg"
+        ? "image/jpeg"
+        : ext === "png"
+          ? "image/png"
+          : ext === "webp"
+            ? "image/webp"
+            : ext === "pdf"
+              ? "application/pdf"
+              : "application/octet-stream";
+    return { bytes, mime };
+  } catch {
+    return null;
+  }
+}
+
 export function sha256(s: string) {
   return crypto.createHash("sha256").update(s).digest("hex");
 }

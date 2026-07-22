@@ -549,6 +549,32 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .photo-grid-sm { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; }
 .photo-grid-sm img { width: 100%; height: 78px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; }
 
+/* Ore per operatore */
+.op-table { width: 100%; border-collapse: collapse; }
+.op-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; padding: 0 6px 6px; }
+.op-table td { padding: 3px 3px; }
+.op-table input { padding: 7px 8px; font-size: 12.5px; }
+.op-table input:disabled { background: var(--surface); color: var(--text); opacity: 1; }
+.op-table-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+.op-table input[type="time"] { padding: 6px 6px; font-size: 12.5px; width: 100%; }
+/* cella timbratura modificata rispetto al valore del timbratore */
+.op-table input.cell-edited { border-color: #ef4444; background: #fef2f2; color: #b91c1c; font-weight: 600; }
+
+/* Allegati del rapportino */
+.att-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.att-item { position: relative; width: 96px; }
+.att-item img { width: 96px; height: 78px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; }
+.att-file { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 96px; height: 78px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-2); text-decoration: none; padding: 6px; }
+.att-file span { font-size: 10px; line-height: 1.2; text-align: center; word-break: break-word; max-height: 34px; overflow: hidden; }
+.att-del { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: none; background: #ef4444; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+.att-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.att-pick { cursor: pointer; }
+.att-check { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12.5px; color: var(--text-2); cursor: pointer; }
+
+/* Azioni PDF del rapportino (scarica / invia) */
+.rap-pdf-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 6px; border-top: 1px dashed var(--border); }
+
 .sig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .sig-readout { width: 100%; max-height: 120px; border: 1px solid var(--border); border-radius: 8px; background: #fff; object-fit: contain; }
 .rapportino-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
@@ -564,8 +590,18 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .rap-day.bare { border: none; background: none; overflow: visible; }
 .rap-day.bare .rap-day-body { border-top: none; padding: 0; }
 
+/* Documenti dell'intervento */
+.doc-upload { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.doc-upload select { max-width: 220px; }
+.doc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.doc-row { display: flex; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid var(--border); font-size: 13px; flex-wrap: wrap; }
+.doc-row:last-child { border-bottom: 0; }
+.doc-name { font-weight: 600; color: var(--navy); text-decoration: none; }
+.doc-name:hover { text-decoration: underline; }
+@media (max-width: 760px) { .doc-upload select { max-width: 100%; flex: 1 1 100%; } }
+
 /* Check list di cantiere */
-.checklist-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.checklist-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
 .checklist-tile { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; background: var(--surface); }
 .checklist-tile-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .checklist-tile-title { font-weight: 600; color: var(--navy); font-size: 14px; margin-bottom: 6px; }
@@ -656,6 +692,35 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .gantt-tech .tname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .gantt-cells { flex: 1; position: relative; min-height: 52px; display: flex; }
 .gantt-cell { flex: 1; border-left: 1px solid var(--border); }
+
+/* Vista pianificazione "per cantiere" */
+.cantieri-view { display: flex; flex-direction: column; gap: 12px; }
+.tech-palette { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+.tech-palette-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+.tech-palette-search { margin-left: auto; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 12.5px; }
+.tech-chips-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.tech-drag-chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px 6px 6px; border: 1px solid var(--border); border-radius: 99px; background: var(--bg-3); font-size: 12.5px; font-weight: 600; color: var(--text); cursor: grab; white-space: nowrap; flex-shrink: 0; }
+.tech-drag-chip:active { cursor: grabbing; }
+.tech-avatar.sm { width: 22px; height: 22px; font-size: 9px; }
+.cantiere-row { display: flex; border-bottom: 1px solid var(--border); min-height: 76px; }
+.cantiere-row:last-child { border-bottom: 0; }
+.cantiere-row.drop-target .gantt-cells { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.cantiere-label { flex: 0 0 270px; border-right: 1px solid var(--border); padding: 10px 14px; display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
+.cantiere-title { font-weight: 600; font-size: 13px; color: var(--navy); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cantiere-title:hover { text-decoration: underline; }
+.cantiere-team { display: flex; flex-direction: column; gap: 4px; margin-top: 5px; }
+.team-line { display: flex; align-items: flex-start; gap: 6px; }
+.team-role { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--muted); min-width: 34px; padding-top: 4px; flex-shrink: 0; }
+.team-sup { padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; font: inherit; font-size: 12px; max-width: 180px; }
+.team-chip.lead { background: var(--accent); color: #fff; }
+.team-chip.conflict { background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; }
+.team-chip.lead.conflict { background: #b91c1c; color: #fff; border: none; }
+.team-sup.conflict { border-color: #dc2626; box-shadow: 0 0 0 1px #dc2626; }
+.cantiere-row.has-conflict { background: #fef4f4; }
+.cantiere-row.has-conflict .cantiere-label { border-left: 3px solid #dc2626; }
+.conflict-badge { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; font-size: 10.5px; font-weight: 700; color: #b91c1c; background: #fef2f2; border-radius: 99px; padding: 2px 8px; margin: 2px 0; }
+.cantiere-empty { padding: 20px 16px; }
+@media (max-width: 900px) { .cantiere-label { flex-basis: 180px; } }
 .gantt-cell.weekend { background: var(--bg); }
 .gantt-cell.today { background: var(--accent-soft); }
 .gantt-block { position: absolute; top: 8px; height: 36px; border-radius: 7px; padding: 0 10px; display: flex; align-items: center; color: #fff; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.18); overflow: hidden; }
