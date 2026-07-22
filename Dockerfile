@@ -7,12 +7,19 @@
 # la porta 80 in uscita è bloccata e `apt-get update` andrebbe in timeout.
 # `openssl` (libssl3) è indispensabile a Prisma: non è incluso in node:*-slim.
 FROM node:22-bookworm-slim AS base
+# L'immagine non contiene ca-certificates, quindi il primo apt su HTTPS non può
+# validare il certificato: si disattiva la verifica TLS SOLO per il bootstrap e
+# la si ripristina subito dopo. L'integrità dei pacchetti resta garantita dalle
+# firme GPG del repository Debian, che apt continua a verificare.
 RUN set -eux; \
     for f in /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list; do \
       [ -f "$f" ] && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' "$f" || true; \
     done; \
+    printf 'Acquire::https::Verify-Peer "false";\nAcquire::https::Verify-Host "false";\n' \
+      > /etc/apt/apt.conf.d/99bootstrap-no-verify; \
     apt-get update; \
     apt-get install -y --no-install-recommends openssl ca-certificates tini; \
+    rm -f /etc/apt/apt.conf.d/99bootstrap-no-verify; \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
