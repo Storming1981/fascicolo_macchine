@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from "./Icon";
@@ -40,6 +40,22 @@ export default function AppShell({
     document.cookie = "shell=campo; path=/; max-age=31536000; samesite=lax";
     router.push("/campo");
   }
+
+  // iPadOS Safari si presenta come "Macintosh" (modalità desktop), quindi il
+  // rilevamento lato server non lo riconosce come tablet. Qui, lato client,
+  // usiamo touch + pointer coarse (che un vero desktop non ha) per mandare i
+  // dispositivi touch alla versione Campo — a meno che l'utente abbia scelto
+  // esplicitamente il desktop (cookie shell) o non abbia app Campo.
+  useEffect(() => {
+    if (!canCampo) return;
+    if (document.cookie.split("; ").some((c) => c.startsWith("shell="))) return;
+    const coarse = window.matchMedia?.("(pointer: coarse)")?.matches;
+    const touch = (navigator.maxTouchPoints ?? 0) > 1;
+    if (coarse && touch) {
+      document.cookie = "shell=campo; path=/; max-age=31536000; samesite=lax";
+      window.location.replace("/campo");
+    }
+  }, [canCampo]);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
 
