@@ -2,9 +2,14 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import LoginForm from "./LoginForm";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const u = await currentUser();
   if (u) redirect("/dashboard");
+  const { error } = await searchParams;
   return (
     <div className="login-shell">
       <div className="login-side">
@@ -28,7 +33,7 @@ export default async function LoginPage() {
         <div className="login-card">
           <h1>Accedi</h1>
           <p className="sub">Inserisci le credenziali per accedere al fascicolo tecnico.</p>
-          <LoginForm />
+          <LoginForm error={!!error} />
         </div>
       </div>
     </div>

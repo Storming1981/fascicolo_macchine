@@ -31,20 +31,31 @@ export function verifyPin(pin: string, hash: string) {
   return bcrypt.compare(pin, hash);
 }
 
-export async function createSession(user: SessionUser) {
-  const token = await new SignJWT({ ...user })
+export const SESSION_COOKIE = COOKIE;
+
+export function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: MAX_AGE,
+  };
+}
+
+/** Firma il JWT di sessione (senza impostare il cookie). */
+export async function signSession(user: SessionUser): Promise<string> {
+  return new SignJWT({ ...user })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${MAX_AGE}s`)
     .sign(SECRET);
+}
+
+export async function createSession(user: SessionUser) {
+  const token = await signSession(user);
   const jar = await cookies();
-  jar.set(COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: MAX_AGE,
-  });
+  jar.set(COOKIE, token, sessionCookieOptions());
 }
 
 export async function destroySession() {

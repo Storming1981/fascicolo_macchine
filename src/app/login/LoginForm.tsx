@@ -1,46 +1,21 @@
-"use client";
-import { useState } from "react";
 import Icon from "@/components/Icon";
 
-export default function LoginForm() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setErr("");
-    setLoading(true);
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-      credentials: "same-origin",
-    });
-    if (res.ok) {
-      // Navigazione "hard": garantisce una richiesta al server con il cookie di
-      // sessione appena impostato. Evita il bug di iOS Safari in cui la
-      // navigazione soft di Next parte prima che il Set-Cookie sia applicato.
-      window.location.assign("/dashboard");
-      return;
-    }
-    setLoading(false);
-    const d = await res.json().catch(() => ({}));
-    setErr(d.error || "Accesso non riuscito");
-  }
-
+/**
+ * Form di login con POST NATIVO (senza fetch/JS): il browser invia le
+ * credenziali e segue il redirect del server applicando il cookie di sessione
+ * in modo nativo. È la modalità più affidabile su iOS Safari.
+ */
+export default function LoginForm({ error }: { error?: boolean }) {
   return (
-    <form className="login-form" onSubmit={submit}>
-      {err && <div className="form-error">{err}</div>}
+    <form className="login-form" method="POST" action="/api/auth/login">
+      {error && <div className="form-error">Credenziali non valide</div>}
       <div className="form-row">
         <label>Email</label>
         <input
           className="input"
           type="email"
+          name="email"
           autoComplete="username"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
           placeholder="nome@zato.it"
           required
         />
@@ -50,14 +25,13 @@ export default function LoginForm() {
         <input
           className="input"
           type="password"
+          name="password"
           autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
           required
         />
       </div>
-      <button className="btn-primary" disabled={loading} style={{ justifyContent: "center", padding: "10px" }}>
-        <Icon name="logout" size={15} /> {loading ? "Accesso…" : "Accedi"}
+      <button className="btn-primary" style={{ justifyContent: "center", padding: "10px" }}>
+        <Icon name="logout" size={15} /> Accedi
       </button>
     </form>
   );
