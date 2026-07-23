@@ -1,10 +1,8 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 
 export default function LoginForm() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
@@ -18,15 +16,18 @@ export default function LoginForm() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
+      credentials: "same-origin",
     });
-    setLoading(false);
     if (res.ok) {
-      router.replace("/dashboard");
-      router.refresh();
-    } else {
-      const d = await res.json().catch(() => ({}));
-      setErr(d.error || "Accesso non riuscito");
+      // Navigazione "hard": garantisce una richiesta al server con il cookie di
+      // sessione appena impostato. Evita il bug di iOS Safari in cui la
+      // navigazione soft di Next parte prima che il Set-Cookie sia applicato.
+      window.location.assign("/dashboard");
+      return;
     }
+    setLoading(false);
+    const d = await res.json().catch(() => ({}));
+    setErr(d.error || "Accesso non riuscito");
   }
 
   return (
