@@ -18,9 +18,11 @@ RUN set -eux; \
     printf 'Acquire::https::Verify-Peer "false";\nAcquire::https::Verify-Host "false";\n' \
       > /etc/apt/apt.conf.d/99bootstrap-no-verify; \
     apt-get update; \
-    apt-get install -y --no-install-recommends openssl ca-certificates tini; \
+    apt-get install -y --no-install-recommends openssl ca-certificates tini tzdata; \
     rm -f /etc/apt/apt.conf.d/99bootstrap-no-verify; \
     rm -rf /var/lib/apt/lists/*
+# Fuso orario italiano di default (date coerenti tra server e client)
+ENV TZ=Europe/Rome
 WORKDIR /app
 
 # ---------- deps: solo dipendenze ----------

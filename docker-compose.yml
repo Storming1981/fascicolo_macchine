@@ -21,6 +21,7 @@ services:
       - .env.production
     environment:
       NODE_ENV: production
+      TZ: Europe/Rome
       # Ascolta su tutte le interfacce dell'host (network_mode: host), così il
       # container del reverse proxy la raggiunge tramite il gateway della propria
       # rete Docker. La porta 3000 va tenuta chiusa verso l'esterno dal firewall.
