@@ -21,8 +21,10 @@ services:
       - .env.production
     environment:
       NODE_ENV: production
-      # ascolto solo su loopback: ci arriva soltanto il reverse proxy locale
-      HOSTNAME: 127.0.0.1
+      # Ascolto sul gateway docker0 (172.17.0.1): raggiungibile dal container
+      # nginx via 172.17.0.1:3000 (come sales-tracker) ma NON esposto sull'IP
+      # pubblico. Se docker0 avesse un IP diverso, adeguare qui e nel proxy_pass.
+      HOSTNAME: 172.17.0.1
       PORT: "3000"
       UPLOAD_DIR: /data/uploads
     volumes:
@@ -33,7 +35,7 @@ services:
         - CMD
         - node
         - -e
-        - "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        - "fetch('http://172.17.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       retries: 5
