@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
+import ModalPortal from "@/components/ModalPortal";
 import {
   INTERVENTO_STATUS_META,
   INTERVENTO_STATUS_ORDER,
@@ -333,7 +334,8 @@ function Ticket({
 
 function Lista({ interventi }: { interventi: InterventoRow[] }) {
   return (
-    <div className="card" style={{ overflow: "hidden" }}>
+    <div className="card no-pad">
+      <div className="table-wrap">
       <table className="data-table">
         <thead>
           <tr>
@@ -396,6 +398,7 @@ function Lista({ interventi }: { interventi: InterventoRow[] }) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -466,6 +469,7 @@ function NewInterventoModal({
   }
 
   return (
+    <ModalPortal>
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -595,5 +599,6 @@ function NewInterventoModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

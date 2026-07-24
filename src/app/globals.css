@@ -47,8 +47,11 @@ a { color: inherit; text-decoration: none; }
 h1, h2, h3, h4 { margin: 0; }
 
 /* ── App shell ───────────────────────────────────────────── */
-.app { display: flex; width: 100%; height: 100vh; min-height: 100vh; overflow: hidden; }
-.main { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; height: 100vh; overflow: hidden; }
+/* NB: `dvh` (dynamic viewport height) è indispensabile su iOS/iPadOS: con `vh`
+   l'altezza include le barre del browser, quindi con `overflow:hidden` il fondo
+   della pagina finisce sotto la toolbar e diventa irraggiungibile. */
+.app { display: flex; width: 100%; height: 100vh; height: 100dvh; min-height: 100vh; min-height: 100dvh; overflow: hidden; }
+.main { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; height: 100vh; height: 100dvh; overflow: hidden; }
 
 .sidebar {
   flex: 0 0 244px; width: 244px;
@@ -96,7 +99,7 @@ h1, h2, h3, h4 { margin: 0; }
 .topbar-greeting { text-align: right; line-height: 1.25; }
 .topbar-greeting .hi { font-size: 11px; color: var(--muted); }
 .topbar-greeting .who { font-size: 13.5px; font-weight: 600; color: var(--text); }
-.search { display: flex; align-items: center; gap: 9px; background: var(--bg); border: 1px solid var(--border); padding: 9px 13px; border-radius: 10px; min-width: 320px; max-width: 360px; }
+.search { display: flex; align-items: center; gap: 9px; background: var(--bg); border: 1px solid var(--border); padding: 9px 13px; border-radius: 10px; flex: 1 1 200px; min-width: 0; max-width: 360px; }
 .search input { background: none; border: none; outline: none; font: inherit; flex: 1; color: var(--text); font-size: 13px; width: 100%; }
 .search input::placeholder { color: var(--muted); }
 .icon-btn { background: none; border: 1px solid transparent; cursor: pointer; padding: 8px; border-radius: 9px; color: var(--muted); display: grid; place-items: center; position: relative; }
@@ -105,7 +108,14 @@ h1, h2, h3, h4 { margin: 0; }
 .icon-btn .dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--red); border: 1.5px solid #fff; }
 
 /* ── View ────────────────────────────────────────────────── */
-.view { padding: 24px 28px 72px; overflow: auto; flex: 1; min-width: 0; }
+.view {
+  padding: 24px 28px 72px; overflow: auto; flex: 1; min-width: 0;
+  -webkit-overflow-scrolling: touch;
+  /* notch/home-indicator in PWA standalone (viewportFit: cover) */
+  padding-left: max(28px, env(safe-area-inset-left));
+  padding-right: max(28px, env(safe-area-inset-right));
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
 .view-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; gap: 16px; flex-wrap: wrap; }
 .view-header h1 { font-size: 23px; font-weight: 650; margin: 0 0 4px; letter-spacing: -0.015em; color: var(--navy); }
 .view-header p { margin: 0; font-size: 13px; color: var(--muted); }
@@ -193,7 +203,7 @@ h1, h2, h3, h4 { margin: 0; }
 .chip-btn.active .chip-n { color: #fff; opacity: 0.7; }
 
 /* ── Table ───────────────────────────────────────────────── */
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .data-table thead th { text-align: left; font-weight: 500; color: var(--muted); padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--bg-3); white-space: nowrap; }
 .data-table tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); height: var(--row-h); }
@@ -347,9 +357,19 @@ img.user-avatar.small { object-fit: cover; }
 .qr-img { width: 140px; height: 140px; }
 
 /* ── Modal ───────────────────────────────────────────────── */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(10, 44, 77, 0.42); z-index: 100; display: grid; place-items: center; backdrop-filter: blur(3px); animation: fade-in 0.15s ease; padding: 16px; }
+/* `-webkit-backdrop-filter` serve a Safari < 18; `dvh` + safe-area evitano che
+   su iPhone/iPad il modale finisca sotto la toolbar o la home-indicator. */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(10, 44, 77, 0.42); z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  animation: fade-in 0.15s ease; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
 @keyframes fade-in { from { opacity: 0; } }
-.modal { background: var(--surface); border-radius: 14px; width: min(640px, 96vw); max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); animation: pop-in 0.2s ease; }
+.modal { background: var(--surface); border-radius: 14px; width: min(640px, 96vw); max-height: 90vh; max-height: 90dvh; margin: auto; flex-shrink: 0; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); animation: pop-in 0.2s ease; }
 .modal-sm { width: min(440px, 96vw); }
 @keyframes pop-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
 .modal-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
@@ -361,6 +381,8 @@ img.user-avatar.small { object-fit: cover; }
 .form-row { display: flex; flex-direction: column; gap: 6px; }
 .form-row label { font-size: 12px; color: var(--muted); font-weight: 500; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-grid-3 { grid-template-columns: minmax(0,1fr) minmax(0,1.4fr) auto; align-items: start; }
+@media (max-width: 900px) { .form-grid-3 { grid-template-columns: 1fr; } }
 .input { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; font: inherit; font-size: 13px; color: var(--text); width: 100%; outline: none; }
 .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(29, 111, 184, 0.16); }
 textarea.input { resize: vertical; min-height: 64px; font-family: inherit; }
@@ -377,7 +399,7 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .empty { padding: 64px 24px; text-align: center; color: var(--muted); }
 
 /* ── Login ───────────────────────────────────────────────── */
-.login-shell { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; }
+.login-shell { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: 1fr 1fr; }
 .login-side { background: linear-gradient(160deg, var(--navy) 0%, var(--navy-deep) 100%); color: #fff; padding: 56px; display: flex; flex-direction: column; justify-content: space-between; }
 .login-side-logo { background: #fff; border-radius: 12px; padding: 16px 20px; width: fit-content; }
 .login-side-logo img { height: 44px; display: block; }
@@ -402,8 +424,8 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .cmp-edit-body { border-top: 1px solid var(--border); padding: 16px; background: var(--bg-3); }
 
 /* ── Toast ───────────────────────────────────────────────── */
-.toast-wrap { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
-.toast { background: var(--navy); color: #fff; padding: 12px 16px; border-radius: 10px; font-size: 13px; box-shadow: var(--shadow-lg); animation: pop-in 0.2s ease; max-width: 360px; }
+.toast-wrap { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); right: 20px; left: 20px; z-index: 200; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
+.toast { background: var(--navy); color: #fff; padding: 12px 16px; border-radius: 10px; font-size: 13px; box-shadow: var(--shadow-lg); animation: pop-in 0.2s ease; max-width: min(360px, 100%); pointer-events: auto; }
 .toast.err { background: #b91c1c; }
 .toast.ok { background: var(--green); }
 
@@ -414,10 +436,18 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .login-shell { grid-template-columns: 1fr; }
   .login-side { display: none; }
+  /* fascia tablet: griglie che restavano in configurazione desktop */
+  .svc-pipeline { grid-template-columns: repeat(3, 1fr); }
+  .cmp-row-head { grid-template-columns: 40px minmax(0,1fr) auto 16px; }
+  .cmp-brand { display: none; }
+  .conflict-cmp { grid-template-columns: 1fr; }
+  .kv > div { grid-template-columns: 1fr 1.2fr; }
 }
 
-/* ── Responsive: tablet (menu a scomparsa, contenuto full-width) ── */
-@media (max-width: 900px) {
+/* ── Responsive: tablet (menu a scomparsa, contenuto full-width) ──
+   Soglia a 1024px (non 900): l'iPad in orizzontale è 1024-1194px e con la
+   sidebar fissa da 244px restavano ~750px utili con tutte le regole desktop. */
+@media (max-width: 1024px) {
   .sidebar {
     position: fixed; inset: 0 auto 0 0; width: 270px; flex-basis: 270px; z-index: 120;
     transform: translateX(-100%); transition: transform 0.25s ease;
@@ -440,9 +470,10 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 
 /* ── Responsive: mobile ──────────────────────────────────── */
 @media (max-width: 760px) {
-  .view { padding: 16px 14px 64px; }
+  .view { padding: 16px 14px 64px; padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
   .topbar { padding: 0 14px; }
-  .search { display: none; }
+  /* solo la ricerca della topbar sparisce: quelle in pagina devono restare */
+  .topbar .search { display: none; }
   .stat-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
   .pipeline { grid-template-columns: 1fr; gap: 14px; }
   .detail-header { grid-template-columns: 1fr; gap: 14px; }
@@ -512,7 +543,7 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .form-error { color: #dc2626; font-size: 12.5px; background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius-sm); padding: 8px 11px; }
 .empty-state { color: var(--muted); text-align: center; padding: 40px 20px; }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .kanban { display: flex; flex-wrap: nowrap; }
   .kanban-col { flex: 0 0 248px; }
 }
@@ -542,6 +573,12 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .info-banner svg { flex-shrink: 0; }
 
 .ric-table { width: 100%; border-collapse: collapse; }
+/* Tabelle di input: sotto una certa larghezza scorrono dentro .table-wrap
+   invece di comprimere le celle fino a renderle inutilizzabili. */
+@media (max-width: 900px) {
+  .ric-table { min-width: 560px; }
+  .op-table { min-width: 420px; }
+}
 .ric-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; padding: 0 6px 6px; }
 .ric-table td { padding: 3px 3px; }
 .ric-table input { padding: 7px 8px; font-size: 12.5px; }
@@ -627,7 +664,7 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 
 /* Autocomplete articoli/ricambi da gestionale */
 .art-input { position: relative; }
-.art-sugg { position: absolute; z-index: 30; top: calc(100% + 2px); left: 0; min-width: 320px; max-width: 460px; max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(15,50,79,0.14); }
+.art-sugg { position: absolute; z-index: 30; top: calc(100% + 2px); left: 0; min-width: min(320px, 84vw); max-width: min(460px, 90vw); max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(15,50,79,0.14); }
 .art-sugg button { display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left; background: none; border: none; padding: 7px 11px; cursor: pointer; }
 .art-sugg button:hover { background: var(--accent-soft); }
 .art-sugg .mono { font-size: 12.5px; font-weight: 600; color: var(--text); }
@@ -637,7 +674,7 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 }
 
 /* ===== Service — clienti & cantieri ===== */
-.table-toolbar { display: flex; align-items: center; gap: 10px; padding: 0 0 14px; }
+.table-toolbar { display: flex; align-items: center; gap: 10px; padding: 0 0 14px; flex-wrap: wrap; }
 .table-toolbar .search { border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; background: var(--surface); display: flex; align-items: center; gap: 8px; width: 100%; }
 .flex-inline { display: inline-flex; align-items: center; gap: 7px; }
 .mini-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -663,7 +700,7 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .map-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; flex: 0 0 auto; }
 .map-cards .mini-list { max-height: 160px; overflow-y: auto; }
 .mini-list.two-col { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; align-content: start; }
-@media (max-width: 1000px) {
+@media (max-width: 1100px) {
   .map-view { overflow: visible; display: block; }
   .map-layout { grid-template-columns: 1fr; display: grid; }
   .map-canvas { height: 420px; }
@@ -673,6 +710,12 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 
 /* ===== Service — Pianificazione (Gantt) ===== */
 .gantt { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+/* Su tablet/telefono il Gantt scorre in orizzontale invece di comprimere i
+   giorni a pochi pixel rendendoli illeggibili. */
+@media (max-width: 1024px) {
+  .gantt { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .gantt-head, .gantt-row, .cantiere-row { min-width: 840px; }
+}
 .gantt-head { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-3); }
 .gantt-corner { flex: 0 0 210px; padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .gantt-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -769,7 +812,7 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 
 /* ===== Service — Chat ===== */
 .chan-badge { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 99px; white-space: nowrap; }
-.chat-shell { display: grid; grid-template-columns: 300px 1fr 280px; gap: 14px; height: calc(100vh - 200px); min-height: 460px; }
+.chat-shell { display: grid; grid-template-columns: 300px 1fr 280px; gap: 14px; height: calc(100vh - 200px); height: calc(100dvh - 200px); min-height: 460px; }
 .chat-inbox, .chat-thread { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
 .chat-context { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
 

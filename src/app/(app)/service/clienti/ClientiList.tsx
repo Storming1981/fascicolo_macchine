@@ -51,7 +51,7 @@ export default function ClientiList({
         )}
       </div>
 
-      <div className="card" style={{ overflow: "hidden" }}>
+      <div className="card">
         <div className="table-toolbar">
           <div className="search" style={{ maxWidth: 320 }}>
             <Icon name="search" size={15} color="var(--muted)" />
@@ -62,6 +62,7 @@ export default function ClientiList({
             />
           </div>
         </div>
+        <div className="table-wrap">
         <table className="data-table">
           <thead>
             <tr>
@@ -134,6 +135,7 @@ export default function ClientiList({
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showNew && <NewCustomerModal onClose={() => setShowNew(false)} />}

@@ -809,6 +809,7 @@ function ErpCard({
                 </div>
               </dl>
 
+              <div className="table-wrap">
               <table className="erp-jobs">
                 <thead>
                   <tr>
@@ -841,6 +842,7 @@ function ErpCard({
                   ))}
                 </tbody>
               </table>
+              </div>
 
               {/* Ordini di produzione: solo impianti nuovi (Body e Container = 999999999) */}
               {isGenericCommessa(machine.jobBody) &&
@@ -904,6 +906,7 @@ function ErpCard({
                     {o.data.start ? fmtDate(o.data.start) : "—"} →{" "}
                     {o.data.end ? fmtDate(o.data.end) : "—"}
                   </div>
+                  <div className="table-wrap">
                   <table className="erp-jobs">
                     <thead>
                       <tr>
@@ -924,6 +927,7 @@ function ErpCard({
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               ))}
 
@@ -1776,7 +1780,7 @@ function TabCollaudo({
           </div>
 
           {(c?.compilerName || c?.approverName) && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div className="form-grid" style={{ marginBottom: 12 }}>
               {c?.compilerName && (
                 <div className="muted small">
                   Compilato da <strong style={{ color: "var(--text)" }}>{c.compilerName}</strong>{" "}

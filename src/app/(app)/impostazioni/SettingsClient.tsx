@@ -271,7 +271,7 @@ export default function SettingsClient({
           <div className="cmp-list">
             {plants.map((p, i) => (
               <div className="card" key={i} style={{ marginBottom: 8 }}>
-                <div className="form-grid" style={{ gridTemplateColumns: "1fr 1.4fr auto", alignItems: "start" }}>
+                <div className="form-grid form-grid-3">
                   <div className="form-row">
                     <label>Tipologia impianto</label>
                     <input

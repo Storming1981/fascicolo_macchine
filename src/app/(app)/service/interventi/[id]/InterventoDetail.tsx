@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
+import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import {
   CHECKLIST_DEFS,
@@ -668,6 +669,7 @@ export default function InterventoDetail({
       )}
 
       {adding && (
+        <ModalPortal>
         <div className="modal-backdrop" onClick={() => setAdding(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -704,6 +706,7 @@ export default function InterventoDetail({
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );
@@ -1004,6 +1007,7 @@ function RapportinoDay({
           <div className="field">
             <span className="field-label">Ore per operatore (timbrature)</span>
             {sessions.length > 0 ? (
+              <div className="table-wrap">
               <table className="op-table ro">
                 <thead>
                   <tr>
@@ -1024,8 +1028,10 @@ function RapportinoDay({
                   ))}
                 </tbody>
               </table>
+              </div>
             ) : roLegacyOps.length ? (
               // vecchi rapportini: solo aggregato per operatore
+              <div className="table-wrap">
               <table className="op-table ro">
                 <thead>
                   <tr>
@@ -1042,6 +1048,7 @@ function RapportinoDay({
                   ))}
                 </tbody>
               </table>
+              </div>
             ) : (
               <div className="readout muted">
                 {rapportino?.hoursWorked != null
@@ -1100,6 +1107,7 @@ function RapportinoDay({
 
           <div className="field">
             <span className="field-label">Ricambi utilizzati</span>
+            <div className="table-wrap">
             <table className="ric-table">
               <thead>
                 <tr>
@@ -1146,6 +1154,7 @@ function RapportinoDay({
                 ))}
               </tbody>
             </table>
+            </div>
             {!readOnly && (
               <button className="btn-ghost-sm" onClick={addRic} style={{ marginTop: 8 }}>
                 <Icon name="plus" size={13} /> Aggiungi ricambio
