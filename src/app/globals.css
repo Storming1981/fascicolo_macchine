@@ -59,7 +59,12 @@ h1, h2, h3, h4 { margin: 0; }
   border-right: 1px solid var(--border);
   color: var(--text-2);
   display: flex; flex-direction: column; padding: 20px 16px; gap: 2px;
+  /* il menu è più alto dello schermo su tablet/telefono: deve scorrere,
+     altrimenti utente e "Esci" in fondo restano irraggiungibili */
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
 }
+/* senza questo i blocchi si comprimono invece di generare lo scroll */
+.brand, .nav, .sidebar-foot { flex-shrink: 0; }
 .brand { display: flex; align-items: center; justify-content: center; padding: 8px 8px 26px; }
 .brand-logo { display: flex; justify-content: center; align-items: center; width: 100%; }
 .brand-logo img { width: auto; height: 64px; max-width: 100%; object-fit: contain; display: block; }
@@ -451,6 +456,7 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
   .sidebar {
     position: fixed; inset: 0 auto 0 0; width: 270px; flex-basis: 270px; z-index: 120;
     transform: translateX(-100%); transition: transform 0.25s ease;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
   }
   .app.nav-open .sidebar { transform: translateX(0); }
   .nav-overlay { display: none; position: fixed; inset: 0; background: rgba(10,44,77,0.4); z-index: 110; }
