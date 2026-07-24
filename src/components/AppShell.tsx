@@ -59,6 +59,30 @@ export default function AppShell({
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
 
+  // Gruppi del menu richiudibili: la scelta resta salvata sul dispositivo, così
+  // su tablet/telefono si tiene aperto solo ciò che serve davvero.
+  const [closedGroups, setClosedGroups] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("nav-collapsed");
+      if (raw) setClosedGroups(JSON.parse(raw));
+    } catch {
+      /* preferenza non critica */
+    }
+  }, []);
+
+  function toggleGroup(title: string) {
+    setClosedGroups((prev) => {
+      const next = { ...prev, [title]: !prev[title] };
+      try {
+        localStorage.setItem("nav-collapsed", JSON.stringify(next));
+      } catch {
+        /* preferenza non critica */
+      }
+      return next;
+    });
+  }
+
   const [searching, setSearching] = useState(false);
 
   async function submitSearch(e: React.FormEvent) {
@@ -151,26 +175,43 @@ export default function AppShell({
           </div>
         </div>
         <nav className="nav">
-          {GROUPS.map((g) => (
-            <div key={g.title}>
-              <div className="nav-section">{g.title}</div>
-              {g.items.map((n) => {
-                const active = pathname === n.href || pathname.startsWith(n.href + "/");
-                return (
-                  <Link
-                    key={n.href}
-                    href={n.href}
-                    className={"nav-item" + (active ? " active" : "")}
-                    onClick={() => setOpen(false)}
-                  >
-                    <Icon name={n.icon} size={18} />
-                    <span>{n.label}</span>
-                    {n.badge && <span className="nav-badge">{machineCount}</span>}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+          {GROUPS.map((g) => {
+            const closed = !!closedGroups[g.title];
+            const hasActive = g.items.some(
+              (n) => pathname === n.href || pathname.startsWith(n.href + "/")
+            );
+            return (
+              <div key={g.title}>
+                <button
+                  type="button"
+                  className={"nav-section" + (closed ? " closed" : "")}
+                  onClick={() => toggleGroup(g.title)}
+                  aria-expanded={!closed}
+                >
+                  <span>{g.title}</span>
+                  {/* pallino quando il gruppo chiuso contiene la pagina corrente */}
+                  {closed && hasActive && <span className="nav-section-dot" />}
+                  <Icon name="chev-down" size={13} />
+                </button>
+                {!closed &&
+                  g.items.map((n) => {
+                    const active = pathname === n.href || pathname.startsWith(n.href + "/");
+                    return (
+                      <Link
+                        key={n.href}
+                        href={n.href}
+                        className={"nav-item" + (active ? " active" : "")}
+                        onClick={() => setOpen(false)}
+                      >
+                        <Icon name={n.icon} size={18} />
+                        <span>{n.label}</span>
+                        {n.badge && <span className="nav-badge">{machineCount}</span>}
+                      </Link>
+                    );
+                  })}
+              </div>
+            );
+          })}
         </nav>
         <div className="sidebar-foot">
           <div className="user">

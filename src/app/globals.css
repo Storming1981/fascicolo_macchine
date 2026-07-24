@@ -71,7 +71,18 @@ h1, h2, h3, h4 { margin: 0; }
 .brand-sub { display: none; }
 
 .nav { display: flex; flex-direction: column; gap: 2px; }
-.nav-section { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.11em; color: var(--muted-2); padding: 18px 10px 7px; font-weight: 600; }
+/* Titolo di gruppo = pulsante che richiude la sezione (menu più corto su tablet) */
+.nav-section {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.11em;
+  color: var(--muted-2); padding: 18px 10px 7px; font-weight: 600;
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  background: none; border: none; cursor: pointer; font-family: inherit; text-align: left;
+}
+.nav-section > span:first-child { flex: 1; min-width: 0; }
+.nav-section:hover { color: var(--text-2); }
+.nav-section svg { flex-shrink: 0; transition: transform 0.18s ease; }
+.nav-section.closed svg { transform: rotate(-90deg); }
+.nav-section-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
 .nav-item {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 12px; border-radius: 10px;
