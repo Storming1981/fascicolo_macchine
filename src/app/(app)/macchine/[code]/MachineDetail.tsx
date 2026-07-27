@@ -676,6 +676,80 @@ function isGenericCommessa(v: string | null | undefined): boolean {
   return !!v && String(v).trim() === GENERIC_COMMESSA;
 }
 
+/**
+ * Vista dei dati gestionale SALVATI sul fascicolo (ultima sincronizzazione),
+ * usata quando la connessione diretta al SQL Server non è disponibile — cioè in
+ * produzione sulla VPS, dove i dati arrivano dal sync-agent on-premise.
+ */
+function SyncedErpFallback({
+  machine,
+  reason,
+}: {
+  machine: Machine;
+  reason: string | null;
+}) {
+  const prodEnd = machine.milestones?.find((m) => m.key === "production_end")?.date ?? null;
+  const prodStart =
+    machine.productionStart ??
+    machine.milestones?.find((m) => m.key === "production_start")?.date ??
+    null;
+  const hasAny =
+    machine.erpSyncedAt || machine.erpDescription || machine.erpHours || prodStart;
+
+  if (!hasAny) {
+    return (
+      <p className="muted small">
+        Nessun dato dal gestionale per questo fascicolo.
+        {reason ? ` (${reason})` : ""}
+      </p>
+    );
+  }
+
+  const fmtH = (h: number | null) =>
+    h && h > 0 ? `${h.toLocaleString("it-IT", { maximumFractionDigits: 1 })} h` : "—";
+
+  return (
+    <>
+      <div className="info-banner" style={{ marginBottom: 12 }}>
+        <Icon name="clock" size={15} />
+        <span>
+          Dati sincronizzati dal gestionale
+          {machine.erpSyncedAt ? ` il ${fmtDate(machine.erpSyncedAt)}` : ""}. La
+          connessione diretta non è attiva su questo server (aggiornamento via sync-agent).
+        </span>
+      </div>
+      <dl className="kv">
+        {machine.erpDescription && (
+          <div>
+            <dt>Descrizione commessa</dt>
+            <dd>{machine.erpDescription}</dd>
+          </div>
+        )}
+        <div>
+          <dt>Cliente (gestionale)</dt>
+          <dd>{machine.customer || <span className="muted">—</span>}</dd>
+        </div>
+        <div>
+          <dt>Inizio produzione (gestionale)</dt>
+          <dd className="mono">
+            {prodStart ? fmtDate(prodStart) : <span className="muted">— nessuna timbratura</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>Fine produzione (gestionale)</dt>
+          <dd className="mono">
+            {prodEnd ? fmtDate(prodEnd) : <span className="muted">— in corso / assente</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>Ore di lavorazione totali</dt>
+          <dd className="mono">{fmtH(machine.erpHours)}</dd>
+        </div>
+      </dl>
+    </>
+  );
+}
+
 function ErpCard({
   machine,
   canEdit,
@@ -764,14 +838,11 @@ function ErpCard({
 
       {state === "loading" && <p className="muted small">Lettura dal gestionale…</p>}
 
-      {state === "unavailable" && (
-        <p className="muted small">Integrazione gestionale non configurata.</p>
-      )}
-
-      {state === "error" && (
-        <p className="muted small" style={{ color: "var(--danger, #b3261e)" }}>
-          {errMsg}
-        </p>
+      {/* In produzione (VPS) la connessione diretta al gestionale non c'è: i dati
+          arrivano dal sync-agent e restano salvati sul fascicolo. Mostriamo QUELLI
+          invece di lasciare la card vuota. */}
+      {(state === "unavailable" || state === "error") && (
+        <SyncedErpFallback machine={machine} reason={state === "error" ? errMsg : null} />
       )}
 
       {state === "ok" && data && (
