@@ -23,3 +23,10 @@ scripts/*.log
 
 # Dati operatori (PII) — tenere solo in locale
 scripts/operators.csv
+
+# Sync-agent ERP: segreti e artefatti (il codice è versionato, non i segreti)
+sync-agent/.env
+sync-agent/node_modules
+sync-agent/dist
+sync-agent/*.log
+sync-agent/.sync.lock

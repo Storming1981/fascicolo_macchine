@@ -33,12 +33,103 @@ export type SyncResult = {
   erp: ErpMachineData;
 };
 
+/**
+ * Dati ERP già calcolati (dal gestionale) da applicare a un fascicolo.
+ * È il sottoinsieme di `ErpMachineData` che finisce nel DB: lo usa sia
+ * `syncMachine` (che li ricava interrogando direttamente SQL Server) sia il
+ * **sync-agent** on-premise, che li invia via HTTPS quando la VPS non ha
+ * visibilità sul gestionale. Le date sono ISO string o Date.
+ */
+export type AppliedErpData = {
+  found: boolean;
+  customer?: string | null;
+  customerCountryIso?: string | null;
+  customerCountryName?: string | null;
+  description?: string | null;
+  totalHours?: number | null;
+  productionStart?: string | Date | null;
+  productionEnd?: string | Date | null;
+};
+
+function toDate(v: string | Date | null | undefined): Date | null {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Scrive nel fascicolo i campi alimentati dal gestionale, con la stessa logica
+ * per tutti i punti di ingresso (sync diretto in LAN e sync-agent via HTTPS).
+ * Ritorna l'elenco dei campi effettivamente modificati.
+ */
+export async function applyErpData(
+  machineId: string,
+  erp: AppliedErpData,
+  options: SyncOptions = ALL,
+): Promise<string[]> {
+  const opt = { ...ALL, ...options };
+  const changed: string[] = [];
+  if (!erp.found) return changed;
+
+  const data: Record<string, unknown> = {};
+
+  // Cliente + paese
+  if (opt.customer && erp.customer) {
+    data.customer = erp.customer;
+    changed.push("cliente");
+    const raw = erp.customerCountryIso || erp.customerCountryName;
+    const resolved = resolveCountry(raw);
+    // aggiorna il paese solo se riconosciuto (evita codici "XX")
+    if (raw && resolved.code !== "XX") {
+      data.country = resolved.label;
+      data.countryCode = resolved.code;
+      changed.push("paese");
+    }
+  }
+
+  // Descrizione commessa
+  if (opt.description && erp.description) {
+    data.erpDescription = erp.description;
+    changed.push("descrizione");
+  }
+
+  // Ore di lavorazione
+  if (opt.hours && (erp.totalHours ?? 0) > 0) {
+    data.erpHours = Math.round((erp.totalHours ?? 0) * 100) / 100;
+    changed.push("ore");
+  }
+
+  const prodStart = toDate(erp.productionStart);
+  const prodEnd = toDate(erp.productionEnd);
+
+  // Inizio produzione (campo fascicolo)
+  if (opt.production && prodStart) {
+    data.productionStart = prodStart;
+  }
+
+  // Marca sempre la data di sync se almeno una commessa è stata trovata
+  data.erpSyncedAt = new Date();
+  await prisma.machine.update({ where: { id: machineId }, data });
+
+  // Milestone produzione (diario), con origine GESTIONALE
+  if (opt.production) {
+    if (prodStart) {
+      await upsertMilestone(machineId, "production_start", prodStart);
+      changed.push("inizio produzione");
+    }
+    if (prodEnd) {
+      await upsertMilestone(machineId, "production_end", prodEnd);
+      changed.push("fine produzione");
+    }
+  }
+
+  return changed;
+}
+
 export async function syncMachine(
   machineId: string,
   options: SyncOptions = ALL,
 ): Promise<SyncResult> {
-  const opt = { ...ALL, ...options };
-
   const machine = await prisma.machine.findUnique({
     where: { id: machineId },
     select: {
@@ -66,57 +157,20 @@ export async function syncMachine(
   });
 
   const found = erp.jobs.some((j) => j.found);
-  const changed: string[] = [];
-  const data: Record<string, unknown> = {};
-
-  if (found) {
-    // Cliente + paese
-    if (opt.customer && erp.customer) {
-      data.customer = erp.customer;
-      changed.push("cliente");
-      const raw = erp.customerCountryIso || erp.customerCountryName;
-      const resolved = resolveCountry(raw);
-      // aggiorna il paese solo se riconosciuto (evita codici "XX")
-      if (raw && resolved.code !== "XX") {
-        data.country = resolved.label;
-        data.countryCode = resolved.code;
-        changed.push("paese");
-      }
-    }
-
-    // Descrizione commessa
-    if (opt.description && erp.description) {
-      data.erpDescription = erp.description;
-      changed.push("descrizione");
-    }
-
-    // Ore di lavorazione
-    if (opt.hours && erp.totalHours > 0) {
-      data.erpHours = Math.round(erp.totalHours * 100) / 100;
-      changed.push("ore");
-    }
-
-    // Inizio produzione (campo fascicolo)
-    if (opt.production && erp.productionStart) {
-      data.productionStart = erp.productionStart;
-    }
-
-    // Marca sempre la data di sync se almeno una commessa è stata trovata
-    data.erpSyncedAt = new Date();
-    await prisma.machine.update({ where: { id: machine.id }, data });
-
-    // Milestone produzione (diario), con origine GESTIONALE
-    if (opt.production) {
-      if (erp.productionStart) {
-        await upsertMilestone(machine.id, "production_start", erp.productionStart);
-        changed.push("inizio produzione");
-      }
-      if (erp.productionEnd) {
-        await upsertMilestone(machine.id, "production_end", erp.productionEnd);
-        changed.push("fine produzione");
-      }
-    }
-  }
+  const changed = await applyErpData(
+    machine.id,
+    {
+      found,
+      customer: erp.customer,
+      customerCountryIso: erp.customerCountryIso,
+      customerCountryName: erp.customerCountryName,
+      description: erp.description,
+      totalHours: erp.totalHours,
+      productionStart: erp.productionStart,
+      productionEnd: erp.productionEnd,
+    },
+    options,
+  );
 
   return { machineId: machine.id, code: machine.code, found, changed, erp };
 }
