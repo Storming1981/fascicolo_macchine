@@ -73,3 +73,26 @@ export async function pushResults(
   }
   return res.json() as Promise<PushResponse>;
 }
+
+export interface ArticlesPushResponse {
+  status: string;
+  received: number;
+  inserted: number;
+  totalInCatalog: number;
+}
+
+export async function pushArticles(
+  articles: { code: string; description: string }[],
+  replace: boolean,
+): Promise<ArticlesPushResponse> {
+  const res = await fetch(config.api.articlesUrl, {
+    method: 'POST',
+    headers: authHeaders(true),
+    body: JSON.stringify({ articles, replace }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`POST /api/sync/erp/articles ${res.status}: ${t.slice(0, 300)}`);
+  }
+  return res.json() as Promise<ArticlesPushResponse>;
+}

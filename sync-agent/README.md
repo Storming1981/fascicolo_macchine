@@ -16,6 +16,9 @@ anche milestone nel diario, con origine `GESTIONALE`). Sono gli stessi campi del
 pulsante *Sincronizza tutti i fascicoli* in Impostazioni, che però funziona solo
 in rete aziendale.
 
+Sincronizza anche il **catalogo articoli/ricambi** (tabella `artico`), così
+l'autocomplete dei ricambi nel rapportino funziona anche sulla VPS.
+
 ## Come funziona
 
 1. `GET /api/sync/erp/machines` → lista fascicoli con i loro job/ordini.
@@ -70,10 +73,12 @@ npm start
 ## Comandi
 
 ```bat
-npm start                    REM sync completo
-npm start -- --test-conn     REM solo test SQL + API
-npm start -- --dry-run       REM interroga il gestionale, NON invia
-npm start -- --limit 20      REM solo i primi 20 fascicoli (prove)
+npm start                     REM catalogo articoli + fascicoli
+npm start -- --test-conn      REM solo test SQL + API
+npm start -- --dry-run        REM interroga il gestionale, NON invia
+npm start -- --limit 20       REM solo i primi 20 fascicoli (prove)
+npm start -- --only-articles  REM solo il catalogo ricambi
+npm start -- --skip-articles  REM solo i fascicoli, salta il catalogo
 ```
 
 ## Pianificazione (Windows Task Scheduler)

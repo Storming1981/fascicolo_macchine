@@ -10,19 +10,22 @@
 //   3. POST /api/sync/erp            -> invio a batch
 //
 // Uso:
-//   npm start                 (sync completo)
-//   npm start -- --test-conn  (solo test connessione SQL + API, nessuna scrittura)
-//   npm start -- --dry-run    (interroga il gestionale ma NON invia all'app)
-//   npm start -- --limit 10   (solo i primi 10 fascicoli, per prove)
+//   npm start                    (catalogo articoli + fascicoli)
+//   npm start -- --test-conn     (solo test connessione SQL + API, nessuna scrittura)
+//   npm start -- --dry-run       (interroga il gestionale ma NON invia all'app)
+//   npm start -- --limit 10      (solo i primi 10 fascicoli, per prove)
+//   npm start -- --only-articles (solo il catalogo ricambi)
+//   npm start -- --skip-articles (solo i fascicoli, salta il catalogo)
 
 import './env-loader';
 import './polyfill';
 import * as fs from 'fs';
 import * as path from 'path';
 import { config, validateConfig } from './config';
-import { closePool, getMachineErpData, testConnection } from './erp';
+import { closePool, getAllArticles, getMachineErpData, testConnection } from './erp';
 import {
   fetchMachines,
+  pushArticles,
   pushResults,
   type MachineRow,
   type PushResult,
@@ -91,6 +94,33 @@ async function mapLimit<T, R>(
   const runners = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, run);
   await Promise.all(runners);
   return out;
+}
+
+// ── Sync catalogo articoli/ricambi ─────────────────────────────────────────
+
+async function runSyncArticles(dryRun: boolean): Promise<void> {
+  log('Leggo il catalogo articoli dal gestionale (artico) ...');
+  const articles = await getAllArticles();
+  log(`  ${articles.length} articoli letti`);
+
+  if (dryRun) {
+    log('--dry-run: NON invio il catalogo. Anteprima primi 5:');
+    for (const a of articles.slice(0, 5)) log(`  ${a.code}  ${a.description}`);
+    return;
+  }
+
+  const size = config.sync.articlesBatchSize;
+  let inserted = 0;
+  let total = 0;
+  for (let i = 0; i < articles.length; i += size) {
+    const chunk = articles.slice(i, i + size);
+    // Il primo chunk azzera il catalogo (replace), i successivi accodano.
+    const resp = await pushArticles(chunk, i === 0);
+    inserted += resp.inserted;
+    total = resp.totalInCatalog;
+    log(`  inviati ${Math.min(i + size, articles.length)}/${articles.length}`);
+  }
+  log(`Catalogo articoli aggiornato: ${inserted} inseriti, ${total} totali sulla piattaforma`);
 }
 
 // ── Sync principale ────────────────────────────────────────────────────────
@@ -185,6 +215,8 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const isTestConn = args.includes('--test-conn');
   const dryRun = args.includes('--dry-run');
+  const onlyArticles = args.includes('--only-articles');
+  const skipArticles = args.includes('--skip-articles');
   const limitArg = getArg(args, '--limit');
   const limit = limitArg ? parseInt(limitArg, 10) : null;
 
@@ -211,7 +243,9 @@ async function main(): Promise<void> {
     log(`Target app:  ${config.api.baseUrl}`);
     log(`SQL Server:  ${config.sqlserver.server}:${config.sqlserver.port}/${config.sqlserver.database}`);
 
-    await runSync({ dryRun, limit });
+    // Catalogo articoli (a meno di --skip-articles). Con --only-articles fa solo questo.
+    if (!skipArticles) await runSyncArticles(dryRun);
+    if (!onlyArticles) await runSync({ dryRun, limit });
     log('Tutto OK.');
   } catch (err) {
     logErr(err instanceof Error ? err.message : String(err));

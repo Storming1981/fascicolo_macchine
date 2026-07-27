@@ -295,6 +295,17 @@ model Setting {
   updatedAt DateTime @updatedAt
 }
 
+/// Catalogo articoli/ricambi copiato dal gestionale (tabella `artico`) dal
+/// sync-agent. Serve all'autocomplete dei ricambi nel rapportino quando la VPS
+/// non ha connessione diretta al SQL Server aziendale.
+model ErpArticle {
+  code        String   @id // ar_codart (trimmed)
+  description String   @default("")
+  updatedAt   DateTime @updatedAt
+
+  @@index([description])
+}
+
 model Document {
   id         String   @id @default(cuid())
   machineId  String

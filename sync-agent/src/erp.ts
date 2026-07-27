@@ -52,6 +52,29 @@ export async function testConnection(): Promise<void> {
   await pool.request().query('SELECT 1 AS ok');
 }
 
+export interface ErpArticle {
+  code: string;
+  description: string;
+}
+
+/**
+ * Catalogo completo articoli/ricambi (tabella `artico`, codditt='ZATO'),
+ * per popolare l'autocomplete del rapportino sulla VPS. Scarta i codici vuoti.
+ */
+export async function getAllArticles(): Promise<ErpArticle[]> {
+  const pool = await getPool();
+  const r = await pool.request().query<{ ar_codart: string | null; ar_descr: string | null }>(`
+    SELECT ar_codart, ar_descr
+    FROM artico
+    WHERE codditt = 'ZATO' AND ar_codart IS NOT NULL AND LTRIM(RTRIM(ar_codart)) <> ''
+    ORDER BY ar_codart ASC;
+  `);
+  return r.recordset.map((x) => ({
+    code: (x.ar_codart ?? '').trim(),
+    description: (x.ar_descr ?? '').trim(),
+  }));
+}
+
 /** Converte le date "sentinella" del gestionale (1900 / 2099) in null. */
 function realDate(d: Date | null | undefined): Date | null {
   if (!d) return null;

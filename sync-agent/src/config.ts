@@ -13,6 +13,7 @@ export const config = {
     // Endpoint sull'app (VPS)
     machinesUrl: `${baseUrl}/api/sync/erp/machines`,
     pushUrl: `${baseUrl}/api/sync/erp`,
+    articlesUrl: `${baseUrl}/api/sync/erp/articles`,
     key: process.env.SYNC_API_KEY || '',
   },
   sqlserver: {
@@ -36,6 +37,8 @@ export const config = {
     batchSize: parseInt(process.env.SYNC_BATCH_SIZE || '50', 10),
     // Concorrenza delle query ERP (quante commesse in parallelo).
     concurrency: parseInt(process.env.SYNC_CONCURRENCY || '4', 10),
+    // Articoli per ogni POST del catalogo ricambi.
+    articlesBatchSize: parseInt(process.env.SYNC_ARTICLES_BATCH || '1000', 10),
   },
 };
 

@@ -30,3 +30,6 @@ sync-agent/node_modules
 sync-agent/dist
 sync-agent/*.log
 sync-agent/.sync.lock
+
+# Preferenze locali dell'IDE/harness
+.claude/settings.json
