@@ -688,6 +688,9 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 /* Autocomplete articoli/ricambi da gestionale */
 .art-input { position: relative; }
 .art-sugg { position: absolute; z-index: 30; top: calc(100% + 2px); left: 0; min-width: min(320px, 84vw); max-width: min(460px, 90vw); max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(15,50,79,0.14); }
+/* Variante in portale (position:fixed): esce dal corpo scrollabile del modale.
+   Larghezza minima maggiore dell'input per leggere bene codice + descrizione. */
+.art-sugg-fixed { position: fixed; z-index: 300; top: 0; left: 0; min-width: min(340px, 92vw); -webkit-overflow-scrolling: touch; }
 .art-sugg button { display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left; background: none; border: none; padding: 7px 11px; cursor: pointer; }
 .art-sugg button:hover { background: var(--accent-soft); }
 .art-sugg .mono { font-size: 12.5px; font-weight: 600; color: var(--text); }

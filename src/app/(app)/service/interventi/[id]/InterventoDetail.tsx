@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
@@ -1825,9 +1826,33 @@ function ArticleInput({
   const [q, setQ] = useState(value);
   const [sugg, setSugg] = useState<{ code: string; description: string }[]>([]);
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setQ(value), [value]);
+
+  // La tendina è renderizzata in un portale con position:fixed, così NON viene
+  // ritagliata dal corpo scrollabile del modale (dove sta il rapportino).
+  function reposition() {
+    const el = boxRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({ top: r.bottom + 2, left: r.left, width: r.width });
+  }
+
+  // Riallinea la tendina se si scrolla o si ridimensiona la finestra
+  useEffect(() => {
+    if (!open) return;
+    reposition();
+    const onMove = () => reposition();
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+    return () => {
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+    };
+  }, [open]);
 
   function onChange(v: string) {
     setQ(v);
@@ -1845,6 +1870,7 @@ function ArticleInput({
         if (res.ok && Array.isArray(d.articles)) {
           setSugg(d.articles);
           setOpen(d.articles.length > 0);
+          reposition();
         }
       } catch {
         /* rete */
@@ -1852,8 +1878,35 @@ function ArticleInput({
     }, 300);
   }
 
+  const dropdown =
+    open && pos && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className="art-sugg art-sugg-fixed"
+            style={{ top: pos.top, left: pos.left, width: pos.width }}
+          >
+            {sugg.map((a) => (
+              <button
+                key={a.code}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onPick(a.code, a.description);
+                  setQ(a.code);
+                  setOpen(false);
+                }}
+              >
+                <span className="mono">{a.code}</span>
+                <span className="muted small">{a.description}</span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div className="art-input">
+    <div className="art-input" ref={boxRef}>
       <input
         value={q}
         onChange={(e) => onChange(e.target.value)}
@@ -1861,25 +1914,7 @@ function ArticleInput({
         onFocus={() => sugg.length > 0 && setOpen(true)}
         placeholder="cod. / descr."
       />
-      {open && (
-        <div className="art-sugg">
-          {sugg.map((a) => (
-            <button
-              key={a.code}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onPick(a.code, a.description);
-                setQ(a.code);
-                setOpen(false);
-              }}
-            >
-              <span className="mono">{a.code}</span>
-              <span className="muted small">{a.description}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }
