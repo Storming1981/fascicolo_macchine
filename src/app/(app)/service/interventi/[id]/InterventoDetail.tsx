@@ -914,6 +914,32 @@ function RapportinoDay({
   }
 
   const pdfUrl = rapportino ? `/api/interventi/${interventoId}/rapportino/${rapportino.id}/pdf` : "";
+
+  /**
+   * Scarica il PDF come blob invece di navigare alla URL. Su iOS/PWA la
+   * navigazione diretta apriva il PDF a tutto schermo senza modo di tornare
+   * all'app; col blob il sistema mostra l'anteprima con "Fine" e l'app resta.
+   */
+  async function downloadPdf() {
+    if (!pdfUrl) return;
+    try {
+      const res = await fetch(`${pdfUrl}?dl=1`);
+      if (!res.ok) throw new Error("pdf");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rapportino-${interventoCode}-${date}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch {
+      // fallback: nuova scheda (contesto separato, con "Fine"/indietro)
+      window.open(`${pdfUrl}?dl=1`, "_blank", "noopener");
+    }
+  }
+
   const giorno = new Date(date + "T00:00:00").toLocaleDateString("it-IT");
   const mailSubject = `Rapportino ${interventoCode} — ${giorno}`;
   const mailBody =
@@ -1322,9 +1348,9 @@ function RapportinoDay({
           {/* PDF: scarica / invia (per rapportini salvati) */}
           {rapportino && (
             <div className="rap-pdf-actions">
-              <a className="btn-ghost-sm" href={`${pdfUrl}?dl=1`}>
+              <button type="button" className="btn-ghost-sm" onClick={downloadPdf}>
                 <Icon name="download" size={13} /> Scarica PDF
-              </a>
+              </button>
               <a className="btn-ghost-sm" href={pdfUrl} target="_blank" rel="noreferrer">
                 <Icon name="doc" size={13} /> Anteprima
               </a>
