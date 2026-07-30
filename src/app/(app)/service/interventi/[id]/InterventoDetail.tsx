@@ -809,6 +809,12 @@ function RapportinoDay({
   const [busy, setBusy] = useState<"draft" | "close" | "edit" | null>(null);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // id del rapportino salvato (per non creare doppioni dopo un blocco/bozza)
+  const [savedId, setSavedId] = useState<string | null>(rapportino?.id ?? null);
+  // operatori ancora timbrati (uscita non registrata) per questo giorno
+  const [openTechs, setOpenTechs] = useState<string[]>([]);
+  // avviso: chiusura bloccata perché ci sono timbrature aperte (salvata bozza)
+  const [blockNotice, setBlockNotice] = useState<string[] | null>(null);
   // composizione email (invio con Gmail)
   const [compose, setCompose] = useState(false);
   const [mailTo, setMailTo] = useState(customerEmail ?? "");
@@ -850,15 +856,36 @@ function RapportinoDay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, readOnly, JSON.stringify(sessGiorno ?? null)]);
 
+  // Rileva se ci sono operatori ANCORA TIMBRATI (senza uscita) per la commessa
+  // in questa giornata: le ore sono parziali e la chiusura va bloccata.
+  useEffect(() => {
+    if (!bodyOpen || readOnly || !interventoId || !date) {
+      setOpenTechs([]);
+      return;
+    }
+    let alive = true;
+    fetch(`/api/interventi/${interventoId}/open-timbrature?day=${date}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d?.configured)
+          setOpenTechs(((d.open ?? []) as { tech: string | null }[]).map((o) => o.tech).filter((t): t is string => !!t));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [interventoId, date, readOnly, bodyOpen]);
+
   const setRic = (i: number, k: keyof Ricambio, v: string) =>
     setRicambi((rs) => rs.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addRic = () => setRicambi((rs) => [...rs, { code: "", desc: "", qty: "", note: "" }]);
   const delRic = (i: number) => setRicambi((rs) => rs.filter((_, idx) => idx !== i));
 
-  async function save(kind: "draft" | "close" | "edit") {
+  async function save(kind: "draft" | "close" | "edit", force = false) {
     setErr(null);
     const fd = new FormData();
-    if (rapportino) fd.set("rapportinoId", rapportino.id);
+    const rid = savedId ?? rapportino?.id ?? null;
+    if (rid) fd.set("rapportinoId", rid);
     fd.set("date", date);
     fd.set("workDescription", workDescription);
     fd.set("issues", issues);
@@ -878,16 +905,26 @@ function RapportinoDay({
     if (clientSig.current && !clientSig.current.isEmpty()) fd.set("clientSignature", clientSig.current.toDataURL() ?? "");
     for (const f of files) fd.append("attachments", f);
     if (kind === "close") fd.set("finalize", "1");
+    if (kind === "close" && force) fd.set("forceClose", "1");
     if (kind === "edit") fd.set("editNote", editNote);
 
     setBusy(kind);
     try {
       const res = await fetch(`/api/interventi/${interventoId}/rapportino`, { method: "POST", body: fd });
+      const d = await res.json().catch(() => null);
       if (!res.ok) {
-        const d = await res.json().catch(() => null);
         setErr(d?.error ?? "Errore nel salvataggio.");
         return;
       }
+      // memorizza l'id per non creare doppioni ai salvataggi successivi
+      if (d?.rapportinoId) setSavedId(d.rapportinoId);
+      // chiusura bloccata: operatori ancora timbrati → salvato in BOZZA
+      if (d?.blockedByOpenSessions) {
+        setBlockNotice(((d.openTechs ?? []) as string[]).filter(Boolean));
+        setFiles([]);
+        return; // resta aperto, mostra l'avviso
+      }
+      setBlockNotice(null);
       setFiles([]);
       setEditing(false);
       onDone();
@@ -1027,6 +1064,20 @@ function RapportinoDay({
             <div className="field" style={{ maxWidth: 260 }}>
               <span className="field-label">Data giornata</span>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+          )}
+
+          {/* Avviso: operatori ancora timbrati → le ore sono parziali */}
+          {!readOnly && openTechs.length > 0 && (
+            <div className="info-banner warn" style={{ marginBottom: 12 }}>
+              <Icon name="clock" size={15} />
+              <span>
+                {openTechs.length === 1
+                  ? `${openTechs[0]} non ha ancora registrato l'uscita`
+                  : `${openTechs.length} operatori non hanno ancora registrato l'uscita`}{" "}
+                ({openTechs.join(", ")}). Le ore sono <strong>parziali</strong>: sincronizza
+                dopo l'uscita, poi firma e chiudi. La chiusura è bloccata fino ad allora.
+              </span>
             </div>
           )}
 
@@ -1470,6 +1521,29 @@ function RapportinoDay({
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Chiusura bloccata: operatori ancora timbrati → salvato in bozza */}
+          {blockNotice && !readOnly && (
+            <div className="info-banner warn" style={{ marginBottom: 12 }}>
+              <Icon name="clock" size={15} />
+              <span>
+                Chiusura bloccata:{" "}
+                {blockNotice.length ? <strong>{blockNotice.join(", ")}</strong> : "alcuni operatori"}{" "}
+                {blockNotice.length === 1 ? "è" : "sono"} ancora timbrati. Il rapportino è stato{" "}
+                <strong>salvato in bozza</strong>. Registra l&apos;uscita sul timbratore, premi
+                &quot;Sincronizza ore&quot;, poi firma e chiudi.{" "}
+                <button
+                  type="button"
+                  className="link-strong"
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
+                  onClick={() => save("close", true)}
+                  disabled={busy !== null}
+                >
+                  Chiudi comunque
+                </button>
+              </span>
             </div>
           )}
 

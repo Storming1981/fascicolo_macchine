@@ -593,6 +593,9 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .chip-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .info-banner { display: flex; align-items: center; gap: 9px; background: var(--accent-soft); color: var(--accent); border-radius: var(--radius-sm); padding: 10px 13px; font-size: 13px; }
+/* variante avviso (ambra): timbrature aperte / ore parziali */
+.info-banner.warn { background: #fdf3e3; color: #b45309; border: 1px solid #f5dca7; align-items: flex-start; }
+.info-banner.warn .link-strong { color: #b45309; text-decoration: underline; }
 .info-banner svg { flex-shrink: 0; }
 
 .ric-table { width: 100%; border-collapse: collapse; }

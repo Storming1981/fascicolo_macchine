@@ -4,6 +4,12 @@ import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { saveFile, saveDataUrl, saveBytes, sha256 } from "@/lib/uploads";
 import { renderRapportinoPdf } from "@/lib/rapportinoRender";
+import { isFeedConfigured, fetchOpenSessionsForCommessa } from "@/lib/presenceFeed";
+
+const isoDay = (d: Date) => {
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+};
 
 type RicambioLine = { code: string; desc: string; qty: string; note: string };
 type OperatorLine = { name: string; matricola: string | null; hours: number };
@@ -214,6 +220,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const techSigData = String(form.get("techSignature") || "");
   const clientSigData = String(form.get("clientSignature") || "");
   const finalize = String(form.get("finalize") || "") === "1";
+  // "Chiudi comunque": salta il blocco per timbrature ancora aperte
+  const forceClose = String(form.get("forceClose") || "") === "1";
 
   const editNote = String(form.get("editNote") || "").trim() || null;
   let existing = null;
@@ -315,6 +323,27 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   await saveAttachments(rapportino.id, form, techName, scope);
 
   if (!finalize) return NextResponse.json({ ok: true, finalized: false, rapportinoId: rapportino.id });
+
+  // --- Blocco chiusura: operatori ancora timbrati per la commessa in quel giorno ---
+  // Il rapportino è già stato salvato sopra: se blocchiamo, resta in BOZZA.
+  if (!forceClose && intervento.commessa && isFeedConfigured()) {
+    try {
+      const openSessions = await fetchOpenSessionsForCommessa(intervento.commessa);
+      const dayKey = isoDay(date);
+      const stillIn = openSessions.filter((o) => isoDay(o.startedAt ?? now) === dayKey);
+      if (stillIn.length > 0) {
+        return NextResponse.json({
+          ok: true,
+          finalized: false,
+          blockedByOpenSessions: true,
+          openTechs: stillIn.map((o) => o.tech).filter(Boolean),
+          rapportinoId: rapportino.id,
+        });
+      }
+    } catch {
+      // timbratore non raggiungibile → non blocchiamo la chiusura
+    }
+  }
 
   // --- Chiusura giornaliera → evento nel diario del fascicolo (del giorno) ---
   let diaryEventId: string | null = rapportino.diaryEventId;

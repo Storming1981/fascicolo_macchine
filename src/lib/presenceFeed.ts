@@ -418,6 +418,63 @@ export async function fetchCommessaHours(
   return { total: Math.round(total * 100) / 100, byDay, byDayOperator, sessions };
 }
 
+export type OpenStamping = {
+  externalId: string;
+  tech: string | null;
+  matricola: string | null;
+  commessa: string | null;
+  startedAt: Date | null;
+};
+
+/**
+ * Timbrature ANCORA APERTE (operatori che non hanno segnato l'uscita) per una
+ * commessa. Legge le pagine recenti di /stampings (le sessioni aperte sono le
+ * più recenti) SENZA filtro server-side sulla commessa — perché le righe aperte
+ * spesso non passano quel filtro — e le filtra qui per commessa esatta.
+ * Serve ad avvisare/bloccare la chiusura di un rapportino con ore parziali.
+ */
+export async function fetchOpenSessionsForCommessa(commessa: string): Promise<OpenStamping[]> {
+  const base = process.env.PRESENCE_FEED_URL;
+  const target = (commessa ?? "").trim();
+  if (!base || !target) return [];
+
+  const token = process.env.PRESENCE_FEED_TOKEN;
+  const cookie = token ? null : await login();
+  const headers: Record<string, string> = {
+    accept: "text/html",
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+    ...(cookie ? { cookie } : {}),
+  };
+
+  const out: OpenStamping[] = [];
+  const seen = new Set<string>();
+  // Le sessioni aperte sono recenti → bastano le prime pagine.
+  for (let page = 1; page <= 3; page++) {
+    const u = new URL(base);
+    u.searchParams.set("page", String(page));
+    const res = await fetch(u.toString(), { headers });
+    if (!res.ok) break;
+    const rows = parseStampingsHtml(await res.text());
+    let fresh = 0;
+    for (const r of rows) {
+      if (seen.has(r.externalId)) continue;
+      seen.add(r.externalId);
+      fresh++;
+      if (!r.open) continue;
+      if ((r.commessa ?? "").trim() !== target) continue;
+      out.push({
+        externalId: r.externalId,
+        tech: r.utente,
+        matricola: r.matricola,
+        commessa: r.commessa,
+        startedAt: r.startedAt,
+      });
+    }
+    if (fresh === 0) break;
+  }
+  return out;
+}
+
 export async function syncStampings(): Promise<{
   fetched: number;
   open: number;
