@@ -98,6 +98,7 @@ export interface ErpJobData {
   found: boolean;
   description: string | null;
   customer: string | null;
+  customerConto: number | null;
   customerCountryIso: string | null;
   customerCountryName: string | null;
   productionStart: Date | null;
@@ -114,6 +115,7 @@ export async function getJobData(job: string): Promise<ErpJobData> {
     found: false,
     description: null,
     customer: null,
+    customerConto: null,
     customerCountryIso: null,
     customerCountryName: null,
     productionStart: null,
@@ -181,6 +183,7 @@ export async function getJobData(job: string): Promise<ErpJobData> {
     found: true,
     description: c.co_descr1?.trim() || null,
     customer,
+    customerConto: c.co_conto && c.co_conto !== 0 ? c.co_conto : null,
     customerCountryIso,
     customerCountryName,
     productionStart: realDate(a.min_s),
@@ -255,6 +258,7 @@ export interface MachineErpInput {
 export interface ErpMachineData {
   found: boolean;
   customer: string | null;
+  customerConto: number | null;
   customerCountryIso: string | null;
   customerCountryName: string | null;
   description: string | null;
@@ -327,6 +331,7 @@ export async function getMachineErpData(input: MachineErpInput): Promise<ErpMach
   return {
     found: found.length > 0,
     customer: primary?.customer ?? null,
+    customerConto: primary?.customerConto ?? null,
     customerCountryIso: primary?.customerCountryIso ?? null,
     customerCountryName: primary?.customerCountryName ?? null,
     description: primary?.description ?? null,
@@ -335,4 +340,61 @@ export async function getMachineErpData(input: MachineErpInput): Promise<ErpMach
     totalHours: Math.round(totalHours * 100) / 100,
     hasProduction,
   };
+}
+
+// ── Anagrafica clienti (per i conti che ci servono) ─────────────────────────
+
+export interface ErpCustomerDetail {
+  conto: number;
+  name: string;
+  city: string | null;
+  province: string | null;
+  countryIso: string | null;
+  countryName: string | null;
+}
+
+/**
+ * Dettaglio anagrafica (anagra, an_tipo='C') per un elenco di conti clienti.
+ * Interroga solo i conti che servono (quelli dei fascicoli), non tutta l'anagra.
+ */
+export async function getCustomerDetails(contos: number[]): Promise<ErpCustomerDetail[]> {
+  const ids = Array.from(new Set(contos.filter((c) => Number.isFinite(c) && c > 0)));
+  if (ids.length === 0) return [];
+  const pool = await getPool();
+  const out: ErpCustomerDetail[] = [];
+  // a blocchi, per non fare un IN gigante
+  const CHUNK = 500;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const req = pool.request();
+    const params = slice.map((v, k) => {
+      req.input(`c${k}`, sql.Int, v);
+      return `@c${k}`;
+    });
+    const r = await req.query<{
+      an_conto: number;
+      an_descr1: string | null;
+      an_citta: string | null;
+      an_prov: string | null;
+      iso2: string | null;
+      country_name: string | null;
+    }>(`
+      SELECT a.an_conto, a.an_descr1, a.an_citta, a.an_prov,
+             s.tb_siglaiso AS iso2, s.tb_desstat AS country_name
+      FROM anagra a
+      LEFT JOIN tabstat s ON s.tb_codstat = a.an_stato
+      WHERE a.an_tipo = 'C' AND a.an_conto IN (${params.join(',')});
+    `);
+    for (const x of r.recordset) {
+      out.push({
+        conto: x.an_conto,
+        name: (x.an_descr1 ?? '').trim(),
+        city: x.an_citta?.trim() || null,
+        province: x.an_prov?.trim() || null,
+        countryIso: x.iso2?.trim() || null,
+        countryName: x.country_name?.trim() || null,
+      });
+    }
+  }
+  return out;
 }

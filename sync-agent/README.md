@@ -19,6 +19,11 @@ in rete aziendale.
 Sincronizza anche il **catalogo articoli/ricambi** (tabella `artico`), così
 l'autocomplete dei ricambi nel rapportino funziona anche sulla VPS.
 
+Aggiorna inoltre l'**anagrafica clienti** (da `anagra`, an_tipo='C') per i conti
+presenti nei fascicoli e **collega ogni macchina al suo cliente** (`customerId`),
+così nel "Nuovo intervento" scegliendo un cliente compaiono le sue macchine,
+sempre allineati al gestionale.
+
 ## Come funziona
 
 1. `GET /api/sync/erp/machines` → lista fascicoli con i loro job/ordini.

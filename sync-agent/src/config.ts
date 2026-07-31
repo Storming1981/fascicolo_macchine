@@ -14,6 +14,7 @@ export const config = {
     machinesUrl: `${baseUrl}/api/sync/erp/machines`,
     pushUrl: `${baseUrl}/api/sync/erp`,
     articlesUrl: `${baseUrl}/api/sync/erp/articles`,
+    customersUrl: `${baseUrl}/api/sync/erp/customers`,
     key: process.env.SYNC_API_KEY || '',
   },
   sqlserver: {

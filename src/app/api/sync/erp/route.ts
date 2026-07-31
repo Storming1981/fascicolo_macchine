@@ -34,7 +34,7 @@ export const maxDuration = 60;
  * Autenticazione: `Authorization: Bearer sk_sync_...` (SYNC_API_KEY).
  */
 
-type IncomingResult = AppliedErpData & { id?: unknown };
+type IncomingResult = AppliedErpData & { id?: unknown; customerConto?: number | null };
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
@@ -61,6 +61,7 @@ export async function POST(req: Request) {
   let matched = 0;
   let updated = 0;
   let withProduction = 0;
+  let linked = 0;
   const errors: { id: string; error: string }[] = [];
 
   for (const r of body.results) {
@@ -88,6 +89,25 @@ export async function POST(req: Request) {
       );
       if (changed.length > 0) updated++;
       if (r.productionStart || r.productionEnd) withProduction++;
+
+      // Collega il fascicolo al Customer del modulo Service (per erpConto), così
+      // nel "Nuovo intervento" le macchine del cliente compaiono aggiornate.
+      if (r.customerConto) {
+        const cust = await prisma.customer.findFirst({
+          where: { erpConto: r.customerConto },
+          select: { id: true },
+        });
+        if (cust) {
+          const machine = await prisma.machine.findUnique({
+            where: { id },
+            select: { customerId: true },
+          });
+          if (machine && machine.customerId !== cust.id) {
+            await prisma.machine.update({ where: { id }, data: { customerId: cust.id } });
+            linked++;
+          }
+        }
+      }
     } catch (e) {
       // P2025 = record non trovato (fascicolo cancellato dopo il GET): lo saltiamo
       const msg = e instanceof Error ? e.message : String(e);
@@ -103,6 +123,7 @@ export async function POST(req: Request) {
       matched,
       updated,
       withProduction,
+      linked,
       errorCount: errors.length,
     },
     errors: errors.slice(0, 50),

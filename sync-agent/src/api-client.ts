@@ -21,12 +21,22 @@ export interface PushResult {
   id: string;
   found: boolean;
   customer?: string | null;
+  customerConto?: number | null;
   customerCountryIso?: string | null;
   customerCountryName?: string | null;
   description?: string | null;
   totalHours?: number | null;
   productionStart?: string | null;
   productionEnd?: string | null;
+}
+
+export interface CustomerPush {
+  conto: number;
+  name: string;
+  city: string | null;
+  province: string | null;
+  countryIso: string | null;
+  countryName: string | null;
 }
 
 export interface PushResponse {
@@ -36,6 +46,7 @@ export interface PushResponse {
     matched: number;
     updated: number;
     withProduction: number;
+    linked?: number;
     errorCount: number;
   };
   errors: { id: string; error: string }[];
@@ -46,6 +57,21 @@ function authHeaders(json = false): Record<string, string> {
   const h: Record<string, string> = { Authorization: `Bearer ${config.api.key}` };
   if (json) h['Content-Type'] = 'application/json';
   return h;
+}
+
+export async function pushCustomers(
+  customers: CustomerPush[],
+): Promise<{ status: string; upserted: number; total: number }> {
+  const res = await fetch(config.api.customersUrl, {
+    method: 'POST',
+    headers: authHeaders(true),
+    body: JSON.stringify({ customers, agentInfo: config.sync.agentInfo }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`POST /api/sync/erp/customers ${res.status}: ${t.slice(0, 300)}`);
+  }
+  return res.json() as Promise<{ status: string; upserted: number; total: number }>;
 }
 
 export async function fetchMachines(): Promise<MachineRow[]> {

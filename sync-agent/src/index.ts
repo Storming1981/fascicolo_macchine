@@ -22,11 +22,19 @@ import './polyfill';
 import * as fs from 'fs';
 import * as path from 'path';
 import { config, validateConfig } from './config';
-import { closePool, getAllArticles, getMachineErpData, testConnection } from './erp';
+import {
+  closePool,
+  getAllArticles,
+  getCustomerDetails,
+  getMachineErpData,
+  testConnection,
+} from './erp';
 import {
   fetchMachines,
   pushArticles,
+  pushCustomers,
   pushResults,
+  type CustomerPush,
   type MachineRow,
   type PushResult,
 } from './api-client';
@@ -154,6 +162,7 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
           id: m.id,
           found: erp.found,
           customer: erp.customer,
+          customerConto: erp.customerConto,
           customerCountryIso: erp.customerCountryIso,
           customerCountryName: erp.customerCountryName,
           description: erp.description,
@@ -185,11 +194,32 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
     return;
   }
 
-  // Invio a batch
+  // 1) Anagrafica clienti: recupera i dettagli dei conti dei fascicoli e li
+  //    invia PRIMA delle macchine, così il collegamento macchina→cliente aggancia.
+  const contos = Array.from(
+    new Set(results.map((r) => r.customerConto).filter((c): c is number => !!c)),
+  );
+  if (contos.length) {
+    log(`Anagrafica clienti: ${contos.length} conti da sincronizzare ...`);
+    const details = await getCustomerDetails(contos);
+    const customers: CustomerPush[] = details.map((d) => ({
+      conto: d.conto,
+      name: d.name,
+      city: d.city,
+      province: d.province,
+      countryIso: d.countryIso,
+      countryName: d.countryName,
+    }));
+    const cResp = await pushCustomers(customers);
+    log(`  clienti: ${cResp.upserted} aggiornati/creati, ${cResp.total} totali sulla piattaforma`);
+  }
+
+  // 2) Invio fascicoli a batch (con customerConto → collegamento cliente)
   const batchSize = config.sync.batchSize;
   let sent = 0;
   let updated = 0;
   let withProduction = 0;
+  let linked = 0;
   let errorCount = 0;
   for (let i = 0; i < results.length; i += batchSize) {
     const batch = results.slice(i, i + batchSize);
@@ -198,6 +228,7 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
     sent += resp.results.received;
     updated += resp.results.updated;
     withProduction += resp.results.withProduction;
+    linked += resp.results.linked ?? 0;
     errorCount += resp.results.errorCount;
     if (resp.errors.length) {
       for (const e of resp.errors.slice(0, 5)) logErr(`  push ${e.id}: ${e.error}`);
@@ -205,10 +236,11 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
   }
 
   log('--- RIEPILOGO ---');
-  log(`  Fascicoli inviati:        ${sent}`);
+  log(`  Fascicoli inviati:          ${sent}`);
   log(`  Aggiornati (con modifiche): ${updated}`);
-  log(`  Con date di produzione:   ${withProduction}`);
-  log(`  Errori lato app:          ${errorCount}`);
+  log(`  Con date di produzione:     ${withProduction}`);
+  log(`  Collegati a cliente:        ${linked}`);
+  log(`  Errori lato app:            ${errorCount}`);
 }
 
 async function main(): Promise<void> {
