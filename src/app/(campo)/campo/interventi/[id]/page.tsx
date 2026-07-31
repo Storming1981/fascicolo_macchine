@@ -37,6 +37,7 @@ export default async function CampoInterventoPage({
       data={data.dto}
       techs={data.techs}
       machines={data.machines}
+      customers={data.customers}
       commesse={data.commesse}
       currentUserName={user.name}
       canEdit={canEdit}

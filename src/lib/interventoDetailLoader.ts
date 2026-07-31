@@ -27,7 +27,7 @@ export async function loadInterventoDetail(id: string) {
   });
   if (!intervento) return null;
 
-  const [techs, machines, commesseRows] = await Promise.all([
+  const [techs, machines, customerRows, commesseRows] = await Promise.all([
     prisma.user.findMany({
       where: { active: true },
       orderBy: [{ siteManager: "desc" }, { name: "asc" }],
@@ -35,7 +35,15 @@ export async function loadInterventoDetail(id: string) {
     }),
     prisma.machine.findMany({
       orderBy: { code: "asc" },
-      select: { id: true, code: true, job: true, customer: true },
+      select: { id: true, code: true, job: true, customer: true, customerId: true },
+    }),
+    prisma.customer.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        sites: { orderBy: { name: "asc" }, select: { id: true, name: true } },
+      },
     }),
     prisma.techPresence.findMany({
       where: { commessa: { not: null } },
@@ -43,6 +51,8 @@ export async function loadInterventoDetail(id: string) {
       orderBy: { clockIn: "desc" },
     }),
   ]);
+
+  const customers = customerRows.map((c) => ({ id: c.id, name: c.name, sites: c.sites }));
 
   const commMap = new Map<string, string>();
   for (const r of commesseRows) {
@@ -66,8 +76,10 @@ export async function loadInterventoDetail(id: string) {
     reportedBy: intervento.reportedBy,
     deletedAt: intervento.deletedAt?.toISOString() ?? null,
     deletedByName: intervento.deletedByName,
+    customerId: intervento.customerId,
     customerName: intervento.customer?.name ?? null,
     customerEmail: intervento.customer?.email ?? null,
+    siteId: intervento.siteId,
     siteName: intervento.site?.name ?? null,
     machine: intervento.machine
       ? {
@@ -156,5 +168,5 @@ export async function loadInterventoDetail(id: string) {
     })),
   };
 
-  return { dto, techs, machines, commesse };
+  return { dto, techs, machines, customers, commesse };
 }

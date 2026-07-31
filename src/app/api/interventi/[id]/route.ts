@@ -42,6 +42,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       : { disconnect: true };
   if ("machineId" in b)
     data.machine = b.machineId ? { connect: { id: b.machineId } } : { disconnect: true };
+  if ("customerId" in b)
+    data.customer = b.customerId ? { connect: { id: b.customerId } } : { disconnect: true };
+  if ("siteId" in b)
+    data.site = b.siteId ? { connect: { id: b.siteId } } : { disconnect: true };
+  if (typeof b.reportedBy === "string") data.reportedBy = b.reportedBy.trim() || null;
   if (Array.isArray(b.participantIds)) {
     const ids = (b.participantIds as unknown[])
       .filter((x): x is string => typeof x === "string" && x.length > 0)

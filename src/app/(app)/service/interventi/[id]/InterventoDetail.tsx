@@ -79,8 +79,10 @@ type Data = {
   reportedBy: string | null;
   deletedAt: string | null;
   deletedByName: string | null;
+  customerId: string | null;
   customerName: string | null;
   customerEmail: string | null;
+  siteId: string | null;
   siteName: string | null;
   machine: { id: string; code: string; job: string; model: string } | null;
   techId: string | null;
@@ -117,13 +119,15 @@ type ChecklistState = {
   revisionsCount: number;
 };
 type Tech = { id: string; name: string; zona: string | null; siteManager: boolean };
-type MachineOpt = { id: string; code: string; job: string; customer: string };
+type MachineOpt = { id: string; code: string; job: string; customer: string; customerId: string | null };
+type CustomerOptDetail = { id: string; name: string; sites: { id: string; name: string }[] };
 type Commessa = { code: string; label: string };
 
 export default function InterventoDetail({
   data,
   techs,
   machines,
+  customers = [],
   commesse,
   currentUserName,
   canEdit,
@@ -138,6 +142,7 @@ export default function InterventoDetail({
   data: Data;
   techs: Tech[];
   machines: MachineOpt[];
+  customers?: CustomerOptDetail[];
   commesse: Commessa[];
   currentUserName: string;
   canEdit: boolean;
@@ -214,6 +219,14 @@ export default function InterventoDetail({
     ...derived,
     ...commesse.filter((c) => !derived.some((d) => d.code === c.code)),
   ];
+
+  // cliente selezionato (per la tendina cantiere) + macchine filtrate per cliente
+  const selectedCustomer = customers.find((c) => c.id === data.customerId) ?? null;
+  const machineOptions = (() => {
+    if (!data.customerId) return machines;
+    const own = machines.filter((m) => m.customerId === data.customerId);
+    return own.length ? own : machines; // se il cliente non ha macchine collegate, mostra tutte
+  })();
 
   // squadra: responsabile (supervisore = techId) + partecipanti
   const participantIds = data.participants.map((p) => p.id);
@@ -386,9 +399,61 @@ export default function InterventoDetail({
               )}
             </div>
 
-            <Field label="Cliente">{data.customerName ?? "—"}</Field>
-            <Field label="Cantiere">{data.siteName ?? "—"}</Field>
-            <Field label="Segnalato da">{data.reportedBy ?? "—"}</Field>
+            <div className="field">
+              <span className="field-label">Cliente</span>
+              {canEdit ? (
+                <select
+                  value={data.customerId ?? ""}
+                  onChange={(e) =>
+                    // cambiando cliente, azzero cantiere e macchina (non più coerenti)
+                    patch({ customerId: e.target.value || null, siteId: null, machineId: null })
+                  }
+                >
+                  <option value="">— Nessuno —</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="readout">{data.customerName ?? "—"}</div>
+              )}
+            </div>
+            <div className="field">
+              <span className="field-label">Cantiere</span>
+              {canEdit ? (
+                <select
+                  value={data.siteId ?? ""}
+                  onChange={(e) => patch({ siteId: e.target.value || null })}
+                  disabled={!selectedCustomer}
+                >
+                  <option value="">— Nessuno —</option>
+                  {selectedCustomer?.sites.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="readout">{data.siteName ?? "—"}</div>
+              )}
+            </div>
+            <div className="field">
+              <span className="field-label">Segnalato da</span>
+              {canEdit ? (
+                <input
+                  defaultValue={data.reportedBy ?? ""}
+                  placeholder="Nome contatto cliente"
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v !== (data.reportedBy ?? "")) patch({ reportedBy: v || null });
+                  }}
+                />
+              ) : (
+                <div className="readout">{data.reportedBy ?? "—"}</div>
+              )}
+            </div>
             <div className="field">
               <span className="field-label">Programmato — Inizio</span>
               {canEdit ? (
@@ -425,7 +490,7 @@ export default function InterventoDetail({
               {canEdit ? (
                 <select value={data.machine?.id ?? ""} onChange={(e) => patch({ machineId: e.target.value || null })}>
                   <option value="">— Nessuna —</option>
-                  {machines.map((m) => (
+                  {machineOptions.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.job || m.code} · {m.customer}
                     </option>
