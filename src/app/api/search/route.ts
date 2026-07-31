@@ -36,7 +36,7 @@ export async function GET(req: Request) {
 
   // 1b) intervento per codice (INT-xxxx)
   const intervento = await prisma.intervento.findFirst({
-    where: { code: { equals: q, mode: "insensitive" } },
+    where: { code: { equals: q, mode: "insensitive" }, deletedAt: null },
     select: { id: true },
   });
   if (intervento) return NextResponse.json({ type: "intervento", id: intervento.id });

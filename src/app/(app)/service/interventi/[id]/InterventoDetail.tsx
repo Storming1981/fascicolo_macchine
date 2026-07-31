@@ -77,6 +77,8 @@ type Data = {
   priority: number;
   channel: string | null;
   reportedBy: string | null;
+  deletedAt: string | null;
+  deletedByName: string | null;
   customerName: string | null;
   customerEmail: string | null;
   siteName: string | null;
@@ -164,6 +166,27 @@ export default function InterventoDetail({
       router.refresh();
     } finally {
       setSavingMeta(false);
+    }
+  }
+
+  // Cestino: elimina (soft) / ripristina
+  const [trashing, setTrashing] = useState(false);
+  async function trashIntervento(restore: boolean) {
+    if (!restore && !confirm("Spostare questo intervento nel cestino? Sparirà dalle liste ma resterà recuperabile."))
+      return;
+    setTrashing(true);
+    try {
+      const res = await fetch(`/api/interventi/${data.id}/trash`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restore }),
+      });
+      if (res.ok) {
+        if (restore) router.refresh();
+        else router.push(backHref);
+      }
+    } finally {
+      setTrashing(false);
     }
   }
 
@@ -295,7 +318,39 @@ export default function InterventoDetail({
             {data.channel && <span className="muted small">via {data.channel}</span>}
           </div>
         </div>
+        {canEdit && !data.deletedAt && (
+          <div className="detail-actions">
+            <button className="btn-danger" onClick={() => trashIntervento(false)} disabled={trashing}>
+              <Icon name="trash" size={14} /> {trashing ? "…" : "Elimina"}
+            </button>
+          </div>
+        )}
       </div>
+
+      {data.deletedAt && (
+        <div className="info-banner warn" style={{ marginBottom: 18 }}>
+          <Icon name="trash" size={15} />
+          <span>
+            Questo intervento è nel <strong>cestino</strong>
+            {data.deletedByName ? ` (eliminato da ${data.deletedByName})` : ""}: non compare nelle
+            liste e nelle statistiche.
+            {canEdit && (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  className="link-strong"
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
+                  onClick={() => trashIntervento(true)}
+                  disabled={trashing}
+                >
+                  Ripristina
+                </button>
+              </>
+            )}
+          </span>
+        </div>
+      )}
 
       <div className="grid-two">
         {/* Anagrafica intervento */}

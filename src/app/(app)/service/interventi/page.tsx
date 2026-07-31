@@ -2,7 +2,11 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
-import InterventiBoard, { type InterventoRow, type CustomerOpt } from "./InterventiBoard";
+import InterventiBoard, {
+  type InterventoRow,
+  type CustomerOpt,
+  type TrashedRow,
+} from "./InterventiBoard";
 
 export const dynamic = "force-dynamic";
 
@@ -21,15 +25,29 @@ export default async function InterventiPage() {
     ? {}
     : { OR: [{ assignedTechId: user.id }, { participants: { some: { id: user.id } } }] };
 
-  const [rows, techs, customerRows] = await Promise.all([
+  const [rows, trashedRows, techs, customerRows] = await Promise.all([
     prisma.intervento.findMany({
-      where: scopeWhere,
+      where: { ...scopeWhere, deletedAt: null },
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
       include: {
         customer: { select: { name: true } },
         site: { select: { name: true } },
         machine: { select: { code: true, job: true } },
         tech: { select: { name: true } },
+      },
+    }),
+    // Cestino: interventi eliminati (per errore/test), ripristinabili
+    prisma.intervento.findMany({
+      where: { ...scopeWhere, deletedAt: { not: null } },
+      orderBy: { deletedAt: "desc" },
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        deletedAt: true,
+        deletedByName: true,
+        customer: { select: { name: true } },
+        machine: { select: { code: true, job: true } },
       },
     }),
     prisma.user.findMany({
@@ -72,9 +90,20 @@ export default async function InterventiPage() {
     scheduledStart: i.scheduledStart ? i.scheduledStart.toISOString() : null,
   }));
 
+  const trashed: TrashedRow[] = trashedRows.map((i) => ({
+    id: i.id,
+    code: i.code,
+    title: i.title,
+    customer: i.customer?.name ?? null,
+    machineJob: i.machine?.job ?? i.machine?.code ?? null,
+    deletedAt: i.deletedAt ? i.deletedAt.toISOString() : null,
+    deletedByName: i.deletedByName,
+  }));
+
   return (
     <InterventiBoard
       interventi={interventi}
+      trashed={trashed}
       techs={techs}
       customers={customers}
       canCreate={canCreate}

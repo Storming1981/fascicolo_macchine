@@ -33,6 +33,16 @@ export type InterventoRow = {
   scheduledStart: string | null;
 };
 
+export type TrashedRow = {
+  id: string;
+  code: string;
+  title: string;
+  customer: string | null;
+  machineJob: string | null;
+  deletedAt: string | null;
+  deletedByName: string | null;
+};
+
 type Tech = { id: string; name: string; zona: string | null };
 export type CustomerOpt = {
   id: string;
@@ -50,12 +60,14 @@ const FILTERS: { key: string; label: string; test: (i: InterventoRow) => boolean
 
 export default function InterventiBoard({
   interventi,
+  trashed = [],
   techs,
   customers,
   canCreate,
   canEdit,
 }: {
   interventi: InterventoRow[];
+  trashed?: TrashedRow[];
   techs: Tech[];
   customers: CustomerOpt[];
   canCreate: boolean;
@@ -64,6 +76,21 @@ export default function InterventiBoard({
   const router = useRouter();
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [filtro, setFiltro] = useState("tutti");
+  const [restoring, setRestoring] = useState<string | null>(null);
+
+  async function restore(id: string) {
+    setRestoring(id);
+    try {
+      const res = await fetch(`/api/interventi/${id}/trash`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restore: true }),
+      });
+      if (res.ok) router.refresh();
+    } finally {
+      setRestoring(null);
+    }
+  }
   const [busy, setBusy] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [localStatus, setLocalStatus] = useState<Record<string, InterventoStatus>>({});
@@ -132,22 +159,35 @@ export default function InterventiBoard({
               <span className="mono muted">{interventi.filter(f.test).length}</span>
             </button>
           ))}
-        </div>
-        <div className="view-switch">
-          {(["kanban", "lista"] as const).map((v) => (
+          {trashed.length > 0 && (
             <button
-              key={v}
-              className={"view-switch-btn" + (view === v ? " active" : "")}
-              onClick={() => setView(v)}
+              className={"seg-tab" + (filtro === "cestino" ? " active" : "")}
+              onClick={() => setFiltro("cestino")}
             >
-              <Icon name={v === "kanban" ? "table" : "doc"} size={14} />
-              {v === "kanban" ? "Kanban" : "Lista"}
+              <Icon name="trash" size={13} /> Cestino
+              <span className="mono muted">{trashed.length}</span>
             </button>
-          ))}
+          )}
         </div>
+        {filtro !== "cestino" && (
+          <div className="view-switch">
+            {(["kanban", "lista"] as const).map((v) => (
+              <button
+                key={v}
+                className={"view-switch-btn" + (view === v ? " active" : "")}
+                onClick={() => setView(v)}
+              >
+                <Icon name={v === "kanban" ? "table" : "doc"} size={14} />
+                {v === "kanban" ? "Kanban" : "Lista"}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {filtered.length === 0 ? (
+      {filtro === "cestino" ? (
+        <Cestino trashed={trashed} onRestore={restore} restoring={restoring} canEdit={canEdit} />
+      ) : filtered.length === 0 ? (
         <div className="card empty-state">Nessun intervento per questo filtro.</div>
       ) : view === "kanban" ? (
         <Kanban
@@ -398,6 +438,78 @@ function Lista({ interventi }: { interventi: InterventoRow[] }) {
           })}
         </tbody>
       </table>
+      </div>
+    </div>
+  );
+}
+
+/* ── Cestino: interventi eliminati (per errore/test), ripristinabili ── */
+function Cestino({
+  trashed,
+  onRestore,
+  restoring,
+  canEdit,
+}: {
+  trashed: TrashedRow[];
+  onRestore: (id: string) => void;
+  restoring: string | null;
+  canEdit: boolean;
+}) {
+  if (trashed.length === 0)
+    return <div className="card empty-state">Il cestino è vuoto.</div>;
+  return (
+    <div className="card no-pad">
+      <div className="info-banner" style={{ margin: 14 }}>
+        <Icon name="trash" size={15} />
+        <span>
+          Interventi spostati nel cestino: non compaiono nelle liste e nelle statistiche, ma
+          i dati sono conservati. Puoi ripristinarli quando vuoi.
+        </span>
+      </div>
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Codice</th>
+              <th>Titolo</th>
+              <th>Cliente · Macchina</th>
+              <th>Eliminato</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {trashed.map((i) => (
+              <tr key={i.id}>
+                <td className="mono muted">
+                  <Link href={`/service/interventi/${i.id}`} className="link-strong">
+                    {i.code}
+                  </Link>
+                </td>
+                <td style={{ fontWeight: 600 }}>{i.title}</td>
+                <td>
+                  <div>{i.customer ?? "—"}</div>
+                  {i.machineJob && <div className="muted small mono">{i.machineJob}</div>}
+                </td>
+                <td className="muted small">
+                  {i.deletedAt ? new Date(i.deletedAt).toLocaleDateString("it-IT") : "—"}
+                  {i.deletedByName ? ` · ${i.deletedByName}` : ""}
+                </td>
+                <td style={{ textAlign: "right" }}>
+                  {canEdit && (
+                    <button
+                      className="btn-ghost-sm"
+                      onClick={() => onRestore(i.id)}
+                      disabled={restoring === i.id}
+                    >
+                      <Icon name="arrow-left" size={13} />
+                      {restoring === i.id ? "Ripristino…" : "Ripristina"}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

@@ -64,6 +64,8 @@ export async function loadInterventoDetail(id: string) {
     priority: intervento.priority,
     channel: intervento.channel,
     reportedBy: intervento.reportedBy,
+    deletedAt: intervento.deletedAt?.toISOString() ?? null,
+    deletedByName: intervento.deletedByName,
     customerName: intervento.customer?.name ?? null,
     customerEmail: intervento.customer?.email ?? null,
     siteName: intervento.site?.name ?? null,

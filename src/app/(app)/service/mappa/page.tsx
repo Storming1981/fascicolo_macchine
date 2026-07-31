@@ -47,7 +47,7 @@ export default async function MappaPage() {
 
   // Cantieri da pianificare: interventi pianificati ai tecnici (con data)
   const plannedRows = await prisma.intervento.findMany({
-    where: { status: "PIANIFICATO", scheduledStart: { not: null } },
+    where: { status: "PIANIFICATO", scheduledStart: { not: null }, deletedAt: null },
     orderBy: { scheduledStart: "asc" },
     take: 40,
     include: {

@@ -14,8 +14,8 @@ export default async function CampoInterventiPage() {
   const canViewAll = await userCan(user.role, "intervento.viewAll");
   const canCreate = await userCan(user.role, "intervento.create");
   const where = canViewAll
-    ? {}
-    : { OR: [{ assignedTechId: user.id }, { participants: { some: { id: user.id } } }] };
+    ? { deletedAt: null }
+    : { deletedAt: null, OR: [{ assignedTechId: user.id }, { participants: { some: { id: user.id } } }] };
 
   const rows = await prisma.intervento.findMany({
     where,

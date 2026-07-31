@@ -89,7 +89,7 @@ export default async function PianificazionePage({
       select: { id: true, name: true, zona: true },
     }),
     prisma.intervento.findMany({
-      where: { assignedTechId: { not: null }, scheduledStart: { gte: start, lt: end } },
+      where: { assignedTechId: { not: null }, scheduledStart: { gte: start, lt: end }, deletedAt: null },
       select: {
         id: true,
         code: true,
@@ -106,6 +106,7 @@ export default async function PianificazionePage({
     prisma.intervento.findMany({
       where: {
         status: { in: ["NUOVO", "PIANIFICATO"] },
+        deletedAt: null,
         OR: [{ scheduledStart: null }, { scheduledStart: { lt: start } }],
       },
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],

@@ -23,12 +23,13 @@ export default async function ServiceDashboard() {
   monthStart.setHours(0, 0, 0, 0);
 
   const [all, p1Pending, inCorso, doneMonth, techs, recent, chats] = await Promise.all([
-    prisma.intervento.groupBy({ by: ["status"], _count: { _all: true } }),
-    prisma.intervento.count({ where: { priority: 1, status: "NUOVO", assignedTechId: null } }),
-    prisma.intervento.count({ where: { status: "IN_CORSO" } }),
-    prisma.intervento.count({ where: { status: { in: ["COMPLETATO", "FATTURATO"] }, completedAt: { gte: monthStart } } }),
+    prisma.intervento.groupBy({ by: ["status"], _count: { _all: true }, where: { deletedAt: null } }),
+    prisma.intervento.count({ where: { priority: 1, status: "NUOVO", assignedTechId: null, deletedAt: null } }),
+    prisma.intervento.count({ where: { status: "IN_CORSO", deletedAt: null } }),
+    prisma.intervento.count({ where: { status: { in: ["COMPLETATO", "FATTURATO"] }, completedAt: { gte: monthStart }, deletedAt: null } }),
     prisma.user.count({ where: { active: true, zona: { not: null } } }),
     prisma.intervento.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: 8,
       include: { customer: { select: { name: true } }, machine: { select: { code: true, job: true } } },

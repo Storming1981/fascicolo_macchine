@@ -388,6 +388,10 @@ model Intervento {
   completedAt   DateTime?
   invoicedAt    DateTime?
   slaDueAt      DateTime?
+  // Cestino (soft-delete): interventi creati per errore o per test. Restano nel
+  // DB ma spariscono da tutte le liste; ripristinabili dal Cestino.
+  deletedAt     DateTime?
+  deletedByName String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -405,6 +409,7 @@ model Intervento {
   @@index([customerId])
   @@index([machineId])
   @@index([status])
+  @@index([deletedAt])
 }
 
 /// Rapportino di intervento (1:1 con Intervento). Alla chiusura genera un

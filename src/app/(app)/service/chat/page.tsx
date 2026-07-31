@@ -38,6 +38,7 @@ export default async function ChatPage({
       },
     }),
     prisma.intervento.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: 200,
       select: { id: true, code: true, title: true, machineId: true, customerId: true },

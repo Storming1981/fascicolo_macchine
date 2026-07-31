@@ -32,17 +32,18 @@ export default async function NotifichePage() {
 
   const [p1, recent, completed, chats] = await Promise.all([
     prisma.intervento.findMany({
-      where: { priority: 1, status: "NUOVO", assignedTechId: null },
+      where: { priority: 1, status: "NUOVO", assignedTechId: null, deletedAt: null },
       include: { customer: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.intervento.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: 8,
       include: { customer: { select: { name: true } } },
     }),
     prisma.intervento.findMany({
-      where: { status: { in: ["COMPLETATO", "FATTURATO"] }, completedAt: { not: null } },
+      where: { status: { in: ["COMPLETATO", "FATTURATO"] }, completedAt: { not: null }, deletedAt: null },
       orderBy: { completedAt: "desc" },
       take: 5,
       include: { customer: { select: { name: true } } },

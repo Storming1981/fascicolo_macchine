@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
-  const where: Prisma.InterventoWhereInput = {};
+  const where: Prisma.InterventoWhereInput = { deletedAt: null };
   const status = searchParams.get("status");
   if (status && STATUSES.includes(status as InterventoStatus))
     where.status = status as InterventoStatus;

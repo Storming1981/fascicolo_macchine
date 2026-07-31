@@ -35,7 +35,7 @@ export async function loadMachineDetailProps(code: string) {
 
   const [serviceInterventi, serviceChats] = await Promise.all([
     prisma.intervento.findMany({
-      where: { machineId: machine.id },
+      where: { machineId: machine.id, deletedAt: null },
       orderBy: { createdAt: "desc" },
       select: { id: true, code: true, title: true, status: true, priority: true },
     }),
