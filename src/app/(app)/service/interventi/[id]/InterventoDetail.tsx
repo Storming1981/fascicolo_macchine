@@ -283,6 +283,14 @@ export default function InterventoDetail({
         setOreByDay(d.byDay ?? {});
         setOreByDayOperator(d.byDayOperator ?? {});
         setOreTotal(typeof d.total === "number" ? d.total : null);
+        const upd = d.updated ?? 0;
+        const clr = d.cleared ?? 0;
+        if (upd === 0) alert("Ore già allineate: nessuna giornata da aggiornare.");
+        else
+          alert(
+            `Ore sincronizzate dal timbratore: ${upd} giornate aggiornate` +
+              (clr ? `, di cui ${clr} azzerate (timbrature spostate su un'altra commessa).` : ".")
+          );
       } else {
         alert(d?.error ?? "Errore nella sincronizzazione ore.");
       }

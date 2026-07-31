@@ -49,10 +49,12 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   let updated = 0;
+  let cleared = 0;
   for (const r of intervento.rapportini) {
     const day = isoDay(r.date);
-    const h = hours.byDay[day];
-    if (h == null) continue;
+    // Ore del giorno su QUESTA commessa: 0 se non ce ne sono più (es. la
+    // timbratura è stata riassegnata a un'altra commessa nel timbratore).
+    const h = hours.byDay[day] ?? 0;
 
     // sessioni entrata/uscita timbrate quel giorno su questa commessa
     // (orig = valore del timbratore, per evidenziare eventuali modifiche manuali)
@@ -74,6 +76,13 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     const total = operators.length
       ? Math.round(operators.reduce((n, o) => n + o.hours, 0) * 100) / 100
       : h;
+
+    // Salta se nulla è cambiato: evita revisioni inutili sui rapportini chiusi.
+    const sameTotal = Math.round((r.hoursWorked ?? 0) * 100) / 100 === total;
+    const sameTimb = JSON.stringify(r.timbrature ?? []) === JSON.stringify(timbrature);
+    if (sameTotal && sameTimb) continue;
+
+    if (total === 0 && timbrature.length === 0) cleared++;
 
     if (r.closed) {
       // modifica di un rapportino firmato → logga lo stato precedente
@@ -106,6 +115,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   return NextResponse.json({
     ok: true,
     updated,
+    cleared,
     total: hours.total,
     byDay: hours.byDay,
     byDayOperator: hours.byDayOperator,
