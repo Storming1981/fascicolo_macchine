@@ -347,6 +347,7 @@ export async function getMachineErpData(input: MachineErpInput): Promise<ErpMach
 export interface ErpCustomerDetail {
   conto: number;
   name: string;
+  address: string | null;
   city: string | null;
   province: string | null;
   countryIso: string | null;
@@ -359,12 +360,13 @@ export async function getAllCustomers(): Promise<ErpCustomerDetail[]> {
   const r = await pool.request().query<{
     an_conto: number;
     an_descr1: string | null;
+    an_address: string | null;
     an_citta: string | null;
     an_prov: string | null;
     iso2: string | null;
     country_name: string | null;
   }>(`
-    SELECT a.an_conto, a.an_descr1, a.an_citta, a.an_prov,
+    SELECT a.an_conto, a.an_descr1, a.an_indir AS an_address, a.an_citta, a.an_prov,
            s.tb_siglaiso AS iso2, s.tb_desstat AS country_name
     FROM anagra a
     LEFT JOIN tabstat s ON s.tb_codstat = a.an_stato
@@ -375,6 +377,7 @@ export async function getAllCustomers(): Promise<ErpCustomerDetail[]> {
   return r.recordset.map((x) => ({
     conto: x.an_conto,
     name: (x.an_descr1 ?? '').trim(),
+    address: x.an_address?.trim() || null,
     city: x.an_citta?.trim() || null,
     province: x.an_prov?.trim() || null,
     countryIso: x.iso2?.trim() || null,
@@ -403,12 +406,13 @@ export async function getCustomerDetails(contos: number[]): Promise<ErpCustomerD
     const r = await req.query<{
       an_conto: number;
       an_descr1: string | null;
+      an_address: string | null;
       an_citta: string | null;
       an_prov: string | null;
       iso2: string | null;
       country_name: string | null;
     }>(`
-      SELECT a.an_conto, a.an_descr1, a.an_citta, a.an_prov,
+      SELECT a.an_conto, a.an_descr1, a.an_indir AS an_address, a.an_citta, a.an_prov,
              s.tb_siglaiso AS iso2, s.tb_desstat AS country_name
       FROM anagra a
       LEFT JOIN tabstat s ON s.tb_codstat = a.an_stato
@@ -418,6 +422,7 @@ export async function getCustomerDetails(contos: number[]): Promise<ErpCustomerD
       out.push({
         conto: x.an_conto,
         name: (x.an_descr1 ?? '').trim(),
+        address: x.an_address?.trim() || null,
         city: x.an_citta?.trim() || null,
         province: x.an_prov?.trim() || null,
         countryIso: x.iso2?.trim() || null,

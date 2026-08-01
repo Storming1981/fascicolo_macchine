@@ -206,6 +206,7 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
     const chunk: CustomerPush[] = allCustomers.slice(i, i + custBatch).map((d) => ({
       conto: d.conto,
       name: d.name,
+      address: d.address,
       city: d.city,
       province: d.province,
       countryIso: d.countryIso,

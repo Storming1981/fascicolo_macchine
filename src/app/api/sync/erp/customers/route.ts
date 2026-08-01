@@ -22,10 +22,20 @@ export const maxDuration = 60;
 type Incoming = {
   conto?: unknown;
   name?: unknown;
+  address?: unknown;
   city?: unknown;
   province?: unknown;
   countryIso?: unknown;
   countryName?: unknown;
+};
+
+/** Coordinate approssimate per paese (centro nazione) per i cantieri sincronizzati. */
+const GEO_BY_CC: Record<string, [number, number]> = {
+  IT: [44.5, 11.0], DE: [51.16, 10.45], SE: [59.33, 18.06], IS: [64.14, -21.94],
+  NO: [59.91, 10.75], FI: [60.17, 24.94], FR: [48.85, 2.35], ES: [40.42, -3.7],
+  GB: [51.51, -0.13], NL: [52.37, 4.9], BE: [50.85, 4.35], AT: [48.21, 16.37],
+  CH: [46.95, 7.45], PL: [52.23, 21.01], US: [40.71, -74.0], DK: [55.68, 12.57],
+  CZ: [50.08, 14.44], RO: [44.43, 26.1], PT: [38.72, -9.14], TR: [39.93, 32.86],
 };
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -46,6 +56,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Campo 'customers' mancante" }, { status: 400 });
 
   const t = (v: unknown) => (typeof v === "string" ? v.trim() || null : null);
+
+  // indirizzo + countryCode per conto (per creare i cantieri di default)
+  const metaByConto = new Map<number, { address: string | null; countryCode: string }>();
 
   // Esistenti in memoria: indicizzati per erpConto e per nome normalizzato
   const existing = await prisma.customer.findMany({
@@ -92,6 +105,7 @@ export async function POST(req: Request) {
     const resolved = resolveCountry(t(c?.countryIso) || t(c?.countryName));
     const country = resolved.code !== "XX" ? resolved.label : "Italia";
     const countryCode = resolved.code !== "XX" ? resolved.code : "IT";
+    metaByConto.set(conto, { address: t(c?.address), countryCode });
 
     const found = byConto.get(conto) ?? byName.get(norm(name));
     if (found) {
@@ -141,12 +155,53 @@ export async function POST(req: Request) {
     );
   }
 
+  // Cantiere di default: dall'indirizzo dell'anagrafica, per i clienti del batch
+  // che NON hanno ancora nessun Site (così il campo "Cantiere" non resta vuoto e
+  // non si duplica quello creato dalle timbrature). Coordinate = centro nazione.
+  const contos = [...metaByConto.keys()];
+  const custRows = await prisma.customer.findMany({
+    where: { erpConto: { in: contos } },
+    select: { id: true, name: true, erpConto: true, city: true, province: true, countryCode: true },
+  });
+  const custIds = custRows.map((c) => c.id);
+  const withSites = new Set(
+    (
+      await prisma.site.findMany({
+        where: { customerId: { in: custIds } },
+        select: { customerId: true },
+        distinct: ["customerId"],
+      })
+    ).map((s) => s.customerId),
+  );
+  const newSites = custRows
+    .filter((c) => !withSites.has(c.id))
+    .map((c) => {
+      const meta = c.erpConto != null ? metaByConto.get(c.erpConto) : undefined;
+      const [lat, lng] = GEO_BY_CC[c.countryCode] ?? GEO_BY_CC.IT;
+      return {
+        customerId: c.id,
+        name: `Stabilimento ${c.city || c.name}`.trim(),
+        city: c.city,
+        province: c.province,
+        address: meta?.address ?? null,
+        lat,
+        lng,
+        status: "ok",
+      };
+    });
+  let sitesCreated = 0;
+  if (newSites.length) {
+    const res = await prisma.site.createMany({ data: newSites });
+    sitesCreated = res.count;
+  }
+
   const total = await prisma.customer.count();
   return NextResponse.json({
     status: "success",
     upserted: toCreate.length + toUpdate.length,
     created: toCreate.length,
     updated: toUpdate.length,
+    sitesCreated,
     total,
   });
 }

@@ -33,6 +33,7 @@ export interface PushResult {
 export interface CustomerPush {
   conto: number;
   name: string;
+  address: string | null;
   city: string | null;
   province: string | null;
   countryIso: string | null;
