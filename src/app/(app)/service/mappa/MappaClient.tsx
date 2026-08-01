@@ -138,7 +138,7 @@ export default function MappaClient({ sites, planned }: { sites: MapSite[]; plan
             .on("click", () => setSel(s.id));
         }
 
-        // pin viola: cantieri da pianificare (interventi programmati)
+        // pin viola: cantieri con interventi pianificati (programmati con data)
         const greenSiteIds = new Set(sites.map((s) => s.id));
         const seenPlanned = new Set<string>();
         for (const p of planned) {
@@ -156,7 +156,7 @@ export default function MappaClient({ sites, planned }: { sites: MapSite[]; plan
           });
           L.marker([p.lat, p.lng], { icon })
             .addTo(map)
-            .bindTooltip(`<strong>${p.customer ?? p.title}</strong><br/>Da pianificare`, { direction: "top", offset: [0, -40] });
+            .bindTooltip(`<strong>${p.customer ?? p.title}</strong><br/>Pianificato`, { direction: "top", offset: [0, -40] });
         }
 
         mapRef.current = map;
@@ -219,7 +219,7 @@ export default function MappaClient({ sites, planned }: { sites: MapSite[]; plan
       <div className="view-header">
         <div>
           <h1>Mappa cantieri</h1>
-          <p>{sites.length} cantieri con tecnici on-site ora · {planned.length} interventi da pianificare</p>
+          <p>{sites.length} cantieri con tecnici on-site ora · {planned.length} interventi pianificati</p>
         </div>
         <button
           className={"btn-ghost" + (showTechs ? " active" : "")}
@@ -246,7 +246,7 @@ export default function MappaClient({ sites, planned }: { sites: MapSite[]; plan
                 <span className="flex-inline"><span className="badge-dot" style={{ background: "#dc2626" }} /> Alert</span>
                 <span className="flex-inline"><span className="badge-dot" style={{ background: "#2f6aed" }} /> In corso</span>
                 <span className="flex-inline"><span className="badge-dot" style={{ background: "#10b981" }} /> Operativo</span>
-                <span className="flex-inline"><span className="badge-dot" style={{ background: "#8b5cf6" }} /> Da pianificare</span>
+                <span className="flex-inline"><span className="badge-dot" style={{ background: "#8b5cf6" }} /> Pianificato</span>
               </div>
             </div>
 
@@ -340,7 +340,7 @@ export default function MappaClient({ sites, planned }: { sites: MapSite[]; plan
 
           <div className="card">
             <div className="card-header">
-              <h3 style={{ fontSize: 13 }}>Cantieri da pianificare</h3>
+              <h3 style={{ fontSize: 13 }}>Cantieri pianificati</h3>
               <span className="muted small">{planned.length}</span>
             </div>
             <ul className="mini-list two-col">
