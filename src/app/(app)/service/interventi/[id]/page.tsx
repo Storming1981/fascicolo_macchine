@@ -39,7 +39,6 @@ export default async function InterventoDetailPage({
       data={data.dto}
       techs={data.techs}
       machines={data.machines}
-      customers={data.customers}
       commesse={data.commesse}
       currentUserName={user.name}
       canEdit={canEdit}

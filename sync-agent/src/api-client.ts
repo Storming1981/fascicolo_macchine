@@ -74,6 +74,8 @@ export async function pushCustomers(
   return res.json() as Promise<{ status: string; upserted: number; total: number }>;
 }
 
+// NB: getCustomerDetails resta disponibile nell'agent per usi futuri (sync mirato).
+
 export async function fetchMachines(): Promise<MachineRow[]> {
   const res = await fetch(config.api.machinesUrl, { method: 'GET', headers: authHeaders() });
   if (!res.ok) {

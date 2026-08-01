@@ -82,6 +82,7 @@ type Data = {
   customerId: string | null;
   customerName: string | null;
   customerEmail: string | null;
+  customerSites: { id: string; name: string }[];
   siteId: string | null;
   siteName: string | null;
   machine: { id: string; code: string; job: string; model: string } | null;
@@ -120,14 +121,14 @@ type ChecklistState = {
 };
 type Tech = { id: string; name: string; zona: string | null; siteManager: boolean };
 type MachineOpt = { id: string; code: string; job: string; customer: string; customerId: string | null };
-type CustomerOptDetail = { id: string; name: string; sites: { id: string; name: string }[] };
+type SiteOpt = { id: string; name: string };
+type CustomerHit = { id: string; name: string; city: string | null; sites: SiteOpt[] };
 type Commessa = { code: string; label: string };
 
 export default function InterventoDetail({
   data,
   techs,
   machines,
-  customers = [],
   commesse,
   currentUserName,
   canEdit,
@@ -142,7 +143,6 @@ export default function InterventoDetail({
   data: Data;
   techs: Tech[];
   machines: MachineOpt[];
-  customers?: CustomerOptDetail[];
   commesse: Commessa[];
   currentUserName: string;
   canEdit: boolean;
@@ -220,8 +220,10 @@ export default function InterventoDetail({
     ...commesse.filter((c) => !derived.some((d) => d.code === c.code)),
   ];
 
-  // cliente selezionato (per la tendina cantiere) + macchine filtrate per cliente
-  const selectedCustomer = customers.find((c) => c.id === data.customerId) ?? null;
+  // cantieri del cliente corrente (aggiornati quando si cambia cliente) +
+  // macchine filtrate per cliente
+  const [custSites, setCustSites] = useState<SiteOpt[]>(data.customerSites ?? []);
+  useEffect(() => setCustSites(data.customerSites ?? []), [data.customerId, data.customerSites]);
   const machineOptions = (() => {
     if (!data.customerId) return machines;
     const own = machines.filter((m) => m.customerId === data.customerId);
@@ -402,20 +404,14 @@ export default function InterventoDetail({
             <div className="field">
               <span className="field-label">Cliente</span>
               {canEdit ? (
-                <select
-                  value={data.customerId ?? ""}
-                  onChange={(e) =>
+                <CustomerCombo
+                  currentName={data.customerName}
+                  onPick={(c) => {
                     // cambiando cliente, azzero cantiere e macchina (non più coerenti)
-                    patch({ customerId: e.target.value || null, siteId: null, machineId: null })
-                  }
-                >
-                  <option value="">— Nessuno —</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                    patch({ customerId: c?.id ?? null, siteId: null, machineId: null });
+                    setCustSites(c?.sites ?? []);
+                  }}
+                />
               ) : (
                 <div className="readout">{data.customerName ?? "—"}</div>
               )}
@@ -426,10 +422,10 @@ export default function InterventoDetail({
                 <select
                   value={data.siteId ?? ""}
                   onChange={(e) => patch({ siteId: e.target.value || null })}
-                  disabled={!selectedCustomer}
+                  disabled={!data.customerId}
                 >
                   <option value="">— Nessuno —</option>
-                  {selectedCustomer?.sites.map((s) => (
+                  {custSites.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
@@ -2039,6 +2035,120 @@ function ChecklistModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Tendina cliente ricercabile (cerca nell'anagrafica via API) ── */
+function CustomerCombo({
+  currentName,
+  onPick,
+}: {
+  currentName: string | null;
+  onPick: (c: CustomerHit | null) => void;
+}) {
+  const [label, setLabel] = useState(currentName ?? "");
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<CustomerHit[]>([]);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setLabel(currentName ?? ""), [currentName]);
+
+  function reposition() {
+    const el = boxRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({ top: r.bottom + 2, left: r.left, width: r.width });
+  }
+  useEffect(() => {
+    if (!open) return;
+    reposition();
+    const onMove = () => reposition();
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+    return () => {
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+    };
+  }, [open]);
+
+  function runSearch(term: string) {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/customers/search?q=${encodeURIComponent(term)}`);
+        const d = await res.json().catch(() => null);
+        if (res.ok && Array.isArray(d.customers)) {
+          setHits(d.customers);
+          setOpen(true);
+          reposition();
+        }
+      } catch {
+        /* rete */
+      }
+    }, 250);
+  }
+
+  const dropdown =
+    open && pos && typeof document !== "undefined"
+      ? createPortal(
+          <div className="art-sugg art-sugg-fixed" style={{ top: pos.top, left: pos.left, width: pos.width }}>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setLabel("");
+                onPick(null);
+                setOpen(false);
+              }}
+            >
+              <span className="muted">— Nessuno —</span>
+            </button>
+            {hits.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setLabel(c.name);
+                  onPick(c);
+                  setOpen(false);
+                }}
+              >
+                <span>{c.name}</span>
+                {c.city && <span className="muted small">{c.city}</span>}
+              </button>
+            ))}
+            {hits.length === 0 && (
+              <div className="muted small" style={{ padding: "8px 11px" }}>
+                Nessun cliente trovato
+              </div>
+            )}
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <div className="art-input" ref={boxRef}>
+      <input
+        value={open ? q : label}
+        placeholder="Cerca cliente…"
+        onFocus={() => {
+          setQ("");
+          setOpen(true);
+          runSearch("");
+        }}
+        onChange={(e) => {
+          setQ(e.target.value);
+          runSearch(e.target.value);
+        }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {dropdown}
     </div>
   );
 }

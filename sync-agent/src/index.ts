@@ -25,7 +25,7 @@ import { config, validateConfig } from './config';
 import {
   closePool,
   getAllArticles,
-  getCustomerDetails,
+  getAllCustomers,
   getMachineErpData,
   testConnection,
 } from './erp';
@@ -194,15 +194,16 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
     return;
   }
 
-  // 1) Anagrafica clienti: recupera i dettagli dei conti dei fascicoli e li
-  //    invia PRIMA delle macchine, così il collegamento macchina→cliente aggancia.
-  const contos = Array.from(
-    new Set(results.map((r) => r.customerConto).filter((c): c is number => !!c)),
-  );
-  if (contos.length) {
-    log(`Anagrafica clienti: ${contos.length} conti da sincronizzare ...`);
-    const details = await getCustomerDetails(contos);
-    const customers: CustomerPush[] = details.map((d) => ({
+  // 1) Anagrafica clienti COMPLETA (anagra, an_tipo='C'): inviata PRIMA delle
+  //    macchine, così il collegamento macchina→cliente (per erpConto) aggancia.
+  log('Anagrafica clienti: lettura completa da anagra ...');
+  const allCustomers = await getAllCustomers();
+  log(`  ${allCustomers.length} clienti letti`);
+  const custBatch = config.sync.articlesBatchSize; // stesso blocco (default 1000)
+  let custUpserted = 0;
+  let custTotal = 0;
+  for (let i = 0; i < allCustomers.length; i += custBatch) {
+    const chunk: CustomerPush[] = allCustomers.slice(i, i + custBatch).map((d) => ({
       conto: d.conto,
       name: d.name,
       city: d.city,
@@ -210,9 +211,12 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
       countryIso: d.countryIso,
       countryName: d.countryName,
     }));
-    const cResp = await pushCustomers(customers);
-    log(`  clienti: ${cResp.upserted} aggiornati/creati, ${cResp.total} totali sulla piattaforma`);
+    const cResp = await pushCustomers(chunk);
+    custUpserted += cResp.upserted;
+    custTotal = cResp.total;
+    log(`  inviati ${Math.min(i + custBatch, allCustomers.length)}/${allCustomers.length}`);
   }
+  log(`Clienti aggiornati: ${custUpserted} creati/aggiornati, ${custTotal} totali sulla piattaforma`);
 
   // 2) Invio fascicoli a batch (con customerConto → collegamento cliente)
   const batchSize = config.sync.batchSize;

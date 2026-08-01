@@ -353,6 +353,35 @@ export interface ErpCustomerDetail {
   countryName: string | null;
 }
 
+/** Intera anagrafica clienti (anagra, an_tipo='C') con nome non vuoto. */
+export async function getAllCustomers(): Promise<ErpCustomerDetail[]> {
+  const pool = await getPool();
+  const r = await pool.request().query<{
+    an_conto: number;
+    an_descr1: string | null;
+    an_citta: string | null;
+    an_prov: string | null;
+    iso2: string | null;
+    country_name: string | null;
+  }>(`
+    SELECT a.an_conto, a.an_descr1, a.an_citta, a.an_prov,
+           s.tb_siglaiso AS iso2, s.tb_desstat AS country_name
+    FROM anagra a
+    LEFT JOIN tabstat s ON s.tb_codstat = a.an_stato
+    WHERE a.an_tipo = 'C' AND a.an_conto IS NOT NULL
+      AND a.an_descr1 IS NOT NULL AND LTRIM(RTRIM(a.an_descr1)) <> ''
+    ORDER BY a.an_descr1 ASC;
+  `);
+  return r.recordset.map((x) => ({
+    conto: x.an_conto,
+    name: (x.an_descr1 ?? '').trim(),
+    city: x.an_citta?.trim() || null,
+    province: x.an_prov?.trim() || null,
+    countryIso: x.iso2?.trim() || null,
+    countryName: x.country_name?.trim() || null,
+  }));
+}
+
 /**
  * Dettaglio anagrafica (anagra, an_tipo='C') per un elenco di conti clienti.
  * Interroga solo i conti che servono (quelli dei fascicoli), non tutta l'anagra.

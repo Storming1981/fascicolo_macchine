@@ -8,7 +8,14 @@ export async function loadInterventoDetail(id: string) {
   const intervento = await prisma.intervento.findUnique({
     where: { id },
     include: {
-      customer: { select: { id: true, name: true, email: true } },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          sites: { orderBy: { name: "asc" }, select: { id: true, name: true } },
+        },
+      },
       site: { select: { id: true, name: true, city: true } },
       machine: { select: { id: true, code: true, job: true, model: true } },
       tech: { select: { id: true, name: true } },
@@ -27,7 +34,7 @@ export async function loadInterventoDetail(id: string) {
   });
   if (!intervento) return null;
 
-  const [techs, machines, customerRows, commesseRows] = await Promise.all([
+  const [techs, machines, commesseRows] = await Promise.all([
     prisma.user.findMany({
       where: { active: true },
       orderBy: [{ siteManager: "desc" }, { name: "asc" }],
@@ -37,14 +44,6 @@ export async function loadInterventoDetail(id: string) {
       orderBy: { code: "asc" },
       select: { id: true, code: true, job: true, customer: true, customerId: true },
     }),
-    prisma.customer.findMany({
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        sites: { orderBy: { name: "asc" }, select: { id: true, name: true } },
-      },
-    }),
     prisma.techPresence.findMany({
       where: { commessa: { not: null } },
       select: { commessa: true, site: { select: { city: true, customer: { select: { name: true } } } } },
@@ -52,7 +51,6 @@ export async function loadInterventoDetail(id: string) {
     }),
   ]);
 
-  const customers = customerRows.map((c) => ({ id: c.id, name: c.name, sites: c.sites }));
 
   const commMap = new Map<string, string>();
   for (const r of commesseRows) {
@@ -79,6 +77,7 @@ export async function loadInterventoDetail(id: string) {
     customerId: intervento.customerId,
     customerName: intervento.customer?.name ?? null,
     customerEmail: intervento.customer?.email ?? null,
+    customerSites: intervento.customer?.sites ?? [],
     siteId: intervento.siteId,
     siteName: intervento.site?.name ?? null,
     machine: intervento.machine
@@ -168,5 +167,5 @@ export async function loadInterventoDetail(id: string) {
     })),
   };
 
-  return { dto, techs, machines, customers, commesse };
+  return { dto, techs, machines, commesse };
 }
