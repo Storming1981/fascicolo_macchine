@@ -107,7 +107,18 @@ export async function POST(req: Request) {
     const countryCode = resolved.code !== "XX" ? resolved.code : "IT";
     metaByConto.set(conto, { address: t(c?.address), countryCode });
 
-    const found = byConto.get(conto) ?? byName.get(norm(name));
+    // 1) match autoritativo per erpConto
+    let found = byConto.get(conto) ?? null;
+    // conto già visto in QUESTO batch → è già in coda di creazione, non aggiornarlo
+    // (altrimenti update su id fittizio "new" → errore "record not found")
+    if (found && found.id === "new") continue;
+    // 2) fallback per nome: SOLO un cliente esistente e senza erpConto (inserito
+    //    a mano). Evita di fondere due clienti ERP distinti con lo stesso nome.
+    if (!found) {
+      const byN = byName.get(norm(name));
+      if (byN && byN.id !== "new" && !byN.erpConto) found = byN;
+    }
+
     if (found) {
       // aggiorna solo se qualcosa è realmente cambiato (evita scritture inutili)
       const nextCity = city ?? found.city;
