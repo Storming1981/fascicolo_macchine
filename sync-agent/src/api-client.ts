@@ -28,6 +28,8 @@ export interface PushResult {
   totalHours?: number | null;
   productionStart?: string | null;
   productionEnd?: string | null;
+  // snapshot completo (jobs+orders+articoli) per la card ERP sulla VPS
+  snapshot?: unknown;
 }
 
 export interface CustomerPush {
@@ -76,6 +78,22 @@ export async function pushCustomers(
 }
 
 // NB: getCustomerDetails resta disponibile nell'agent per usi futuri (sync mirato).
+
+export async function pushOrders(
+  commessa: number,
+  orders: unknown[],
+): Promise<{ status: string; count: number }> {
+  const res = await fetch(config.api.ordersUrl, {
+    method: 'POST',
+    headers: authHeaders(true),
+    body: JSON.stringify({ commessa, orders }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`POST /api/sync/erp/orders ${res.status}: ${t.slice(0, 300)}`);
+  }
+  return res.json() as Promise<{ status: string; count: number }>;
+}
 
 export async function fetchMachines(): Promise<MachineRow[]> {
   const res = await fetch(config.api.machinesUrl, { method: 'GET', headers: authHeaders() });

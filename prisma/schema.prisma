@@ -139,6 +139,9 @@ model Machine {
   erpContainerOrder String?     // chiave ordine container
   erpStandOrder   String?       // chiave ordine cavalletto
   erpBladesOrder  String?       // chiave ordine lame
+  // Snapshot completo dei dati gestionale (jobs + ordini + articoli) dal
+  // sync-agent, per mostrare la card ERP ricca sulla VPS (senza ERP diretto).
+  erpSnapshot     Json?
   customerId      String?       // anagrafica cliente condivisa (service) — opzionale
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -304,6 +307,30 @@ model ErpArticle {
   updatedAt   DateTime @updatedAt
 
   @@index([description])
+}
+
+/// Ordini di produzione di una commessa (dal gestionale, tabella avlavp) copiati
+/// dal sync-agent, per popolare le tendine "Ordine Corpo/Container" sulla VPS
+/// (impianti nuovi, commessa 999999999).
+model ErpCommessaOrder {
+  id              String    @id @default(cuid())
+  commessa        Int
+  key             String // "tipork|anno|serie|numero"
+  tipork          String
+  anno            Int
+  serie           String    @default("")
+  num             Int
+  mainArticleCode String?
+  mainArticleDesc String?
+  hours           Float     @default(0)
+  start           DateTime?
+  end             DateTime?
+  rows            Int       @default(0)
+  articleCount    Int       @default(0)
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([commessa, key])
+  @@index([commessa])
 }
 
 model Document {

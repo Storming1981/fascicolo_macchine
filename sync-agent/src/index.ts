@@ -26,13 +26,17 @@ import {
   closePool,
   getAllArticles,
   getAllCustomers,
+  getCommessaOrders,
   getMachineErpData,
   testConnection,
+  GENERIC_COMMESSA,
+  type ErpMachineData,
 } from './erp';
 import {
   fetchMachines,
   pushArticles,
   pushCustomers,
+  pushOrders,
   pushResults,
   type CustomerPush,
   type MachineRow,
@@ -83,6 +87,52 @@ function getArg(args: string[], flag: string): string | undefined {
 }
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+
+/** Serializza ErpMachineData nello snapshot JSON atteso dalla card ERP (date ISO). */
+function buildSnapshot(erp: ErpMachineData): Record<string, unknown> {
+  return {
+    jobs: erp.jobs.map((j) => ({
+      job: j.job,
+      found: j.found,
+      description: j.description,
+      customer: j.customer,
+      customerCountryIso: j.customerCountryIso,
+      openedAt: iso(j.openedAt),
+      closedAt: iso(j.closedAt),
+      isClosed: j.isClosed,
+      productionStart: iso(j.productionStart),
+      productionEnd: iso(j.productionEnd),
+      progressRows: j.progressRows,
+      hours: j.hours,
+    })),
+    orders: erp.orders.map((o) => ({
+      role: o.role,
+      data: {
+        key: o.data.key,
+        found: o.data.found,
+        tipork: o.data.tipork,
+        anno: o.data.anno,
+        serie: o.data.serie,
+        num: o.data.num,
+        hours: o.data.hours,
+        start: iso(o.data.start),
+        end: iso(o.data.end),
+        articles: o.data.articles.map((a) => ({
+          code: a.code,
+          desc: a.desc,
+          hours: a.hours,
+          rows: a.rows,
+          start: iso(a.start),
+          end: iso(a.end),
+        })),
+      },
+    })),
+    productionStart: iso(erp.productionStart),
+    productionEnd: iso(erp.productionEnd),
+    totalHours: erp.totalHours,
+    hasProduction: erp.hasProduction,
+  };
+}
 
 /** Esegue `worker` su `items` con al più `limit` in parallelo. */
 async function mapLimit<T, R>(
@@ -169,6 +219,7 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
           totalHours: erp.totalHours,
           productionStart: iso(erp.productionStart),
           productionEnd: iso(erp.productionEnd),
+          snapshot: buildSnapshot(erp),
         } as PushResult;
       } catch (e) {
         logErr(`fascicolo ${m.code}: ${e instanceof Error ? e.message : String(e)}`);
@@ -238,6 +289,31 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
     if (resp.errors.length) {
       for (const e of resp.errors.slice(0, 5)) logErr(`  push ${e.id}: ${e.error}`);
     }
+  }
+
+  // 3) Elenco ordini di produzione della commessa generica (999999999), per le
+  //    tendine "Ordine Corpo/Container" degli impianti nuovi sulla VPS.
+  try {
+    log('Ordini di produzione commessa generica ...');
+    const genOrders = await getCommessaOrders(GENERIC_COMMESSA);
+    const payload = genOrders.map((o) => ({
+      key: o.key,
+      tipork: o.tipork,
+      anno: o.anno,
+      serie: o.serie,
+      num: o.num,
+      mainArticleCode: o.mainArticleCode,
+      mainArticleDesc: o.mainArticleDesc,
+      hours: o.hours,
+      start: iso(o.start),
+      end: iso(o.end),
+      rows: o.rows,
+      articleCount: o.articleCount,
+    }));
+    const oResp = await pushOrders(GENERIC_COMMESSA, payload);
+    log(`  ordini commessa ${GENERIC_COMMESSA}: ${oResp.count} sincronizzati`);
+  } catch (e) {
+    logErr(`ordini commessa: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   log('--- RIEPILOGO ---');

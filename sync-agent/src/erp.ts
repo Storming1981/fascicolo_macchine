@@ -101,6 +101,9 @@ export interface ErpJobData {
   customerConto: number | null;
   customerCountryIso: string | null;
   customerCountryName: string | null;
+  openedAt: Date | null;
+  closedAt: Date | null;
+  isClosed: boolean;
   productionStart: Date | null;
   productionEnd: Date | null;
   progressRows: number;
@@ -118,6 +121,9 @@ export async function getJobData(job: string): Promise<ErpJobData> {
     customerConto: null,
     customerCountryIso: null,
     customerCountryName: null,
+    openedAt: null,
+    closedAt: null,
+    isClosed: false,
     productionStart: null,
     productionEnd: null,
     progressRows: 0,
@@ -133,8 +139,11 @@ export async function getJobData(job: string): Promise<ErpJobData> {
     .query<{
       co_conto: number;
       co_descr1: string | null;
+      co_dtaper: Date | null;
+      co_dtchiu: Date | null;
+      co_chiusa: string | null;
     }>(`
-      SELECT TOP 1 co_conto, co_descr1
+      SELECT TOP 1 co_conto, co_descr1, co_dtaper, co_dtchiu, co_chiusa
       FROM commess
       WHERE co_comme = @c;
     `);
@@ -186,6 +195,9 @@ export async function getJobData(job: string): Promise<ErpJobData> {
     customerConto: c.co_conto && c.co_conto !== 0 ? c.co_conto : null,
     customerCountryIso,
     customerCountryName,
+    openedAt: realDate(c.co_dtaper),
+    closedAt: realDate(c.co_dtchiu),
+    isClosed: c.co_chiusa === 'S',
     productionStart: realDate(a.min_s),
     productionEnd: realDate(a.max_e),
     progressRows: a.n ?? 0,
@@ -194,6 +206,10 @@ export async function getJobData(job: string): Promise<ErpJobData> {
 }
 
 // ── Ordini di produzione (impianti nuovi: commessa 999999999) ───────────────
+
+export function buildOrderKey(tipork: string, anno: number, serie: string, num: number): string {
+  return `${tipork}|${anno}|${(serie ?? '').trim()}|${num}`;
+}
 
 export function parseOrderKey(
   key: string,
@@ -206,11 +222,26 @@ export function parseOrderKey(
   return { tipork: parts[0], anno, serie: parts[2] ?? '', num };
 }
 
+export interface ErpOrderArticle {
+  code: string | null;
+  desc: string | null;
+  hours: number;
+  rows: number;
+  start: Date | null;
+  end: Date | null;
+}
+
 export interface ErpOrderData {
+  key: string;
   found: boolean;
+  tipork: string;
+  anno: number;
+  serie: string;
+  num: number;
   hours: number;
   start: Date | null;
   end: Date | null;
+  articles: ErpOrderArticle[];
 }
 
 export async function getOrderData(orderKey: string): Promise<ErpOrderData | null> {
@@ -232,15 +263,145 @@ export async function getOrderData(orderKey: string): Promise<ErpOrderData | nul
     `);
 
   const a = agg.recordset[0];
-  if (!a || (a.n ?? 0) === 0) {
-    return { found: false, hours: 0, start: null, end: null };
-  }
+  const baseOut: ErpOrderData = {
+    key: orderKey, found: false,
+    tipork: k.tipork, anno: k.anno, serie: k.serie, num: k.num,
+    hours: 0, start: null, end: null, articles: [],
+  };
+  if (!a || (a.n ?? 0) === 0) return baseOut;
+
+  const arts = await pool
+    .request()
+    .input('t', sql.VarChar, k.tipork)
+    .input('y', sql.Int, k.anno)
+    .input('s', sql.VarChar, k.serie)
+    .input('n', sql.Int, k.num)
+    .query<{
+      lce_codart: string | null;
+      lce_desart: string | null;
+      ore: number | null;
+      n: number;
+      s: Date | null;
+      e: Date | null;
+    }>(`
+      SELECT lce_codart, MIN(lce_desart) AS lce_desart,
+        SUM(lce_tempese) AS ore, COUNT(*) AS n, MIN(lce_start) AS s, MAX(lce_stop) AS e
+      FROM avlavp
+      WHERE lce_ortipo = @t AND lce_oranno = @y
+        AND LTRIM(RTRIM(lce_orserie)) = @s AND lce_ornum = @n
+      GROUP BY lce_codart
+      ORDER BY SUM(lce_tempese) DESC;
+    `);
+
   return {
+    ...baseOut,
     found: true,
     hours: a.ore ?? 0,
     start: realDate(a.s),
     end: realDate(a.e),
+    articles: arts.recordset.map((x) => ({
+      code: x.lce_codart?.trim() || null,
+      desc: x.lce_desart?.trim() || null,
+      hours: x.ore ?? 0,
+      rows: x.n ?? 0,
+      start: realDate(x.s),
+      end: realDate(x.e),
+    })),
   };
+}
+
+export interface ErpOrder {
+  key: string;
+  tipork: string;
+  anno: number;
+  serie: string;
+  num: number;
+  mainArticleCode: string | null;
+  mainArticleDesc: string | null;
+  hours: number;
+  start: Date | null;
+  end: Date | null;
+  rows: number;
+  articleCount: number;
+}
+
+/** Elenco ordini di produzione (tipork 'H') di una commessa (da avlavp). */
+export async function getCommessaOrders(commessa: number): Promise<ErpOrder[]> {
+  const pool = await getPool();
+  const r = await pool
+    .request()
+    .input('c', sql.Int, commessa)
+    .query<{
+      lce_ortipo: string;
+      lce_oranno: number;
+      lce_orserie: string | null;
+      lce_ornum: number;
+      n: number;
+      ore: number | null;
+      s: Date | null;
+      e: Date | null;
+      art_count: number;
+    }>(`
+      SELECT lce_ortipo, lce_oranno, lce_orserie, lce_ornum,
+        COUNT(*) AS n, SUM(lce_tempese) AS ore,
+        MIN(lce_start) AS s, MAX(lce_stop) AS e,
+        COUNT(DISTINCT lce_codart) AS art_count
+      FROM avlavp
+      WHERE lce_commeca = @c AND lce_ortipo = 'H'
+      GROUP BY lce_ortipo, lce_oranno, lce_orserie, lce_ornum
+      ORDER BY lce_oranno DESC, lce_ornum DESC;
+    `);
+
+  const mains = await pool
+    .request()
+    .input('c', sql.Int, commessa)
+    .query<{
+      lce_ortipo: string;
+      lce_oranno: number;
+      lce_orserie: string | null;
+      lce_ornum: number;
+      lce_codart: string | null;
+      lce_desart: string | null;
+    }>(`
+      WITH x AS (
+        SELECT lce_ortipo, lce_oranno, lce_orserie, lce_ornum, lce_codart, lce_desart,
+          ROW_NUMBER() OVER (
+            PARTITION BY lce_ortipo, lce_oranno, lce_orserie, lce_ornum
+            ORDER BY SUM(lce_tempese) DESC
+          ) AS rn
+        FROM avlavp
+        WHERE lce_commeca = @c AND lce_ortipo = 'H'
+        GROUP BY lce_ortipo, lce_oranno, lce_orserie, lce_ornum, lce_codart, lce_desart
+      )
+      SELECT lce_ortipo, lce_oranno, lce_orserie, lce_ornum, lce_codart, lce_desart
+      FROM x WHERE rn = 1;
+    `);
+
+  const mainBy = new Map<string, { code: string | null; desc: string | null }>();
+  for (const m of mains.recordset) {
+    const key = buildOrderKey(m.lce_ortipo, m.lce_oranno, m.lce_orserie ?? '', m.lce_ornum);
+    mainBy.set(key, { code: m.lce_codart?.trim() || null, desc: m.lce_desart?.trim() || null });
+  }
+
+  return r.recordset.map((o) => {
+    const serie = (o.lce_orserie ?? '').trim();
+    const key = buildOrderKey(o.lce_ortipo, o.lce_oranno, serie, o.lce_ornum);
+    const main = mainBy.get(key);
+    return {
+      key,
+      tipork: o.lce_ortipo,
+      anno: o.lce_oranno,
+      serie,
+      num: o.lce_ornum,
+      mainArticleCode: main?.code ?? null,
+      mainArticleDesc: main?.desc ?? null,
+      hours: o.ore ?? 0,
+      start: realDate(o.s),
+      end: realDate(o.e),
+      rows: o.n ?? 0,
+      articleCount: o.art_count ?? 0,
+    };
+  });
 }
 
 // ── Aggregato per macchina (stessa logica di src/lib/erp.ts) ────────────────
@@ -256,6 +417,8 @@ export interface MachineErpInput {
 }
 
 export interface ErpMachineData {
+  jobs: ErpJobData[];
+  orders: { role: string; data: ErpOrderData }[];
   found: boolean;
   customer: string | null;
   customerConto: number | null;
@@ -283,17 +446,17 @@ export async function getMachineErpData(input: MachineErpInput): Promise<ErpMach
     found.find((j) => j.customer && j.commeca !== GENERIC_COMMESSA) ?? found[0] ?? null;
 
   // Ordini di produzione selezionati (corpo, container, cavalletto, lame)
-  const orderInputs: { key: string | null | undefined }[] = [
-    { key: input.bodyOrder },
-    { key: input.containerOrder },
-    { key: input.standOrder },
-    { key: input.bladesOrder },
+  const orderInputs: { role: string; key: string | null | undefined }[] = [
+    { role: 'Corpo', key: input.bodyOrder },
+    { role: 'Container', key: input.containerOrder },
+    { role: 'Cavalletto', key: input.standOrder },
+    { role: 'Lame', key: input.bladesOrder },
   ];
-  const orders: ErpOrderData[] = [];
+  const orders: { role: string; data: ErpOrderData }[] = [];
   for (const oi of orderInputs) {
     if (!oi.key) continue;
     const d = await getOrderData(oi.key);
-    if (d) orders.push(d);
+    if (d) orders.push({ role: oi.role, data: d });
   }
 
   const starts: Date[] = [];
@@ -305,10 +468,10 @@ export async function getMachineErpData(input: MachineErpInput): Promise<ErpMach
   const containerHasOrder = !!input.containerOrder;
 
   for (const o of orders) {
-    if (o.start) starts.push(o.start);
-    if (o.end) ends.push(o.end);
-    totalHours += o.hours || 0;
-    if (o.hours > 0 || o.start) hasProduction = true;
+    if (o.data.start) starts.push(o.data.start);
+    if (o.data.end) ends.push(o.data.end);
+    totalHours += o.data.hours || 0;
+    if (o.data.hours > 0 || o.data.start) hasProduction = true;
   }
 
   for (const j of found) {
@@ -329,6 +492,8 @@ export async function getMachineErpData(input: MachineErpInput): Promise<ErpMach
     ends.length > 0 ? new Date(Math.max(...ends.map((d) => d.getTime()))) : null;
 
   return {
+    jobs,
+    orders,
     found: found.length > 0,
     customer: primary?.customer ?? null,
     customerConto: primary?.customerConto ?? null,

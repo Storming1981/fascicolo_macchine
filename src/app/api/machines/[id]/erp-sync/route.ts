@@ -44,10 +44,17 @@ async function loadMachineAndErp(id: string) {
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  if (!isErpConfigured())
-    return NextResponse.json({ error: "Gestionale non configurato" }, { status: 503 });
 
   const { id } = await ctx.params;
+
+  // Senza ERP diretto (VPS): serviamo lo snapshot sincronizzato dal sync-agent.
+  if (!isErpConfigured()) {
+    const m = await prisma.machine.findUnique({ where: { id }, select: { erpSnapshot: true } });
+    if (!m) return NextResponse.json({ error: "Macchina non trovata" }, { status: 404 });
+    if (m.erpSnapshot) return NextResponse.json(m.erpSnapshot);
+    return NextResponse.json({ error: "Gestionale non configurato", noSnapshot: true }, { status: 503 });
+  }
+
   try {
     const res = await loadMachineAndErp(id);
     if (!res) return NextResponse.json({ error: "Macchina non trovata" }, { status: 404 });

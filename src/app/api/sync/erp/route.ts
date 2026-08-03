@@ -34,7 +34,11 @@ export const maxDuration = 60;
  * Autenticazione: `Authorization: Bearer sk_sync_...` (SYNC_API_KEY).
  */
 
-type IncomingResult = AppliedErpData & { id?: unknown; customerConto?: number | null };
+type IncomingResult = AppliedErpData & {
+  id?: unknown;
+  customerConto?: number | null;
+  snapshot?: unknown;
+};
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
@@ -89,6 +93,14 @@ export async function POST(req: Request) {
       );
       if (changed.length > 0) updated++;
       if (r.productionStart || r.productionEnd) withProduction++;
+
+      // Snapshot ERP completo (jobs+ordini+articoli) per la card ricca sulla VPS
+      if (r.snapshot && typeof r.snapshot === "object") {
+        await prisma.machine.update({
+          where: { id },
+          data: { erpSnapshot: r.snapshot as object },
+        });
+      }
 
       // Collega il fascicolo al Customer del modulo Service (per erpConto), così
       // nel "Nuovo intervento" le macchine del cliente compaiono aggiornate.
