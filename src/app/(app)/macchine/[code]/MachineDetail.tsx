@@ -915,16 +915,18 @@ function ErpCard({
               </table>
               </div>
 
-              {/* Ordini di produzione: solo impianti nuovi (Body e Container = 999999999) */}
-              {isGenericCommessa(machine.jobBody) &&
-                isGenericCommessa(machine.jobContainer) && (
-                  <div style={{ marginTop: 14 }}>
-                    <div
-                      className="muted small"
-                      style={{ fontWeight: 600, marginBottom: 6 }}
-                    >
-                      Ordini di produzione (impianto nuovo, commessa 999999999)
-                    </div>
+              {/* Ordini di produzione: quando una parte è sulla commessa generica
+                  999999999 (impianto nuovo) va scelto l'ordine. Il Corpo mostra
+                  la tendina se jobBody è generico, il Container se jobContainer è
+                  generico; cavalletto/lame sono accessori sotto la commessa
+                  generica e restano sempre selezionabili se c'è una parte generica. */}
+              {(isGenericCommessa(machine.jobBody) ||
+                isGenericCommessa(machine.jobContainer)) && (
+                <div style={{ marginTop: 14 }}>
+                  <div className="muted small" style={{ fontWeight: 600, marginBottom: 6 }}>
+                    Ordini di produzione (impianto nuovo, commessa 999999999)
+                  </div>
+                  {isGenericCommessa(machine.jobBody) && (
                     <OrderPicker
                       machineId={machine.id}
                       role="Corpo"
@@ -935,6 +937,8 @@ function ErpCard({
                       onDone={onDone}
                       notify={notify}
                     />
+                  )}
+                  {isGenericCommessa(machine.jobContainer) && (
                     <OrderPicker
                       machineId={machine.id}
                       role="Container"
@@ -945,28 +949,29 @@ function ErpCard({
                       onDone={onDone}
                       notify={notify}
                     />
-                    <OrderPicker
-                      machineId={machine.id}
-                      role="Cavalletto"
-                      commessa={GENERIC_COMMESSA}
-                      field="erpStandOrder"
-                      currentKey={machine.erpStandOrder}
-                      canEdit={canEdit}
-                      onDone={onDone}
-                      notify={notify}
-                    />
-                    <OrderPicker
-                      machineId={machine.id}
-                      role="Lame"
-                      commessa={GENERIC_COMMESSA}
-                      field="erpBladesOrder"
-                      currentKey={machine.erpBladesOrder}
-                      canEdit={canEdit}
-                      onDone={onDone}
-                      notify={notify}
-                    />
-                  </div>
-                )}
+                  )}
+                  <OrderPicker
+                    machineId={machine.id}
+                    role="Cavalletto"
+                    commessa={GENERIC_COMMESSA}
+                    field="erpStandOrder"
+                    currentKey={machine.erpStandOrder}
+                    canEdit={canEdit}
+                    onDone={onDone}
+                    notify={notify}
+                  />
+                  <OrderPicker
+                    machineId={machine.id}
+                    role="Lame"
+                    commessa={GENERIC_COMMESSA}
+                    field="erpBladesOrder"
+                    currentKey={machine.erpBladesOrder}
+                    canEdit={canEdit}
+                    onDone={onDone}
+                    notify={notify}
+                  />
+                </div>
+              )}
 
               {/* Dettaglio articoli degli ordini selezionati */}
               {data.orders.filter((o) => o.data.found).map((o) => (
