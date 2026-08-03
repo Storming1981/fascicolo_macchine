@@ -1,12 +1,41 @@
 /**
  * Hook di avvio del server Next.js.
- * Avvia il polling automatico delle timbrature se configurato:
- *   PRESENCE_SYNC_INTERVAL_MIN=5   (minuti; 0 o assente = disattivato)
- * Richiede anche PRESENCE_FEED_URL/LOGIN_URL/USER/PASS.
+ * - Avanzamento automatico interventi (pianificato → in corso al giorno previsto).
+ * - Polling automatico delle timbrature se configurato:
+ *     PRESENCE_SYNC_INTERVAL_MIN=5   (minuti; 0 o assente = disattivato)
+ *   Richiede anche PRESENCE_FEED_URL/LOGIN_URL/USER/PASS.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  startAutoProgress();
+  startPresencePoller();
+}
+
+/**
+ * Ogni ora (+ subito dopo l'avvio) porta a IN_CORSO gli interventi pianificati
+ * il cui giorno è arrivato. Disattivabile con AUTO_PROGRESS_DISABLED=1.
+ */
+function startAutoProgress() {
+  if (process.env.AUTO_PROGRESS_DISABLED === "1") return;
+  const g = globalThis as unknown as { __autoProgress?: boolean };
+  if (g.__autoProgress) return;
+  g.__autoProgress = true;
+
+  const run = async () => {
+    try {
+      const { autoProgressInterventi } = await import("./lib/interventoAuto");
+      const r = await autoProgressInterventi();
+      if (r.started > 0) console.log(`[interventi/auto] ${r.started} → in corso (giorno pianificato)`);
+    } catch (e) {
+      console.error("[interventi/auto]", e instanceof Error ? e.message : e);
+    }
+  };
+  setTimeout(run, 25_000); // primo giro poco dopo l'avvio
+  setInterval(run, 60 * 60_000); // poi ogni ora
+}
+
+async function startPresencePoller() {
   const min = Number(process.env.PRESENCE_SYNC_INTERVAL_MIN || "0");
   if (!min || min <= 0) return;
 
