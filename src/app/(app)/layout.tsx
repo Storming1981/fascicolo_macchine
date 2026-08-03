@@ -11,6 +11,8 @@ import AppShell from "@/components/AppShell";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
   if (!user) redirect("/login");
+  // Gli utenti cliente non entrano nell'app operatori: solo portale.
+  if (user.role === "CLIENTE") redirect("/portale");
 
   // Guscio: gli operativi (e i responsabili su tablet/telefono) vanno all'app Campo.
   const { access, target } = await resolveShell(user);

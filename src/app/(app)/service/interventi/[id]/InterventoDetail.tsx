@@ -79,6 +79,7 @@ type Data = {
   reportedBy: string | null;
   deletedAt: string | null;
   deletedByName: string | null;
+  chatId: string | null;
   customerId: string | null;
   customerName: string | null;
   customerEmail: string | null;
@@ -341,13 +342,18 @@ export default function InterventoDetail({
             {data.channel && <span className="muted small">via {data.channel}</span>}
           </div>
         </div>
-        {canEdit && !data.deletedAt && (
-          <div className="detail-actions">
+        <div className="detail-actions">
+          {data.chatId && !campo && (
+            <Link className="btn-ghost" href={`/service/chat?conv=${data.chatId}`}>
+              <Icon name="sign" size={14} /> Chat intervento
+            </Link>
+          )}
+          {canEdit && !data.deletedAt && (
             <button className="btn-danger" onClick={() => trashIntervento(false)} disabled={trashing}>
               <Icon name="trash" size={14} /> {trashing ? "…" : "Elimina"}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {data.deletedAt && (

@@ -96,6 +96,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   COLLAUDATORE: "Collaudatore",
   TECNICO_CAMPO: "Tecnico campo",
   LOGISTICA: "Logistica",
+  CLIENTE: "Cliente (portale)",
 };
 
 /**

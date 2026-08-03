@@ -54,9 +54,11 @@ export async function POST(req: Request) {
     // redirect): garantisce che il Set-Cookie accompagni la navigazione anche
     // su iOS Safari.
     const token = await signSession({ id: user.id, name: user.name, email: user.email, role: user.role });
+    // I clienti (ruolo CLIENTE) vanno al portale, non alla dashboard operatori.
+    const home = user.role === "CLIENTE" ? "/portale" : "/dashboard";
     const res = isForm
-      ? NextResponse.redirect(absolute(req, "/dashboard"), { status: 303 })
-      : NextResponse.json({ ok: true });
+      ? NextResponse.redirect(absolute(req, home), { status: 303 })
+      : NextResponse.json({ ok: true, home });
     res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
     return res;
   } catch {

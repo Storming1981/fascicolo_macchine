@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon, { Flag } from "@/components/Icon";
@@ -270,6 +270,9 @@ export default function CustomerDetail({
 
         {/* Cantieri */}
         <SitesCard customerId={data.id} sites={data.sites} canManage={canManage} />
+
+        {/* Accesso portale cliente */}
+        <PortalAccessCard customerId={data.id} canManage={canManage} />
       </div>
 
       <div className="grid-two">
@@ -332,6 +335,97 @@ export default function CustomerDetail({
         </section>
       </div>
     </div>
+  );
+}
+
+/* ── Accesso portale cliente ─────────────────────────────── */
+function PortalAccessCard({ customerId, canManage }: { customerId: string; canManage: boolean }) {
+  const [account, setAccount] = useState<{ email: string; active: boolean } | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [creds, setCreds] = useState<{ email: string; password: string } | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/clienti/${customerId}/portal-access`)
+      .then((r) => (r.ok ? r.json() : { account: null }))
+      .then((d) => setAccount(d.account ?? null))
+      .catch(() => setAccount(null));
+  }, [customerId]);
+
+  async function generate() {
+    if (account && !confirm("Rigenerare la password? Quella attuale smetterà di funzionare.")) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/clienti/${customerId}/portal-access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const d = await r.json().catch(() => null);
+      if (r.ok) {
+        setCreds({ email: d.email, password: d.password });
+        setAccount({ email: d.email, active: true });
+      } else alert(d?.error ?? "Errore");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke() {
+    if (!confirm("Revocare l'accesso al portale per questo cliente?")) return;
+    setBusy(true);
+    try {
+      await fetch(`/api/clienti/${customerId}/portal-access`, { method: "DELETE" });
+      setAccount(null);
+      setCreds(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card">
+      <div className="card-header">
+        <h3>Accesso portale cliente</h3>
+      </div>
+      <p className="muted small" style={{ marginBottom: 10 }}>
+        Il cliente accede al <strong>portale</strong> con queste credenziali e vede solo i messaggi
+        <strong> pubblici</strong> delle chat dei suoi interventi.
+      </p>
+
+      {account === undefined ? (
+        <div className="muted small">Caricamento…</div>
+      ) : account ? (
+        <div className="field" style={{ marginBottom: 10 }}>
+          <span className="field-label">Accesso attivo</span>
+          <div className="readout mono">{account.email}</div>
+        </div>
+      ) : (
+        <div className="muted small" style={{ marginBottom: 10 }}>Nessun accesso ancora creato.</div>
+      )}
+
+      {creds && (
+        <div className="form-ok" style={{ marginBottom: 10 }}>
+          <div>
+            Credenziali (mostrate <strong>una sola volta</strong>, copiale ora):
+          </div>
+          <div className="mono" style={{ marginTop: 6 }}>Email: {creds.email}</div>
+          <div className="mono">Password: {creds.password}</div>
+        </div>
+      )}
+
+      {canManage && (
+        <div className="row-actions">
+          <button className="btn-primary-sm" onClick={generate} disabled={busy}>
+            <Icon name="sign" size={13} /> {account ? "Rigenera password" : "Crea accesso"}
+          </button>
+          {account && (
+            <button className="btn-ghost-sm danger" onClick={revoke} disabled={busy}>
+              <Icon name="trash" size={13} /> Revoca
+            </button>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

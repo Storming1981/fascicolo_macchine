@@ -75,5 +75,18 @@ export async function POST(req: Request) {
       scheduledEnd: b.scheduledEnd ? new Date(b.scheduledEnd) : null,
     },
   });
+
+  // Chat dedicata dell'intervento (per la gestione della conversazione): una sola
+  // per intervento. Eredita cliente/macchina; il cliente vedrà solo i messaggi pubblici.
+  await prisma.conversation.create({
+    data: {
+      title: `Intervento ${code} — ${intervento.title}`,
+      channel: "native",
+      interventoId: intervento.id,
+      customerId: intervento.customerId,
+      machineId: intervento.machineId,
+    },
+  });
+
   return NextResponse.json({ ok: true, id: intervento.id, code });
 }

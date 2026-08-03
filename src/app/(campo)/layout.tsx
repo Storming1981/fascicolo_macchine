@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function CampoLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
   if (!user) redirect("/login");
+  if (user.role === "CLIENTE") redirect("/portale");
 
   const { access } = await resolveShell(user);
   // Nessuna app campo disponibile → torna al desktop.

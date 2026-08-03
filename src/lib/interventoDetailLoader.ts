@@ -30,6 +30,7 @@ export async function loadInterventoDetail(id: string) {
       checklists: true,
       documents: { orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true } } } },
       photos: { orderBy: { createdAt: "desc" } },
+      conversations: { orderBy: { createdAt: "asc" }, take: 1, select: { id: true } },
     },
   });
   if (!intervento) return null;
@@ -74,6 +75,7 @@ export async function loadInterventoDetail(id: string) {
     reportedBy: intervento.reportedBy,
     deletedAt: intervento.deletedAt?.toISOString() ?? null,
     deletedByName: intervento.deletedByName,
+    chatId: intervento.conversations[0]?.id ?? null,
     customerId: intervento.customerId,
     customerName: intervento.customer?.name ?? null,
     customerEmail: intervento.customer?.email ?? null,

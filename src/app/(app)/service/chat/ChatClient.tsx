@@ -22,8 +22,10 @@ export type LinkOpts = {
 type Msg = {
   id: string;
   direction: "IN" | "OUT";
+  visibility?: "INTERNAL" | "PUBLIC";
   authorName: string;
   body: string | null;
+  photoPath?: string | null;
   sentAt: string;
   source: string;
 };
@@ -80,6 +82,8 @@ export default function ChatClient({
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [toClient, setToClient] = useState(false); // messaggio visibile al cliente
+  const [photo, setPhoto] = useState<File | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -130,16 +134,17 @@ export default function ChatClient({
   }, [detail]);
 
   async function send() {
-    if (!draft.trim() || !selId) return;
+    if ((!draft.trim() && !photo) || !selId) return;
     setSending(true);
     try {
-      const res = await fetch(`/api/chat/${selId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: draft }),
-      });
+      const fd = new FormData();
+      fd.set("body", draft);
+      fd.set("visibility", toClient ? "PUBLIC" : "INTERNAL");
+      if (photo) fd.set("photo", photo);
+      const res = await fetch(`/api/chat/${selId}/messages`, { method: "POST", body: fd });
       if (res.ok) {
         setDraft("");
+        setPhoto(null);
         await loadDetail(selId);
       }
     } finally {
@@ -234,9 +239,28 @@ export default function ChatClient({
 
               <div className="thread-messages" ref={msgRef}>
                 {detail.messages.map((m) => (
-                  <div key={m.id} className={"msg " + (m.direction === "OUT" ? "out" : "in")}>
+                  <div
+                    key={m.id}
+                    className={
+                      "msg " + (m.direction === "OUT" ? "out" : "in") +
+                      (m.visibility === "PUBLIC" ? "" : " internal")
+                    }
+                  >
                     {m.direction === "IN" && <div className="msg-author">{m.authorName}</div>}
+                    <div className="msg-vis">
+                      {m.visibility === "PUBLIC" ? (
+                        <span className="vis-badge pub">Cliente</span>
+                      ) : (
+                        <span className="vis-badge int">Interno</span>
+                      )}
+                    </div>
                     {m.body && <div className="msg-body">{m.body}</div>}
+                    {m.photoPath && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <a href={m.photoPath} target="_blank" rel="noreferrer">
+                        <img className="msg-photo" src={m.photoPath} alt="allegato" />
+                      </a>
+                    )}
                     <div className="msg-time mono">
                       {new Date(m.sentAt).toLocaleString("it-IT", {
                         day: "2-digit",
@@ -251,22 +275,52 @@ export default function ChatClient({
               </div>
 
               {isNative && canSend ? (
-                <div className="thread-composer">
-                  <textarea
-                    rows={1}
-                    placeholder="Scrivi un messaggio…"
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        send();
-                      }
-                    }}
-                  />
-                  <button className="btn-primary" onClick={send} disabled={sending || !draft.trim()}>
-                    <Icon name="arrow-right" size={15} /> Invia
-                  </button>
+                <div className="thread-composer-wrap">
+                  <div className="composer-toolbar">
+                    <label className={"vis-toggle" + (toClient ? " on" : "")}>
+                      <input
+                        type="checkbox"
+                        checked={toClient}
+                        onChange={(e) => setToClient(e.target.checked)}
+                      />
+                      {toClient ? "Visibile al cliente" : "Interno ZATO"}
+                    </label>
+                    <label className="btn-ghost-sm" style={{ cursor: "pointer" }}>
+                      <Icon name="upload" size={13} /> {photo ? photo.name.slice(0, 18) : "Foto"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                    {photo && (
+                      <button className="btn-ghost-sm" onClick={() => setPhoto(null)}>
+                        <Icon name="x" size={13} /> togli
+                      </button>
+                    )}
+                  </div>
+                  <div className="thread-composer">
+                    <textarea
+                      rows={1}
+                      placeholder={toClient ? "Messaggio al cliente…" : "Nota interna ZATO…"}
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          send();
+                        }
+                      }}
+                    />
+                    <button
+                      className="btn-primary"
+                      onClick={send}
+                      disabled={sending || (!draft.trim() && !photo)}
+                    >
+                      <Icon name="arrow-right" size={15} /> Invia
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="thread-readonly muted small">

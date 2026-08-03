@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
@@ -57,6 +57,8 @@ export default function KnowledgeList({
         )}
       </div>
 
+      <RecurringIssuesPanel canManage={canManage} />
+
       <div className="kb-toolbar">
         <div className="search" style={{ maxWidth: 340 }}>
           <Icon name="search" size={15} color="var(--muted)" />
@@ -99,6 +101,120 @@ export default function KnowledgeList({
 
       {showNew && <NewArticleModal onClose={() => setShowNew(false)} />}
     </div>
+  );
+}
+
+/* ── Problematiche ricorrenti (analisi AI del corpus) ─────── */
+type RecurringIssue = {
+  theme: string;
+  frequency: number;
+  affectedModels?: string[];
+  plantTypes?: string[];
+  probableCauses?: string[];
+  recommendations?: string[];
+};
+type Insight = {
+  createdAt: string;
+  interventiCount: number;
+  generatedByName: string | null;
+  data: { summary: string; issues: RecurringIssue[] };
+};
+
+function RecurringIssuesPanel({ canManage }: { canManage: boolean }) {
+  const [insight, setInsight] = useState<Insight | null | undefined>(undefined);
+  const [aiConfigured, setAiConfigured] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [open, setOpen] = useState(true);
+
+  function load() {
+    fetch("/api/knowledge/analyze")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) {
+          setInsight(d.insight ?? null);
+          setAiConfigured(!!d.aiConfigured);
+        } else setInsight(null);
+      })
+      .catch(() => setInsight(null));
+  }
+  useEffect(load, []);
+
+  async function generate() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch("/api/knowledge/analyze", { method: "POST" });
+      const d = await r.json().catch(() => null);
+      if (r.ok) setInsight(d.insight);
+      else setErr(d?.error ?? "Errore analisi");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (insight === undefined) return null;
+
+  return (
+    <section className="card" style={{ marginBottom: 18 }}>
+      <div className="card-header">
+        <h3>
+          <button className="kb-collapse" onClick={() => setOpen((o) => !o)}>
+            <Icon name={open ? "chev-down" : "chev-right"} size={14} /> Problematiche ricorrenti (AI)
+          </button>
+        </h3>
+        {canManage && (
+          <button className="btn-ghost-sm" onClick={generate} disabled={busy || !aiConfigured}>
+            <Icon name="clock" size={13} /> {busy ? "Analisi…" : insight ? "Rigenera" : "Genera analisi"}
+          </button>
+        )}
+      </div>
+
+      {!aiConfigured && (
+        <p className="muted small">AI non configurata (ANTHROPIC_API_KEY): analisi non disponibile.</p>
+      )}
+      {err && <p className="form-error">{err}</p>}
+
+      {open && (
+        insight ? (
+          <>
+            <p className="muted small" style={{ marginBottom: 10 }}>
+              {insight.data.summary} <span className="mono">· {insight.interventiCount} interventi ·{" "}
+              {new Date(insight.createdAt).toLocaleDateString("it-IT")}</span>
+            </p>
+            <div className="ri-grid">
+              {insight.data.issues.map((it, i) => (
+                <div key={i} className="ri-card">
+                  <div className="ri-head">
+                    <span className="ri-theme">{it.theme}</span>
+                    <span className="ri-freq mono">×{it.frequency}</span>
+                  </div>
+                  {(it.plantTypes?.length || it.affectedModels?.length) ? (
+                    <div className="ri-tags">
+                      {(it.plantTypes ?? []).map((p) => <span key={p} className="kb-plant">{p}</span>)}
+                      {(it.affectedModels ?? []).map((m) => <span key={m} className="ai-tag">{m}</span>)}
+                    </div>
+                  ) : null}
+                  {it.probableCauses?.length ? (
+                    <div className="ri-sec"><b>Cause probabili:</b> {it.probableCauses.join("; ")}</div>
+                  ) : null}
+                  {it.recommendations?.length ? (
+                    <div className="ri-sec"><b>Raccomandazioni:</b> {it.recommendations.join("; ")}</div>
+                  ) : null}
+                </div>
+              ))}
+              {insight.data.issues.length === 0 && (
+                <div className="muted small">Nessuna problematica ricorrente individuata.</div>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="muted small">
+            Nessuna analisi ancora generata. {canManage ? "Premi “Genera analisi”." : ""}
+          </p>
+        )
+      )}
+    </section>
   );
 }
 

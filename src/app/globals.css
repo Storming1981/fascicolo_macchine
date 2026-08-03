@@ -444,6 +444,53 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .cmp-edit-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; overflow: hidden; }
 .cmp-edit-body { border-top: 1px solid var(--border); padding: 16px; background: var(--bg-3); }
 
+/* ── Knowledge: problematiche ricorrenti (AI) ────────────── */
+.kb-collapse { background: none; border: none; cursor: pointer; font: inherit; font-size: 14px; font-weight: 650; color: var(--navy); display: inline-flex; align-items: center; gap: 6px; padding: 0; }
+.ri-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.ri-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--bg-3); font-size: 13px; }
+.ri-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.ri-theme { font-weight: 650; color: var(--navy); }
+.ri-freq { background: var(--accent-soft); color: var(--accent); padding: 1px 8px; border-radius: 99px; font-size: 12px; }
+.ri-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.ri-sec { margin-top: 5px; line-height: 1.4; }
+.ri-sec b { color: var(--text-2); }
+
+/* ── Portale cliente ─────────────────────────────────────── */
+.portal { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg); }
+.portal-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; padding-top: max(12px, env(safe-area-inset-top)); background: #fff; border-bottom: 1px solid var(--border); }
+.portal-logo { height: 34px; width: auto; }
+.portal-who { display: flex; align-items: center; gap: 14px; }
+.portal-cust { font-weight: 600; color: var(--navy); font-size: 14px; }
+.portal-logout { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; cursor: pointer; font: inherit; font-size: 12.5px; color: var(--muted); }
+.portal-logout:hover { color: var(--accent); border-color: var(--accent-soft); }
+.portal-main { flex: 1; min-height: 0; padding: 16px; }
+.portal-grid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: 100%; max-width: 1200px; margin: 0 auto; }
+.portal-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.portal-list h2 { font-size: 15px; color: var(--navy); margin-bottom: 4px; }
+.portal-item { text-align: left; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; cursor: pointer; box-shadow: var(--shadow); }
+.portal-item.active { border-color: var(--accent); }
+.portal-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.portal-item-title { font-weight: 600; font-size: 14px; color: var(--navy); }
+.portal-item-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.portal-chat { background: #fff; border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow); min-height: 0; }
+.portal-chat-head { padding: 13px 16px; border-bottom: 1px solid var(--border); background: var(--bg-3); font-weight: 600; color: var(--navy); }
+.portal-messages { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.pmsg { max-width: 78%; padding: 8px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.45; box-shadow: var(--shadow); }
+.pmsg.me { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.pmsg.zato { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.pmsg-author { font-size: 11px; font-weight: 700; opacity: 0.8; margin-bottom: 3px; }
+.pmsg-body { white-space: pre-wrap; word-break: break-word; }
+.pmsg-photo { max-width: 220px; border-radius: 8px; margin-top: 6px; display: block; }
+.pmsg-time { font-size: 10px; opacity: 0.7; margin-top: 4px; text-align: right; }
+.portal-composer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); align-items: flex-end; }
+.portal-composer textarea { flex: 1; resize: none; max-height: 120px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 14px; outline: none; }
+.portal-empty { display: grid; place-items: center; height: 100%; color: var(--muted); padding: 40px; text-align: center; }
+.portal-empty.small { display: block; height: auto; padding: 16px 2px; font-size: 13px; }
+@media (max-width: 760px) {
+  .portal-grid { grid-template-columns: 1fr; height: auto; }
+  .portal-chat { min-height: 60vh; }
+}
+
 /* ── Toast ───────────────────────────────────────────────── */
 .toast-wrap { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); right: 20px; left: 20px; z-index: 200; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
 .toast { background: var(--navy); color: #fff; padding: 12px 16px; border-radius: 10px; font-size: 13px; box-shadow: var(--shadow-lg); animation: pop-in 0.2s ease; max-width: min(360px, 100%); pointer-events: auto; }
@@ -863,10 +910,21 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .msg { max-width: 74%; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45; box-shadow: var(--shadow); }
 .msg.in { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
 .msg.out { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+/* messaggio interno ZATO (non visibile al cliente): sfondo ambra tenue */
+.msg.out.internal { background: #fff7ed; color: var(--text); border: 1px solid #f5dca7; }
 .msg-author { font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 3px; }
+.msg-vis { margin-bottom: 3px; }
+.vis-badge { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 1px 6px; border-radius: 99px; }
+.vis-badge.int { background: #fdf0d5; color: #b45309; }
+.vis-badge.pub { background: #dcfce7; color: #15803d; }
 .msg-body { white-space: pre-wrap; word-break: break-word; }
+.msg-photo { max-width: 220px; max-height: 220px; border-radius: 8px; margin-top: 6px; display: block; }
 .msg-time { font-size: 10px; opacity: 0.7; margin-top: 4px; text-align: right; }
-.thread-composer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); align-items: flex-end; }
+.thread-composer-wrap { border-top: 1px solid var(--border); }
+.composer-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px 0; flex-wrap: wrap; }
+.vis-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #b45309; cursor: pointer; }
+.vis-toggle.on { color: #15803d; }
+.thread-composer { display: flex; gap: 8px; padding: 12px; align-items: flex-end; }
 .thread-composer textarea { flex: 1; resize: none; max-height: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 13px; outline: none; }
 .thread-composer textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(29, 111, 184, 0.16); }
 .thread-readonly { padding: 12px; border-top: 1px solid var(--border); text-align: center; }

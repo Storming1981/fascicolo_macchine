@@ -17,6 +17,7 @@ enum Role {
   COLLAUDATORE
   TECNICO_CAMPO
   LOGISTICA
+  CLIENTE // utente esterno: accesso al portale del proprio cliente (solo chat pubbliche)
 }
 
 enum MachineStatus {
@@ -62,6 +63,13 @@ enum MessageDirection {
   OUT
 }
 
+/// Visibilità di un messaggio della chat intervento:
+/// INTERNAL = solo operatori ZATO; PUBLIC = visibile anche al cliente nel portale.
+enum MessageVisibility {
+  INTERNAL
+  PUBLIC
+}
+
 model User {
   id             String   @id @default(cuid())
   name           String
@@ -79,8 +87,10 @@ model User {
   reparto        String?  // reparto (timbratore): PRO, APV, UTE…
   siteManager    Boolean  @default(false) // responsabile di cantiere
   appAccess      String?  // override guscio: "desktop" | "field" (null = default ruolo)
+  customerId     String?  // per gli utenti CLIENTE: azienda cliente di appartenenza
   createdAt      DateTime @default(now())
 
+  customer       Customer?    @relation("CustomerUsers", fields: [customerId], references: [id], onDelete: Cascade)
   diaryEvents    DiaryEvent[]
   signatures     Signature[]
   photos         Photo[]
@@ -370,6 +380,7 @@ model Customer {
   interventi    Intervento[]
   machines      Machine[]
   conversations Conversation[]
+  users         User[]         @relation("CustomerUsers") // accessi portale cliente
 }
 
 /// Cantiere / stabilimento di un cliente (con geolocalizzazione per la mappa).
@@ -583,15 +594,18 @@ model Conversation {
 }
 
 model Message {
-  id             String           @id @default(cuid())
+  id             String            @id @default(cuid())
   conversationId String
-  direction      MessageDirection @default(IN)
+  direction      MessageDirection  @default(IN)
+  // INTERNAL = solo ZATO; PUBLIC = visibile al cliente. Default: interno (sicuro).
+  visibility     MessageVisibility @default(INTERNAL)
+  authorId       String? // operatore ZATO o utente cliente che ha scritto
   authorName     String
   body           String?
   photoPath      String?
-  source         String           @default("native") // native | import
-  sentAt         DateTime         @default(now())
-  createdAt      DateTime         @default(now())
+  source         String            @default("native") // native | import
+  sentAt         DateTime          @default(now())
+  createdAt      DateTime          @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -639,4 +653,20 @@ model KnowledgeArticle {
   updatedAt    DateTime @updatedAt
 
   @@index([category])
+}
+
+/// Analisi AI generata sul corpus aziendale (chat interventi + rapportini), es.
+/// problematiche ricorrenti. Separata dagli articoli manuali (KnowledgeArticle).
+model KnowledgeInsight {
+  id              String   @id @default(cuid())
+  scope           String   @default("recurring-issues")
+  model           String // modello AI usato
+  data            Json // output strutturato (temi, frequenze, raccomandazioni…)
+  filters         Json? // finestra temporale / tipologia impianto usate
+  interventiCount Int      @default(0) // quanti interventi nel corpus analizzato
+  generatedById   String?
+  generatedByName String?
+  createdAt       DateTime @default(now())
+
+  @@index([scope])
 }
