@@ -1,9 +1,30 @@
+import type { Metadata, Viewport } from "next";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import "../globals.css";
 
 export const dynamic = "force-dynamic";
+
+// PWA dedicata del portale cliente: installabile "come app" (nome/icona ZATO
+// Service, avvio diretto su /portale). Sovrascrive il manifest dell'app operatori.
+export const metadata: Metadata = {
+  title: "ZATO Service — Portale",
+  applicationName: "ZATO Service",
+  manifest: "/portale.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "ZATO Service" },
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0f3b66",
+};
 
 /**
  * Guscio del PORTALE CLIENTE: minimale, separato dall'app operatori. Accessibile

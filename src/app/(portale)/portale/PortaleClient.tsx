@@ -74,6 +74,8 @@ export default function PortaleClient() {
   if (loading) return <div className="portal-empty">Caricamento…</div>;
 
   return (
+    <>
+      <InstallHint />
     <div className="portal-grid">
       <aside className="portal-list">
         <h2>I tuoi interventi</h2>
@@ -155,6 +157,43 @@ export default function PortaleClient() {
           </>
         )}
       </section>
+    </div>
+    </>
+  );
+}
+
+/** Suggerimento discreto per installare il portale come app (persistente). */
+function InstallHint() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    try {
+      const standalone =
+        window.matchMedia?.("(display-mode: standalone)")?.matches ||
+        (navigator as unknown as { standalone?: boolean }).standalone;
+      if (!standalone && !localStorage.getItem("portal-install-dismissed")) setShow(true);
+    } catch {
+      /* no-op */
+    }
+  }, []);
+  if (!show) return null;
+  return (
+    <div className="portal-install">
+      <span>
+        💡 Aggiungi <strong>ZATO Service</strong> alla schermata Home per usarlo come app.
+      </span>
+      <button
+        onClick={() => {
+          try {
+            localStorage.setItem("portal-install-dismissed", "1");
+          } catch {
+            /* no-op */
+          }
+          setShow(false);
+        }}
+        aria-label="Chiudi"
+      >
+        ✕
+      </button>
     </div>
   );
 }

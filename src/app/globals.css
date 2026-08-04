@@ -464,6 +464,8 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .portal-logout { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; cursor: pointer; font: inherit; font-size: 12.5px; color: var(--muted); }
 .portal-logout:hover { color: var(--accent); border-color: var(--accent-soft); }
 .portal-main { flex: 1; min-height: 0; padding: 16px; }
+.portal-install { max-width: 1200px; margin: 0 auto 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+.portal-install button { background: none; border: none; color: inherit; cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 4px; }
 .portal-grid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: 100%; max-width: 1200px; margin: 0 auto; }
 .portal-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
 .portal-list h2 { font-size: 15px; color: var(--navy); margin-bottom: 4px; }
