@@ -20,11 +20,13 @@ export async function POST(req: Request) {
 
   let email = "";
   let password = "";
+  let portale = false;
   try {
     if (isForm) {
       const fd = await req.formData();
       email = String(fd.get("email") || "");
       password = String(fd.get("password") || "");
+      portale = String(fd.get("portale") || "") === "1";
     } else {
       const b = await req.json();
       email = String(b?.email || "");
@@ -36,9 +38,11 @@ export async function POST(req: Request) {
       : NextResponse.json({ error: "Richiesta non valida" }, { status: 400 });
   }
 
+  // preserva il contesto portale nel redirect d'errore (branding cliente)
+  const loginErr = portale ? "/login?error=1&portale=1" : "/login?error=1";
   const fail = (msg: string, status: number) =>
     isForm
-      ? NextResponse.redirect(absolute(req, "/login?error=1"), { status: 303 })
+      ? NextResponse.redirect(absolute(req, loginErr), { status: 303 })
       : NextResponse.json({ error: msg }, { status });
 
   if (!email || !password) return fail("Email e password obbligatori", 400);

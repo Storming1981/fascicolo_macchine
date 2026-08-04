@@ -5,11 +5,13 @@ import LoginForm from "./LoginForm";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; portale?: string }>;
 }) {
   const u = await currentUser();
-  if (u) redirect("/dashboard");
-  const { error } = await searchParams;
+  if (u) redirect(u.role === "CLIENTE" ? "/portale" : "/dashboard");
+  const { error, portale } = await searchParams;
+  const isPortal = portale != null;
+
   return (
     <div className="login-shell">
       <div className="login-side">
@@ -18,12 +20,24 @@ export default async function LoginPage({
           <img src="/zato-logo.png" alt="ZATO" />
         </div>
         <div>
-          <h2>Fascicolo Tecnico Macchina</h2>
-          <p>
-            Il diario digitale di ogni macchina ZATO: produzione, componenti e matricole,
-            montaggio e collaudo con firma digitale, interventi e manutenzioni — dalla
-            genesi alla rottamazione.
-          </p>
+          {isPortal ? (
+            <>
+              <h2>Portale assistenza ZATO</h2>
+              <p>
+                Segui i tuoi interventi e comunica direttamente con il Service ZATO: stato
+                dei lavori, aggiornamenti e conversazione, sempre a portata di mano.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2>Fascicolo Tecnico Macchina</h2>
+              <p>
+                Il diario digitale di ogni macchina ZATO: produzione, componenti e matricole,
+                montaggio e collaudo con firma digitale, interventi e manutenzioni — dalla
+                genesi alla rottamazione.
+              </p>
+            </>
+          )}
         </div>
         <p className="small" style={{ color: "#7d96b2" }}>
           © {new Date().getFullYear()} ZATO Recycling Solutions
@@ -31,9 +45,13 @@ export default async function LoginPage({
       </div>
       <div className="login-main">
         <div className="login-card">
-          <h1>Accedi</h1>
-          <p className="sub">Inserisci le credenziali per accedere al fascicolo tecnico.</p>
-          <LoginForm error={!!error} />
+          <h1>{isPortal ? "Portale clienti" : "Accedi"}</h1>
+          <p className="sub">
+            {isPortal
+              ? "Accedi con le credenziali fornite da ZATO per il portale assistenza."
+              : "Inserisci le credenziali per accedere al fascicolo tecnico."}
+          </p>
+          <LoginForm error={!!error} portale={isPortal} />
         </div>
       </div>
     </div>

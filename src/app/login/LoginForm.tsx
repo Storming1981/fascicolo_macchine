@@ -5,10 +5,11 @@ import Icon from "@/components/Icon";
  * credenziali e segue il redirect del server applicando il cookie di sessione
  * in modo nativo. È la modalità più affidabile su iOS Safari.
  */
-export default function LoginForm({ error }: { error?: boolean }) {
+export default function LoginForm({ error, portale }: { error?: boolean; portale?: boolean }) {
   return (
     <form className="login-form" method="POST" action="/api/auth/login">
       {error && <div className="form-error">Credenziali non valide</div>}
+      {portale && <input type="hidden" name="portale" value="1" />}
       <div className="form-row">
         <label>Email</label>
         <input
@@ -16,7 +17,7 @@ export default function LoginForm({ error }: { error?: boolean }) {
           type="email"
           name="email"
           autoComplete="username"
-          placeholder="nome@zato.it"
+          placeholder={portale ? "email fornita da ZATO" : "nome@zato.it"}
           required
         />
       </div>

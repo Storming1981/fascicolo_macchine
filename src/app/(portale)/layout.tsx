@@ -32,7 +32,7 @@ export const viewport: Viewport = {
  */
 export default async function PortaleLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?portale=1"); // login con branding cliente
   if (user.role !== "CLIENTE") redirect("/dashboard");
 
   const full = await prisma.user.findUnique({
