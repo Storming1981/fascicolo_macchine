@@ -144,6 +144,7 @@ export async function loadInterventoDetail(id: string) {
         kind: a.kind,
       })),
       pdfPath: r.pdfPath,
+      authorId: r.authorId,
       techName: r.techName,
       techSignature: r.techSignature,
       clientName: r.clientName,

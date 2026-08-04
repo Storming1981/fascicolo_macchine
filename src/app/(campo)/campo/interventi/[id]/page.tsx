@@ -39,6 +39,8 @@ export default async function CampoInterventoPage({
       machines={data.machines}
       commesse={data.commesse}
       currentUserName={user.name}
+      currentUserId={user.id}
+      isAdmin={user.role === "ADMIN"}
       canEdit={canEdit}
       canSign={canSign}
       canChecklist={false}

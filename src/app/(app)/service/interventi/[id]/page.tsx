@@ -41,6 +41,8 @@ export default async function InterventoDetailPage({
       machines={data.machines}
       commesse={data.commesse}
       currentUserName={user.name}
+      currentUserId={user.id}
+      isAdmin={user.role === "ADMIN"}
       canEdit={canEdit}
       canSign={canSign}
       canChecklist={canChecklist}

@@ -472,6 +472,9 @@ model Rapportino {
   clientSignedAt  DateTime?
   hash            String?
   closed          Boolean   @default(false)
+  // Autore del rapportino: solo lui (o un ADMIN) può modificarlo, a tutela di
+  // chi lo compila. Null sui rapportini storici (grazia: modificabili come prima).
+  authorId        String?
   sentAt          DateTime? // ultimo invio email del PDF
   sentTo          String?   // destinatari dell'ultimo invio
   diaryEventId    String?   // evento generato nel diario del fascicolo

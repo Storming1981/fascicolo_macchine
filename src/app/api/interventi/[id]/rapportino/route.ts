@@ -228,6 +228,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (rapportinoId) {
     existing = await prisma.rapportino.findFirst({ where: { id: rapportinoId, interventoId: id } });
     if (!existing) return NextResponse.json({ error: "Rapportino non trovato" }, { status: 404 });
+    // Solo l'autore del rapportino (o un ADMIN) può modificarlo. I rapportini
+    // storici senza autore restano modificabili come prima (grazia).
+    if (existing.authorId && existing.authorId !== user.id && user.role !== "ADMIN")
+      return NextResponse.json(
+        { error: "Solo chi ha compilato il rapportino (o un amministratore) può modificarlo." },
+        { status: 403 },
+      );
   }
   // modifica di un rapportino GIÀ FIRMATO: consentita, ma tracciata in un log
   const wasClosed = existing?.closed === true;
@@ -288,7 +295,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   const rapportino = existing
     ? await prisma.rapportino.update({ where: { id: existing.id }, data: fields })
-    : await prisma.rapportino.create({ data: { interventoId: id, ...fields } });
+    : await prisma.rapportino.create({ data: { interventoId: id, ...fields, authorId: user.id } });
 
   // Modifica di un rapportino chiuso: resta chiuso, aggiorna l'evento del diario collegato.
   if (wasClosed && existing) {
@@ -420,6 +427,11 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   const r = await prisma.rapportino.findFirst({ where: { id: rapportinoId, interventoId: id } });
   if (!r) return NextResponse.json({ error: "Rapportino non trovato" }, { status: 404 });
   if (r.closed) return NextResponse.json({ error: "Un rapportino chiuso non può essere eliminato" }, { status: 400 });
+  if (r.authorId && r.authorId !== user.id && user.role !== "ADMIN")
+    return NextResponse.json(
+      { error: "Solo chi ha compilato il rapportino (o un amministratore) può eliminarlo." },
+      { status: 403 },
+    );
   await prisma.rapportino.delete({ where: { id: rapportinoId } });
   return NextResponse.json({ ok: true });
 }

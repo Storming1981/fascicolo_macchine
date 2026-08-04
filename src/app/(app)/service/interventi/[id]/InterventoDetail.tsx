@@ -55,6 +55,7 @@ type Rapportino = {
   timbrature: StoredTimbratura[];
   attachments: Attachment[];
   pdfPath: string | null;
+  authorId: string | null;
   techName: string | null;
   techSignature: string | null;
   clientName: string | null;
@@ -132,6 +133,8 @@ export default function InterventoDetail({
   machines,
   commesse,
   currentUserName,
+  currentUserId,
+  isAdmin = false,
   canEdit,
   canSign,
   canChecklist = false,
@@ -146,6 +149,8 @@ export default function InterventoDetail({
   machines: MachineOpt[];
   commesse: Commessa[];
   currentUserName: string;
+  currentUserId: string;
+  isAdmin?: boolean;
   canEdit: boolean;
   canSign: boolean;
   canChecklist?: boolean;
@@ -709,6 +714,8 @@ export default function InterventoDetail({
                 googleConfigured={googleConfigured}
                 googleSender={googleSender}
                 currentUserName={currentUserName}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
                 canSign={canSign}
                 defaultOpen={!r.closed}
                 onDone={() => router.refresh()}
@@ -825,6 +832,8 @@ export default function InterventoDetail({
                 googleConfigured={googleConfigured}
                 googleSender={googleSender}
                 currentUserName={currentUserName}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
                 canSign={canSign}
                 defaultOpen
                 hideHeader
@@ -877,6 +886,8 @@ function RapportinoDay({
   googleConfigured,
   googleSender,
   currentUserName,
+  currentUserId,
+  isAdmin = false,
   canSign,
   defaultOpen,
   hideHeader = false,
@@ -897,6 +908,8 @@ function RapportinoDay({
   googleConfigured: boolean;
   googleSender: string | null;
   currentUserName: string;
+  currentUserId: string;
+  isAdmin?: boolean;
   canSign: boolean;
   defaultOpen: boolean;
   hideHeader?: boolean;
@@ -904,10 +917,15 @@ function RapportinoDay({
   onCancel?: () => void;
 }) {
   const closed = rapportino?.closed ?? false;
+  // Solo l'autore (o un ADMIN) può modificare un rapportino esistente. I nuovi
+  // e gli storici senza autore restano modificabili (grazia).
+  const canEditThis =
+    !rapportino || !rapportino.authorId || rapportino.authorId === currentUserId || isAdmin;
   const [open, setOpen] = useState(defaultOpen);
   const bodyOpen = hideHeader || open;
   const [editing, setEditing] = useState(false); // modifica di un rapportino già firmato
-  const readOnly = closed && !editing;
+  // sola lettura se: chiuso e non in modifica, OPPURE non sei l'autore/admin
+  const readOnly = (closed && !editing) || !canEditThis;
 
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(rapportino ? rapportino.date.slice(0, 10) : today);
@@ -1681,9 +1699,16 @@ function RapportinoDay({
           {canSign && (
             <div className="rapportino-actions">
               {readOnly ? (
-                <button className="btn-ghost" onClick={() => setEditing(true)}>
-                  <Icon name="sign" size={14} /> Modifica
-                </button>
+                canEditThis ? (
+                  <button className="btn-ghost" onClick={() => setEditing(true)}>
+                    <Icon name="sign" size={14} /> Modifica
+                  </button>
+                ) : (
+                  <span className="muted small">
+                    Rapportino di {rapportino?.techName || "un altro operatore"}: solo chi lo ha
+                    compilato (o un amministratore) può modificarlo.
+                  </span>
+                )
               ) : editing ? (
                 <>
                   <button
