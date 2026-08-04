@@ -123,6 +123,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     "machine.sign": true,
     "service.view": true,
     "intervento.sign": true,
+    // chat dell'intervento in Campo (leggere/scrivere, interno e pubblico)
+    "chat.send": true,
     "knowledge.view": true,
   },
   LOGISTICA: { "machine.edit": true, "service.view": true, "knowledge.view": true },

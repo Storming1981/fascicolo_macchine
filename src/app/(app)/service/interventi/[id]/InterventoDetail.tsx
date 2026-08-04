@@ -348,8 +348,11 @@ export default function InterventoDetail({
           </div>
         </div>
         <div className="detail-actions">
-          {data.chatId && !campo && (
-            <Link className="btn-ghost" href={`/service/chat?conv=${data.chatId}`}>
+          {data.chatId && (
+            <Link
+              className="btn-ghost"
+              href={campo ? `/campo/interventi/${data.id}/chat` : `/service/chat?conv=${data.chatId}`}
+            >
               <Icon name="sign" size={14} /> Chat intervento
             </Link>
           )}

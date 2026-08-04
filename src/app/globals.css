@@ -449,6 +449,23 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .cmp-edit-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; overflow: hidden; }
 .cmp-edit-body { border-top: 1px solid var(--border); padding: 16px; background: var(--bg-3); }
 
+/* ── Chat Campo (mobile, dentro l'intervento) ────────────── */
+.campo-chatview { display: flex; flex-direction: column; }
+.campo-msgs { display: flex; flex-direction: column; gap: 8px; background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin: 12px 0; min-height: 40vh; max-height: 62vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.cmsg { max-width: 88%; padding: 8px 11px; border-radius: 12px; font-size: 14px; line-height: 1.4; }
+.cmsg.in { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.cmsg.out { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.cmsg.out.internal { background: #fff7ed; color: var(--text); border: 1px solid #f5dca7; }
+.cmsg-top { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.cmsg-author { font-size: 11px; font-weight: 700; opacity: 0.85; }
+.cmsg-body { white-space: pre-wrap; word-break: break-word; }
+.cmsg-photo { max-width: 200px; border-radius: 8px; margin-top: 6px; display: block; }
+.cmsg-time { font-size: 10px; opacity: 0.7; margin-top: 4px; text-align: right; }
+.campo-composer { position: sticky; bottom: 0; background: var(--app-bg, #f4f6f9); padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+.campo-composer-row { display: flex; gap: 8px; align-items: flex-end; }
+.campo-composer-row textarea { flex: 1; resize: none; max-height: 120px; border: 1px solid var(--border); border-radius: 12px; padding: 11px 13px; font: inherit; font-size: 15px; outline: none; background: #fff; }
+.campo-composer-row .btn-primary { min-height: 44px; padding: 0 16px; }
+
 /* ── Knowledge: problematiche ricorrenti (AI) ────────────── */
 .kb-collapse { background: none; border: none; cursor: pointer; font: inherit; font-size: 14px; font-weight: 650; color: var(--navy); display: inline-flex; align-items: center; gap: 6px; padding: 0; }
 .ri-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
