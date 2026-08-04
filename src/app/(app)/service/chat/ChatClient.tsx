@@ -152,6 +152,20 @@ export default function ChatClient({
     }
   }
 
+  async function deleteConv() {
+    if (!selId) return;
+    const linked = detail?.intervento
+      ? `\n\nAttenzione: è la chat dell'intervento ${detail.intervento.code}. Verrà eliminata insieme ai suoi messaggi.`
+      : "";
+    if (!confirm("Eliminare questa conversazione e tutti i suoi messaggi?" + linked)) return;
+    const res = await fetch(`/api/chat/${selId}`, { method: "DELETE" });
+    if (res.ok) {
+      setSelId(null);
+      setDetail(null);
+      router.refresh();
+    }
+  }
+
   const isNative = detail?.channel === "native";
 
   return (
@@ -231,9 +245,14 @@ export default function ChatClient({
                   </div>
                 </div>
                 {canSend && (
-                  <button className="btn-ghost-sm" onClick={() => setShowEdit(true)}>
-                    <Icon name="sign" size={14} /> Modifica
-                  </button>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn-ghost-sm" onClick={() => setShowEdit(true)}>
+                      <Icon name="sign" size={14} /> Modifica
+                    </button>
+                    <button className="btn-ghost-sm danger" onClick={deleteConv}>
+                      <Icon name="trash" size={14} /> Elimina
+                    </button>
+                  </div>
                 )}
               </div>
 
