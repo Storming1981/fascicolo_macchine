@@ -15,6 +15,19 @@ export default async function LoginPage({
   return (
     <div className="login-shell">
       <div className="login-side">
+        {/* Sfondo video (auto-hostato). Se il file non c'è resta il gradiente. */}
+        <video
+          className="login-video"
+          autoPlay
+          muted
+          loop
+          playsInline
+          poster="/video/hero-poster.jpg"
+        >
+          <source src="/video/hero.mp4" type="video/mp4" />
+        </video>
+        <div className="login-side-overlay" />
+        <div className="login-side-content">
         <div className="login-side-logo">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/zato-logo.png" alt="ZATO" />
@@ -39,9 +52,10 @@ export default async function LoginPage({
             </>
           )}
         </div>
-        <p className="small" style={{ color: "#7d96b2" }}>
+        <p className="small" style={{ color: "#cdd9e8" }}>
           © {new Date().getFullYear()} ZATO Recycling Solutions
         </p>
+        </div>
       </div>
       <div className="login-main">
         <div className="login-card">
