@@ -33,3 +33,8 @@ sync-agent/.sync.lock
 
 # Preferenze locali dell'IDE/harness
 .claude/settings.json
+
+# Video sorgente pesanti nella root di public (comprimere prima di usarli).
+# Il video di sfondo compresso va in public/video/hero.mp4 (versionabile).
+/public/*.mp4
+/public/*.mov
