@@ -941,6 +941,9 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .vis-badge { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 1px 6px; border-radius: 99px; }
 .vis-badge.int { background: #fdf0d5; color: #b45309; }
 .vis-badge.pub { background: #dcfce7; color: #15803d; }
+/* cestino "elimina il mio messaggio": discreto, accanto al badge/autore */
+.msg-del { background: none; border: none; cursor: pointer; padding: 0 2px; opacity: 0.45; color: inherit; display: inline-flex; align-items: center; margin-left: 4px; }
+.msg-del:hover { opacity: 1; color: #b91c1c; }
 .msg-body { white-space: pre-wrap; word-break: break-word; }
 .msg-photo { max-width: 220px; max-height: 220px; border-radius: 8px; margin-top: 6px; display: block; }
 .msg-time { font-size: 10px; opacity: 0.7; margin-top: 4px; text-align: right; }

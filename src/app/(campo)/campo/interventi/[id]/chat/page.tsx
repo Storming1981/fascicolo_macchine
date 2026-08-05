@@ -48,6 +48,8 @@ export default async function CampoInterventoChatPage({
       title={intervento.title}
       convId={convId}
       canSend={canSend}
+      currentUserId={user.id}
+      isAdmin={user.role === "ADMIN"}
     />
   );
 }

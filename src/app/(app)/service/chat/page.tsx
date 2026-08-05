@@ -69,6 +69,8 @@ export default async function ChatPage({
       conversations={conversations}
       links={links}
       currentUserName={user.name}
+      currentUserId={user.id}
+      isAdmin={user.role === "ADMIN"}
       canSend={canSend}
       canImport={canImport}
       initialConvId={initialConvId}

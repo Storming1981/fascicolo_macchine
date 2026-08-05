@@ -23,6 +23,7 @@ type Msg = {
   id: string;
   direction: "IN" | "OUT";
   visibility?: "INTERNAL" | "PUBLIC";
+  authorId?: string | null;
   authorName: string;
   body: string | null;
   photoPath?: string | null;
@@ -64,6 +65,8 @@ export default function ChatClient({
   conversations,
   links,
   currentUserName,
+  currentUserId,
+  isAdmin = false,
   canSend,
   canImport,
   initialConvId,
@@ -71,6 +74,8 @@ export default function ChatClient({
   conversations: ConversationRow[];
   links: LinkOpts;
   currentUserName: string;
+  currentUserId: string;
+  isAdmin?: boolean;
   canSend: boolean;
   canImport: boolean;
   initialConvId?: string | null;
@@ -150,6 +155,12 @@ export default function ChatClient({
     } finally {
       setSending(false);
     }
+  }
+
+  async function deleteMsg(msgId: string) {
+    if (!selId || !confirm("Eliminare questo messaggio?")) return;
+    const res = await fetch(`/api/chat/${selId}/messages/${msgId}`, { method: "DELETE" });
+    if (res.ok) await loadDetail(selId);
   }
 
   async function deleteConv() {
@@ -271,6 +282,15 @@ export default function ChatClient({
                         <span className="vis-badge pub">Cliente</span>
                       ) : (
                         <span className="vis-badge int">Interno</span>
+                      )}
+                      {(m.authorId === currentUserId || isAdmin) && (
+                        <button
+                          className="msg-del"
+                          title="Elimina messaggio"
+                          onClick={() => deleteMsg(m.id)}
+                        >
+                          <Icon name="trash" size={12} />
+                        </button>
                       )}
                     </div>
                     {m.body && <div className="msg-body">{m.body}</div>}

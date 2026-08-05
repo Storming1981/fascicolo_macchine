@@ -7,6 +7,7 @@ type Msg = {
   id: string;
   direction: "IN" | "OUT";
   visibility?: "INTERNAL" | "PUBLIC";
+  authorId?: string | null;
   authorName: string;
   body: string | null;
   photoPath?: string | null;
@@ -19,12 +20,16 @@ export default function CampoChat({
   title,
   convId,
   canSend,
+  currentUserId,
+  isAdmin = false,
 }: {
   interventoId: string;
   code: string;
   title: string;
   convId: string | null;
   canSend: boolean;
+  currentUserId: string;
+  isAdmin?: boolean;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
@@ -51,6 +56,12 @@ export default function CampoChat({
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages]);
+
+  async function deleteMsg(msgId: string) {
+    if (!convId || !confirm("Eliminare questo messaggio?")) return;
+    const r = await fetch(`/api/chat/${convId}/messages/${msgId}`, { method: "DELETE" });
+    if (r.ok) await load();
+  }
 
   async function send() {
     if ((!draft.trim() && !photo) || !convId) return;
@@ -101,12 +112,15 @@ export default function CampoChat({
                 }
               >
                 <div className="cmsg-top">
-                  <span className="cmsg-author">
-                    {m.direction === "OUT" ? m.authorName : m.authorName}
-                  </span>
+                  <span className="cmsg-author">{m.authorName}</span>
                   <span className={"vis-badge " + (m.visibility === "PUBLIC" ? "pub" : "int")}>
                     {m.visibility === "PUBLIC" ? "Cliente" : "Interno"}
                   </span>
+                  {(m.authorId === currentUserId || isAdmin) && (
+                    <button className="msg-del" onClick={() => deleteMsg(m.id)} aria-label="Elimina">
+                      <Icon name="trash" size={13} />
+                    </button>
+                  )}
                 </div>
                 {m.body && <div className="cmsg-body">{m.body}</div>}
                 {m.photoPath && (

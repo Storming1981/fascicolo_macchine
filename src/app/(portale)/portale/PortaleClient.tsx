@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Icon from "@/components/Icon";
 import { INTERVENTO_STATUS_META } from "@/lib/domain";
 import type { InterventoStatus } from "@prisma/client";
 
@@ -51,6 +52,15 @@ export default function PortaleClient() {
   useEffect(() => {
     if (msgRef.current) msgRef.current.scrollTop = msgRef.current.scrollHeight;
   }, [messages]);
+
+  async function deleteMsg(msgId: string) {
+    if (!sel?.chatId || !confirm("Eliminare questo messaggio?")) return;
+    const r = await fetch(`/api/portale/chat/${sel.chatId}/messages/${msgId}`, { method: "DELETE" });
+    if (r.ok) {
+      const d = await fetch(`/api/portale/chat/${sel.chatId}/messages`).then((x) => x.json());
+      setMessages(d.messages ?? []);
+    }
+  }
 
   async function send() {
     if (!draft.trim() || !sel?.chatId) return;
@@ -118,7 +128,14 @@ export default function PortaleClient() {
               )}
               {messages.map((m) => (
                 <div key={m.id} className={"pmsg " + (m.direction === "OUT" ? "zato" : "me")}>
-                  <div className="pmsg-author">{m.direction === "OUT" ? "ZATO Service" : m.authorName}</div>
+                  <div className="pmsg-author">
+                    {m.direction === "OUT" ? "ZATO Service" : m.authorName}
+                    {m.direction === "IN" && (
+                      <button className="msg-del" onClick={() => deleteMsg(m.id)} aria-label="Elimina">
+                        <Icon name="trash" size={12} />
+                      </button>
+                    )}
+                  </div>
                   {m.body && <div className="pmsg-body">{m.body}</div>}
                   {m.photoPath && (
                     // eslint-disable-next-line @next/next/no-img-element
