@@ -283,7 +283,7 @@ export default function ChatClient({
                       ) : (
                         <span className="vis-badge int">Interno</span>
                       )}
-                      {(m.authorId === currentUserId || isAdmin) && (
+                      {m.authorId != null && m.authorId === currentUserId && (
                         <button
                           className="msg-del"
                           title="Elimina messaggio"

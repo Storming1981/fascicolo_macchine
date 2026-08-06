@@ -5,8 +5,8 @@ import { prisma } from "@/lib/db";
 
 /**
  * DELETE /api/chat/[id]/messages/[msgId]
- * Cancella un messaggio: consentito solo all'AUTORE (o a un ADMIN). Se il
- * messaggio aveva una foto confluita nel corpus (Photo category "chat"), la
+ * Cancella un messaggio: consentito SOLO all'autore (ognuno solo i propri). Se
+ * il messaggio aveva una foto confluita nel corpus (Photo category "chat"), la
  * rimuove anche da lì.
  */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string; msgId: string }> }) {
@@ -22,7 +22,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string;
   });
   if (!msg) return NextResponse.json({ error: "Messaggio non trovato" }, { status: 404 });
 
-  if (msg.authorId !== user.id && user.role !== "ADMIN")
+  if (msg.authorId !== user.id)
     return NextResponse.json({ error: "Puoi cancellare solo i tuoi messaggi." }, { status: 403 });
 
   if (msg.photoPath)

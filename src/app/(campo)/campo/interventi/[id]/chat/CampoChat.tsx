@@ -116,7 +116,7 @@ export default function CampoChat({
                   <span className={"vis-badge " + (m.visibility === "PUBLIC" ? "pub" : "int")}>
                     {m.visibility === "PUBLIC" ? "Cliente" : "Interno"}
                   </span>
-                  {(m.authorId === currentUserId || isAdmin) && (
+                  {m.authorId != null && m.authorId === currentUserId && (
                     <button className="msg-del" onClick={() => deleteMsg(m.id)} aria-label="Elimina">
                       <Icon name="trash" size={13} />
                     </button>
