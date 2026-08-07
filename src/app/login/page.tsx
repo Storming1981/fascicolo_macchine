@@ -28,33 +28,37 @@ export default async function LoginPage({
         </video>
         <div className="login-side-overlay" />
         <div className="login-side-content">
-        <div className="login-side-logo">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/zato-logo.png" alt="ZATO" />
-        </div>
-        <div>
-          {isPortal ? (
-            <>
-              <h2>Portale assistenza ZATO</h2>
-              <p>
-                Segui i tuoi interventi e comunica direttamente con il Service ZATO: stato
-                dei lavori, aggiornamenti e conversazione, sempre a portata di mano.
-              </p>
-            </>
-          ) : (
-            <>
-              <h2>Fascicolo Tecnico Macchina</h2>
-              <p>
-                Il diario digitale di ogni macchina ZATO: produzione, componenti e matricole,
-                montaggio e collaudo con firma digitale, interventi e manutenzioni — dalla
-                genesi alla rottamazione.
-              </p>
-            </>
-          )}
-        </div>
-        <p className="small" style={{ color: "#cdd9e8" }}>
-          © {new Date().getFullYear()} ZATO Recycling Solutions
-        </p>
+          <div className="login-side-logo">
+            {/* logo negativo (bianco) sul video — grande e centrato */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/zato-logo-neg.png" alt="ZATO" />
+          </div>
+          {/* testo in basso, per non sovrapporsi al "Zato" iniziale del video */}
+          <div className="login-side-bottom">
+            <div>
+              {isPortal ? (
+                <>
+                  <h2>Portale assistenza ZATO</h2>
+                  <p>
+                    Segui i tuoi interventi e comunica direttamente con il Service ZATO: stato
+                    dei lavori, aggiornamenti e conversazione, sempre a portata di mano.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2>Fascicolo Tecnico Macchina</h2>
+                  <p>
+                    Il diario digitale di ogni macchina ZATO: produzione, componenti e matricole,
+                    montaggio e collaudo con firma digitale, interventi e manutenzioni — dalla
+                    genesi alla rottamazione.
+                  </p>
+                </>
+              )}
+            </div>
+            <p className="small" style={{ color: "#cdd9e8", marginTop: 18 }}>
+              © {new Date().getFullYear()} ZATO Recycling Solutions
+            </p>
+          </div>
         </div>
       </div>
       <div className="login-main">
