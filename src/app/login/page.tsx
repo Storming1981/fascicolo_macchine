@@ -63,7 +63,7 @@ export default async function LoginPage({
       </div>
       <div className="login-main">
         <div className="login-card">
-          <h1>{isPortal ? "Portale clienti" : "Accedi"}</h1>
+          <h1>{isPortal ? "Assistenza clienti ZATO" : "Accedi"}</h1>
           <p className="sub">
             {isPortal
               ? "Accedi con le credenziali fornite da ZATO per il portale assistenza."
