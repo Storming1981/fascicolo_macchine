@@ -192,6 +192,18 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
 - **Nuovo intervento**: fase, tipo (sostituzione/ispezione/riparazione/nota),
   matricole, foto, firma PIN o a penna su canvas → diario + firma + aggiorna seriale.
 - **Nuova macchina**: wizard 4 step (identificazione, cliente, targa, componenti).
+  Il **cliente si sceglie dall'anagrafica** con tendina ricercabile
+  (`src/components/CustomerPicker.tsx` → `/api/customers/search`), non a mano:
+  il fascicolo salva `Machine.customerId` e compare così tra le macchine del
+  cliente negli interventi di service. Chi ha `customer.manage` può creare al
+  volo la scheda cliente dal wizard. `createMachine()` aggancia comunque il
+  Customer per nome (case-insensitive) quando `customerId` non è passato —
+  utile per l'import massivo.
+- **Modifica anagrafica fascicolo**: nella scheda Anagrafica il pulsante
+  *Modifica* (permesso `machine.edit`) rende editabili tipologia, modello,
+  anno, job/jobBody/jobContainer, cliente (tendina anagrafica), paese, sito,
+  date e targa tecnica. `PATCH /api/machines/[id]` valida i campi e **annota a
+  diario** le variazioni ("Anagrafica fascicolo aggiornata: campo vecchio → nuovo").
 - **Import Excel/CSV**: anteprima (dry-run) + conferma; salta job già presenti.
 - **Persone**: elenco operatori, firme, creazione operatore (solo ADMIN).
 - **Ricerca topbar intelligente** (`/api/search`): matricola componente / codice

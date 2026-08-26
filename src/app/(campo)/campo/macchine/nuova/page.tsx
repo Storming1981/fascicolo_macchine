@@ -12,13 +12,18 @@ export default async function CampoNuovaMacchinaPage() {
   if (!user) redirect("/login");
   if (!(await userCan(user.role, "machine.create"))) redirect("/campo/macchine");
   const plantConfig = await getPlantConfig();
+  const canCreateCustomer = await userCan(user.role, "customer.manage");
 
   return (
     <div>
       <Link href="/campo/macchine" className="campo-back">
         <Icon name="arrow-left" size={16} /> Fascicolo
       </Link>
-      <NewMachineForm plantConfig={plantConfig} redirectBase="/campo/macchine" />
+      <NewMachineForm
+        plantConfig={plantConfig}
+        redirectBase="/campo/macchine"
+        canCreateCustomer={canCreateCustomer}
+      />
     </div>
   );
 }

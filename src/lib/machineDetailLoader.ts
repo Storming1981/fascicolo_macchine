@@ -3,6 +3,7 @@ import { prisma } from "./db";
 import { currentUser } from "./auth";
 import { ROLE_LABEL } from "./domain";
 import { userCaps } from "./caps";
+import { getPlantConfig } from "./settings";
 
 /**
  * Carica tutte le props della scheda fascicolo macchina. Condiviso tra guscio
@@ -30,8 +31,11 @@ export async function loadMachineDetailProps(code: string) {
     "machine.sign",
     "service.view",
     "intervento.create",
-    "chat.send"
+    "chat.send",
+    "customer.manage"
   );
+  // tipologie/modelli configurabili: servono alla modifica dell'anagrafica
+  const plantConfig = await getPlantConfig();
 
   const [serviceInterventi, serviceChats] = await Promise.all([
     prisma.intervento.findMany({
@@ -155,6 +159,7 @@ export async function loadMachineDetailProps(code: string) {
 
   return {
     machine: data,
+    plantConfig,
     qrDataUrl,
     service: {
       interventi: serviceInterventi,
@@ -180,6 +185,7 @@ export async function loadMachineDetailProps(code: string) {
       service: caps["service.view"],
       interventoCreate: caps["intervento.create"],
       chatSend: caps["chat.send"],
+      customerManage: caps["customer.manage"],
     },
   };
 }

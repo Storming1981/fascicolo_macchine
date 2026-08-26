@@ -19,6 +19,8 @@ export type CreateMachineInput = {
   plantType?: string | null;
   model: string;
   customer: string;
+  /** Anagrafica cliente (Customer.id). Se assente si tenta il match per nome. */
+  customerId?: string | null;
   country: string;
   countryCode: string;
   site?: string | null;
@@ -47,8 +49,38 @@ export async function nextMachineCode(year: number): Promise<string> {
   return machineCode(year, Date.now() % 10000);
 }
 
+/**
+ * Risolve il collegamento all'anagrafica clienti di un fascicolo.
+ * Se `customerId` è valorizzato lo verifica e restituisce nome/paese ufficiali
+ * del Customer (l'anagrafica è la fonte di verità); altrimenti prova il match
+ * per nome (case-insensitive) così anche l'import massivo aggancia i clienti
+ * già censiti. Ritorna `null` in `id` se non c'è corrispondenza.
+ */
+export async function resolveCustomerLink(input: {
+  customerId?: string | null;
+  customer?: string | null;
+}): Promise<{ id: string | null; name: string | null; country: string | null; countryCode: string | null }> {
+  const none = { id: null, name: null, country: null, countryCode: null };
+  if (input.customerId) {
+    const c = await prisma.customer.findUnique({
+      where: { id: input.customerId },
+      select: { id: true, name: true, country: true, countryCode: true },
+    });
+    if (c) return c;
+  }
+  const name = (input.customer ?? "").trim();
+  if (!name) return none;
+  const byName = await prisma.customer.findFirst({
+    where: { name: { equals: name, mode: "insensitive" } },
+    select: { id: true, name: true, country: true, countryCode: true },
+  });
+  return byName ?? none;
+}
+
 export async function createMachine(input: CreateMachineInput, authorName = "Sistema", authorId?: string) {
   const code = await nextMachineCode(input.year);
+  const link = await resolveCustomerLink(input);
+  const customerName = link.name ?? input.customer;
   const machine = await prisma.machine.create({
     data: {
       code,
@@ -58,7 +90,8 @@ export async function createMachine(input: CreateMachineInput, authorName = "Sis
       year: input.year,
       plantType: input.plantType || null,
       model: input.model,
-      customer: input.customer,
+      customer: customerName,
+      customerId: link.id,
       country: input.country,
       countryCode: input.countryCode,
       site: input.site || null,
@@ -102,7 +135,7 @@ export async function createMachine(input: CreateMachineInput, authorName = "Sis
           phase: "PRODUCTION",
           type: "milestone",
           title: "Apertura fascicolo tecnico",
-          note: `Fascicolo creato per job ${input.job} — ${input.customer}.`,
+          note: `Fascicolo creato per job ${input.job} — ${customerName}.`,
           actorName: authorName,
           authorId: authorId || null,
         },

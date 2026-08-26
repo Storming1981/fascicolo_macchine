@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from "@/components/Icon";
+import CustomerPicker, { type CustomerHit } from "@/components/CustomerPicker";
 import { COMPONENT_GROUPS } from "@/lib/components";
 import { COUNTRIES } from "@/lib/domain";
 import { hasDualJob, CUSTOM_MODEL } from "@/lib/plant";
@@ -19,9 +20,12 @@ const STEPS = ["Identificazione", "Cliente", "Targa tecnica", "Componenti"];
 export default function NewMachineForm({
   plantConfig,
   redirectBase = "/macchine",
+  canCreateCustomer = false,
 }: {
   plantConfig: PlantConfig;
   redirectBase?: string;
+  /** Se true mostra il pulsante per creare al volo un cliente in anagrafica. */
+  canCreateCustomer?: boolean;
 }) {
   const router = useRouter();
   const PLANT_TYPES = plantConfig.map((p) => p.name);
@@ -44,6 +48,7 @@ export default function NewMachineForm({
     model: modelsForPlant(PLANT_TYPES[0])[0],
     customModel: "",
     customer: "",
+    customerId: "",
     countryCode: "IT",
     site: "",
     productionStart: new Date().toISOString().slice(0, 10),
@@ -54,6 +59,53 @@ export default function NewMachineForm({
     pressureSettings: "",
   });
   const set = (k: string, v: string | number) => setF((s) => ({ ...s, [k]: v }));
+
+  // Cliente selezionato dall'anagrafica (Customer): serve il collegamento
+  // `customerId`, altrimenti il fascicolo non compare tra le macchine del
+  // cliente negli interventi di service.
+  const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
+  const [newCust, setNewCust] = useState<null | { name: string; city: string; countryCode: string }>(
+    null
+  );
+
+  function pickCustomer(c: CustomerHit | null) {
+    setSites(c?.sites ?? []);
+    setF((s) => ({
+      ...s,
+      customer: c?.name ?? "",
+      customerId: c?.id ?? "",
+      countryCode: c?.countryCode && c.countryCode !== "XX" ? c.countryCode : s.countryCode,
+      site: "",
+    }));
+  }
+
+  async function createCustomer() {
+    if (!newCust?.name.trim()) return setErr("La ragione sociale del cliente è obbligatoria.");
+    setBusy(true);
+    setErr("");
+    const country = COUNTRIES.find((c) => c.code === newCust.countryCode);
+    const res = await fetch("/api/clienti", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: newCust.name.trim(),
+        city: newCust.city.trim(),
+        country: country?.label || "Italia",
+      }),
+    });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return setErr(d.error || "Errore creazione cliente");
+    setSites([]);
+    setF((s) => ({
+      ...s,
+      customer: newCust.name.trim(),
+      customerId: d.id,
+      countryCode: newCust.countryCode,
+      site: "",
+    }));
+    setNewCust(null);
+  }
   const setPlant = (pt: string) =>
     setF((s) => ({ ...s, plantType: pt, model: modelsForPlant(pt)[0], customModel: "" }));
   const modelOptions = modelsForPlant(f.plantType);
@@ -87,9 +139,15 @@ export default function NewMachineForm({
 
   async function submit() {
     setErr("");
-    if (!f.job.trim() || !f.customer.trim()) {
-      setStep(!f.job.trim() ? 0 : 1);
-      return setErr("Job number e cliente sono obbligatori.");
+    if (!f.job.trim()) {
+      setStep(0);
+      return setErr("Il Job number è obbligatorio.");
+    }
+    if (!f.customerId) {
+      setStep(1);
+      return setErr(
+        "Seleziona il cliente dall'anagrafica: senza collegamento il fascicolo non comparirà tra le macchine del cliente."
+      );
     }
     const resolvedModel =
       f.model === CUSTOM_MODEL ? f.customModel.trim() : f.model;
@@ -255,14 +313,82 @@ export default function NewMachineForm({
 
         {step === 1 && (
           <div className="form-grid">
-            <div className="form-row">
-              <label>Cliente *</label>
-              <input
-                className="input"
-                value={f.customer}
-                onChange={(e) => set("customer", e.target.value)}
-                placeholder="es. NORD METAL RECYCLING GmbH"
-              />
+            <div className="form-row" style={{ gridColumn: "1 / -1" }}>
+              <label>Cliente * — dall'anagrafica clienti</label>
+              <CustomerPicker currentName={f.customer || null} onPick={pickCustomer} />
+              <div className="muted small" style={{ marginTop: 5 }}>
+                {f.customerId ? (
+                  <>
+                    <Icon name="check" size={12} /> Collegato all'anagrafica: gli interventi di
+                    service vedranno questa macchina tra quelle del cliente.
+                  </>
+                ) : (
+                  <>
+                    Il cliente va <strong>scelto dall'elenco</strong>, non scritto a mano.
+                    {canCreateCustomer && " Se non è ancora censito, creane la scheda."}
+                  </>
+                )}
+              </div>
+              {canCreateCustomer && !newCust && !f.customerId && (
+                <button
+                  type="button"
+                  className="btn-ghost-sm"
+                  style={{ marginTop: 8, alignSelf: "flex-start" }}
+                  onClick={() => setNewCust({ name: "", city: "", countryCode: f.countryCode })}
+                >
+                  <Icon name="plus" size={13} /> Nuovo cliente in anagrafica
+                </button>
+              )}
+              {canCreateCustomer && newCust && (
+                <div className="card" style={{ marginTop: 10, padding: 12 }}>
+                  <div className="form-grid">
+                    <div className="form-row">
+                      <label>Ragione sociale *</label>
+                      <input
+                        className="input"
+                        value={newCust.name}
+                        onChange={(e) => setNewCust({ ...newCust, name: e.target.value })}
+                        placeholder="es. NORD METAL RECYCLING GmbH"
+                      />
+                    </div>
+                    <div className="form-row">
+                      <label>Città</label>
+                      <input
+                        className="input"
+                        value={newCust.city}
+                        onChange={(e) => setNewCust({ ...newCust, city: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-row">
+                      <label>Paese</label>
+                      <select
+                        className="input"
+                        value={newCust.countryCode}
+                        onChange={(e) => setNewCust({ ...newCust, countryCode: e.target.value })}
+                      >
+                        {COUNTRIES.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button className="btn-ghost-sm" type="button" onClick={() => setNewCust(null)}>
+                      Annulla
+                    </button>
+                    <button
+                      className="btn-primary-sm"
+                      type="button"
+                      disabled={busy}
+                      onClick={createCustomer}
+                    >
+                      <Icon name="check" size={13} /> Crea e seleziona
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="form-row">
               <label>Paese *</label>
@@ -280,6 +406,21 @@ export default function NewMachineForm({
             </div>
             <div className="form-row">
               <label>Sito di installazione</label>
+              {sites.length > 0 && (
+                <select
+                  className="input"
+                  style={{ marginBottom: 6 }}
+                  value={sites.some((x) => x.name === f.site) ? f.site : ""}
+                  onChange={(e) => set("site", e.target.value)}
+                >
+                  <option value="">— Cantiere del cliente / altro —</option>
+                  {sites.map((x) => (
+                    <option key={x.id} value={x.name}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 className="input"
                 value={f.site}

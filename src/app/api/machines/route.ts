@@ -22,6 +22,7 @@ export async function POST(req: Request) {
         plantType: b.plantType || null,
         model: String(b.model),
         customer: String(b.customer),
+        customerId: typeof b.customerId === "string" && b.customerId ? b.customerId : null,
         country: String(b.country || "Italia"),
         countryCode: String(b.countryCode || "IT"),
         site: b.site || null,

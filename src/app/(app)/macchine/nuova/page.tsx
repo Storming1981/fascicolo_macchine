@@ -12,5 +12,6 @@ export default async function NewMachinePage() {
   const perms = await getPermissions();
   if (!can(user.role, "machine.create", perms)) redirect("/macchine");
   const plantConfig = await getPlantConfig();
-  return <NewMachineForm plantConfig={plantConfig} />;
+  const canCreateCustomer = can(user.role, "customer.manage", perms);
+  return <NewMachineForm plantConfig={plantConfig} canCreateCustomer={canCreateCustomer} />;
 }

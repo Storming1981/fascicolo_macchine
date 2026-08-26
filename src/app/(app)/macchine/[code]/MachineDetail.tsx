@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon, { Flag } from "@/components/Icon";
 import { SignaturePad, SignaturePadHandle } from "@/components/SignaturePad";
+import CustomerPicker, { type CustomerHit } from "@/components/CustomerPicker";
 import { COMPONENT_GROUPS } from "@/lib/components";
 import {
   STATUS_META,
@@ -11,7 +12,9 @@ import {
   STATUS_ORDER,
   INTERVENTO_STATUS_META,
   PRIORITY_META,
+  COUNTRIES,
 } from "@/lib/domain";
+import { CUSTOM_MODEL } from "@/lib/plant";
 import { MILESTONES, milestoneDef } from "@/lib/milestones";
 import { CHECKLIST_TRITURATORE } from "@/lib/checklist";
 import { fmtDate, fmtBytes } from "@/lib/format";
@@ -69,14 +72,18 @@ const TABS = [
   { id: "qr", label: "QR & Etichetta", icon: "qr" },
 ];
 
+export type PlantConfig = { name: string; models: string[] }[];
+
 export default function MachineDetail({
   machine,
+  plantConfig,
   qrDataUrl,
   service,
   currentUser,
   caps,
 }: {
   machine: Machine;
+  plantConfig: PlantConfig;
   qrDataUrl: string;
   service: ServiceData;
   currentUser: { id: string; name: string; role: string; hasPin: boolean; hasSignature: boolean };
@@ -87,6 +94,7 @@ export default function MachineDetail({
     service: boolean;
     interventoCreate: boolean;
     chatSend: boolean;
+    customerManage?: boolean;
   };
 }) {
   const router = useRouter();
@@ -174,7 +182,13 @@ export default function MachineDetail({
       </div>
 
       {tab === "anagrafica" && (
-        <TabAnagrafica machine={machine} canEdit={caps.edit} onDone={refresh} notify={notify} />
+        <TabAnagrafica
+          machine={machine}
+          plantConfig={plantConfig}
+          canEdit={caps.edit}
+          onDone={refresh}
+          notify={notify}
+        />
       )}
       {tab === "componenti" && (
         <TabComponenti
@@ -325,11 +339,13 @@ function StatusControl({
 /* ── Tab Anagrafica ─────────────────────────────────────── */
 function TabAnagrafica({
   machine,
+  plantConfig,
   canEdit,
   onDone,
   notify,
 }: {
   machine: Machine;
+  plantConfig: PlantConfig;
   canEdit: boolean;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
@@ -368,35 +384,115 @@ function TabAnagrafica({
     }
   }
 
-  const [editJobs, setEditJobs] = useState(false);
-  const [jobs, setJobs] = useState({
-    job: machine.job,
-    jobBody: machine.jobBody || "",
-    jobContainer: machine.jobContainer || "",
-  });
+  // ── Modifica anagrafica (ogni campo del fascicolo è correggibile) ──
+  const plantNames = plantConfig.map((x) => x.name);
+  const modelsFor = (pt: string) => [
+    ...(plantConfig.find((x) => x.name === pt)?.models ?? []),
+    CUSTOM_MODEL,
+  ];
+  const initForm = () => {
+    const pt = machine.plantType || plantNames[0] || "";
+    const known = modelsFor(pt).includes(machine.model);
+    return {
+      job: machine.job,
+      jobBody: machine.jobBody || "",
+      jobContainer: machine.jobContainer || "",
+      plantType: pt,
+      model: known ? machine.model : CUSTOM_MODEL,
+      customModel: known ? "" : machine.model,
+      year: String(machine.year),
+      customer: machine.customer,
+      customerId: machine.customerId || "",
+      countryCode: machine.countryCode,
+      site: machine.site || "",
+      productionStart: isoToDay(machine.productionStart || undefined),
+      deliveryDate: isoToDay(machine.deliveryDate || undefined),
+      plateWeight: machine.plateWeight || "",
+      platePower: machine.platePower || "",
+      plateVoltage: machine.plateVoltage || "",
+      pressureSettings: machine.pressureSettings || "",
+    };
+  };
+  const [edit, setEdit] = useState(false);
+  const [form, setForm] = useState(initForm);
+  const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
+  const setFF = (k: string, v: string) => setForm((s) => ({ ...s, [k]: v }));
 
-  async function saveJobs() {
-    if (!jobs.job.trim()) return notify("Il Job Number è obbligatorio", "err");
+  function startEdit() {
+    setForm(initForm());
+    setSites([]);
+    setEdit(true);
+  }
+  function cancelEdit() {
+    setForm(initForm());
+    setEdit(false);
+  }
+  function pickCustomer(c: CustomerHit | null) {
+    setSites(c?.sites ?? []);
+    setForm((s) => ({
+      ...s,
+      customer: c?.name ?? "",
+      customerId: c?.id ?? "",
+      countryCode: c?.countryCode && c.countryCode !== "XX" ? c.countryCode : s.countryCode,
+    }));
+  }
+
+  async function saveAnagrafica() {
+    if (!form.job.trim()) return notify("Il Job Number è obbligatorio", "err");
+    const model = form.model === CUSTOM_MODEL ? form.customModel.trim() : form.model;
+    if (!model) return notify("Specifica il modello", "err");
+    const year = Number(form.year);
+    if (!Number.isInteger(year) || year < 1900 || year > 2100)
+      return notify("Anno non valido", "err");
     setBusy(true);
     const res = await fetch(`/api/machines/${machine.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        job: jobs.job,
-        jobBody: jobs.jobBody,
-        jobContainer: jobs.jobContainer,
+        job: form.job,
+        jobBody: form.jobBody,
+        jobContainer: form.jobContainer,
+        plantType: form.plantType,
+        model,
+        year,
+        customerId: form.customerId,
+        customer: form.customer,
+        countryCode: form.countryCode,
+        site: form.site,
+        productionStart: form.productionStart,
+        deliveryDate: form.deliveryDate,
+        plateWeight: form.plateWeight,
+        platePower: form.platePower,
+        plateVoltage: form.plateVoltage,
+        pressureSettings: form.pressureSettings,
       }),
     });
     setBusy(false);
     if (res.ok) {
-      setEditJobs(false);
+      setEdit(false);
       onDone();
-      notify("Job aggiornati");
+      notify("Anagrafica aggiornata");
     } else {
       const d = await res.json().catch(() => ({}));
       notify(d.error || "Errore salvataggio", "err");
     }
   }
+
+  /** Pulsanti Modifica / Annulla+Salva ripetuti sulle card modificabili. */
+  const editButtons = !canEdit ? null : edit ? (
+    <div style={{ display: "flex", gap: 6 }}>
+      <button className="btn-ghost-sm" onClick={cancelEdit}>
+        Annulla
+      </button>
+      <button className="btn-primary-sm" disabled={busy} onClick={saveAnagrafica}>
+        <Icon name="check" size={13} /> Salva
+      </button>
+    </div>
+  ) : (
+    <button className="btn-ghost-sm" onClick={startEdit}>
+      <Icon name="wrench" size={13} /> Modifica
+    </button>
+  );
 
   async function uploadDocs(files: FileList | null) {
     if (!files || !files.length) return;
@@ -417,44 +513,76 @@ function TabAnagrafica({
         <section className="card">
           <div className="card-header">
             <h3>Anagrafica macchina</h3>
-            {canEdit &&
-              (editJobs ? (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button
-                    className="btn-ghost-sm"
-                    onClick={() => {
-                      setEditJobs(false);
-                      setJobs({
-                        job: machine.job,
-                        jobBody: machine.jobBody || "",
-                        jobContainer: machine.jobContainer || "",
-                      });
-                    }}
-                  >
-                    Annulla
-                  </button>
-                  <button className="btn-primary-sm" disabled={busy} onClick={saveJobs}>
-                    <Icon name="check" size={13} /> Salva
-                  </button>
-                </div>
-              ) : (
-                <button className="btn-ghost-sm" onClick={() => setEditJobs(true)}>
-                  <Icon name="wrench" size={13} /> Modifica job
-                </button>
-              ))}
+            {editButtons}
           </div>
           <dl className="kv">
             <div><dt>ID Fascicolo</dt><dd className="mono">{machine.code}</dd></div>
-            <div><dt>Tipologia impianto</dt><dd>{machine.plantType || "—"}</dd></div>
-            <div><dt>Modello</dt><dd>{machine.model}</dd></div>
+            <div>
+              <dt>Tipologia impianto</dt>
+              <dd>
+                {edit ? (
+                  <select
+                    className="input"
+                    value={form.plantType}
+                    onChange={(e) => {
+                      const pt = e.target.value;
+                      setForm((s) => ({
+                        ...s,
+                        plantType: pt,
+                        model: modelsFor(pt)[0],
+                        customModel: "",
+                      }));
+                    }}
+                  >
+                    {(plantNames.includes(form.plantType) || !form.plantType
+                      ? plantNames
+                      : [form.plantType, ...plantNames]
+                    ).map((x) => (
+                      <option key={x}>{x}</option>
+                    ))}
+                  </select>
+                ) : (
+                  machine.plantType || "—"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Modello</dt>
+              <dd>
+                {edit ? (
+                  <>
+                    <select
+                      className="input"
+                      value={form.model}
+                      onChange={(e) => setFF("model", e.target.value)}
+                    >
+                      {modelsFor(form.plantType).map((m) => (
+                        <option key={m}>{m}</option>
+                      ))}
+                    </select>
+                    {form.model === CUSTOM_MODEL && (
+                      <input
+                        className="input"
+                        style={{ marginTop: 6 }}
+                        value={form.customModel}
+                        placeholder="Modello personalizzato"
+                        onChange={(e) => setFF("customModel", e.target.value)}
+                      />
+                    )}
+                  </>
+                ) : (
+                  machine.model
+                )}
+              </dd>
+            </div>
             <div>
               <dt>Job Number (commessa di vendita)</dt>
               <dd className="mono">
-                {editJobs ? (
+                {edit ? (
                   <input
                     className="input mono"
-                    value={jobs.job}
-                    onChange={(e) => setJobs((s) => ({ ...s, job: e.target.value }))}
+                    value={form.job}
+                    onChange={(e) => setFF("job", e.target.value)}
                   />
                 ) : (
                   machine.job
@@ -464,12 +592,12 @@ function TabAnagrafica({
             <div>
               <dt>Job Body (corpo trituratore)</dt>
               <dd className="mono">
-                {editJobs ? (
+                {edit ? (
                   <input
                     className="input mono"
-                    value={jobs.jobBody}
+                    value={form.jobBody}
                     placeholder="—"
-                    onChange={(e) => setJobs((s) => ({ ...s, jobBody: e.target.value }))}
+                    onChange={(e) => setFF("jobBody", e.target.value)}
                   />
                 ) : (
                   machine.jobBody || "—"
@@ -479,41 +607,236 @@ function TabAnagrafica({
             <div>
               <dt>Job Container (container)</dt>
               <dd className="mono">
-                {editJobs ? (
+                {edit ? (
                   <input
                     className="input mono"
-                    value={jobs.jobContainer}
+                    value={form.jobContainer}
                     placeholder="—"
-                    onChange={(e) => setJobs((s) => ({ ...s, jobContainer: e.target.value }))}
+                    onChange={(e) => setFF("jobContainer", e.target.value)}
                   />
                 ) : (
                   machine.jobContainer || "—"
                 )}
               </dd>
             </div>
-            <div><dt>Anno</dt><dd>{machine.year}</dd></div>
+            <div>
+              <dt>Anno</dt>
+              <dd>
+                {edit ? (
+                  <input
+                    className="input mono"
+                    type="number"
+                    value={form.year}
+                    onChange={(e) => setFF("year", e.target.value)}
+                  />
+                ) : (
+                  machine.year
+                )}
+              </dd>
+            </div>
           </dl>
         </section>
         <section className="card">
-          <div className="card-header"><h3>Cliente e destinazione</h3></div>
+          <div className="card-header">
+            <h3>Cliente e destinazione</h3>
+            {editButtons}
+          </div>
           <dl className="kv">
-            <div><dt>Cliente</dt><dd>{machine.customer}</dd></div>
-            <div><dt>Paese</dt><dd>{machine.country}</dd></div>
-            <div><dt>Sito</dt><dd>{machine.site || "—"}</dd></div>
-            <div><dt>Inizio produzione</dt><dd>{fmtDate(machine.productionStart)}</dd></div>
-            <div><dt>Data consegna</dt><dd>{fmtDate(machine.deliveryDate)}</dd></div>
+            <div>
+              <dt>Cliente</dt>
+              <dd>
+                {edit ? (
+                  <>
+                    <CustomerPicker currentName={form.customer || null} onPick={pickCustomer} />
+                    <div className="muted small" style={{ marginTop: 4 }}>
+                      {form.customerId
+                        ? "Collegato all'anagrafica clienti."
+                        : "Non collegato: scegli il cliente dall'elenco perché la macchina compaia tra le sue."}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {machine.customer}
+                    {!machine.customerId && (
+                      <span className="muted small" style={{ marginLeft: 6 }}>
+                        (non collegato all'anagrafica)
+                      </span>
+                    )}
+                  </>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Paese</dt>
+              <dd>
+                {edit ? (
+                  <select
+                    className="input"
+                    value={form.countryCode}
+                    onChange={(e) => setFF("countryCode", e.target.value)}
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  machine.country
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Sito</dt>
+              <dd>
+                {edit ? (
+                  <>
+                    {sites.length > 0 && (
+                      <select
+                        className="input"
+                        style={{ marginBottom: 6 }}
+                        value={sites.some((x) => x.name === form.site) ? form.site : ""}
+                        onChange={(e) => setFF("site", e.target.value)}
+                      >
+                        <option value="">— Cantiere del cliente / altro —</option>
+                        {sites.map((x) => (
+                          <option key={x.id} value={x.name}>
+                            {x.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <input
+                      className="input"
+                      value={form.site}
+                      placeholder="—"
+                      onChange={(e) => setFF("site", e.target.value)}
+                    />
+                  </>
+                ) : (
+                  machine.site || "—"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Inizio produzione</dt>
+              <dd>
+                {edit ? (
+                  <input
+                    className="input"
+                    type="date"
+                    value={form.productionStart}
+                    onChange={(e) => setFF("productionStart", e.target.value)}
+                  />
+                ) : (
+                  fmtDate(machine.productionStart)
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Data consegna</dt>
+              <dd>
+                {edit ? (
+                  <input
+                    className="input"
+                    type="date"
+                    value={form.deliveryDate}
+                    onChange={(e) => setFF("deliveryDate", e.target.value)}
+                  />
+                ) : (
+                  fmtDate(machine.deliveryDate)
+                )}
+              </dd>
+            </div>
           </dl>
         </section>
 
         <ErpCard machine={machine} canEdit={canEdit} onDone={onDone} notify={notify} />
 
         <section className="card">
-          <div className="card-header"><h3>Targa tecnica</h3></div>
+          <div className="card-header">
+            <h3>Targa tecnica</h3>
+            {editButtons}
+          </div>
           <dl className="kv">
-            <div><dt>Peso</dt><dd>{machine.plateWeight || "—"}</dd></div>
-            <div><dt>Potenza nominale</dt><dd>{machine.platePower || "—"}</dd></div>
-            <div><dt>Tensione / Frequenza</dt><dd>{machine.plateVoltage || "—"}</dd></div>
-            <div><dt>Settaggi pressione</dt><dd className="mono">{machine.pressureSettings || "—"}</dd></div>
+            <div>
+              <dt>Peso</dt>
+              <dd>
+                {edit ? (
+                  <input
+                    className="input"
+                    value={form.plateWeight}
+                    placeholder="38 500 kg"
+                    onChange={(e) => setFF("plateWeight", e.target.value)}
+                  />
+                ) : (
+                  machine.plateWeight || "—"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Potenza nominale</dt>
+              <dd>
+                {edit ? (
+                  <input
+                    className="input"
+                    value={form.platePower}
+                    placeholder="450 kW"
+                    onChange={(e) => setFF("platePower", e.target.value)}
+                  />
+                ) : (
+                  machine.platePower || "—"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Tensione / Frequenza</dt>
+              <dd>
+                {edit ? (
+                  <select
+                    className="input"
+                    value={form.plateVoltage}
+                    onChange={(e) => setFF("plateVoltage", e.target.value)}
+                  >
+                    <option value="">—</option>
+                    {[
+                      "400V / 50Hz",
+                      "480V / 60Hz",
+                      "690V / 50Hz",
+                      "380V / 50Hz",
+                      ...(form.plateVoltage &&
+                      ![
+                        "400V / 50Hz",
+                        "480V / 60Hz",
+                        "690V / 50Hz",
+                        "380V / 50Hz",
+                      ].includes(form.plateVoltage)
+                        ? [form.plateVoltage]
+                        : []),
+                    ].map((v) => (
+                      <option key={v}>{v}</option>
+                    ))}
+                  </select>
+                ) : (
+                  machine.plateVoltage || "—"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Settaggi pressione</dt>
+              <dd className="mono">
+                {edit ? (
+                  <input
+                    className="input mono"
+                    value={form.pressureSettings}
+                    placeholder="255 bar + 3/4 giro (320 bar)"
+                    onChange={(e) => setFF("pressureSettings", e.target.value)}
+                  />
+                ) : (
+                  machine.pressureSettings || "—"
+                )}
+              </dd>
+            </div>
           </dl>
         </section>
 
