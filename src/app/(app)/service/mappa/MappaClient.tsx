@@ -43,6 +43,11 @@ export type PlannedRow = {
   scheduledStart: string;
 };
 
+// Sfondo cartografico: Esri World Light Gray Canvas, gratuito e senza API key.
+// (Zoom massimo supportato dal servizio: 16.)
+const BASEMAP_MAX_ZOOM = 16;
+const BASEMAP_ATTRIBUTION = "Esri · HERE · Garmin · © OpenStreetMap contributors";
+
 // Carica Leaflet da CDN una sola volta.
 let leafletPromise: Promise<void> | null = null;
 function loadLeaflet(): Promise<void> {
@@ -111,12 +116,24 @@ export default function MappaClient({ sites, planned }: { sites: MapSite[]; plan
         if (cancelled || !mapDivRef.current || mapRef.current) return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const L = (window as any).L;
-        const map = L.map(mapDivRef.current, { center: [42.5, 12.5], zoom: 5, zoomControl: true });
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-          attribution: "© OpenStreetMap © CARTO",
-          subdomains: "abcd",
-          maxZoom: 19,
-        }).addTo(map);
+        const map = L.map(mapDivRef.current, {
+          center: [42.5, 12.5],
+          zoom: 5,
+          zoomControl: true,
+          maxZoom: BASEMAP_MAX_ZOOM,
+        });
+        // Sfondo chiaro Esri "Light Gray Canvas": stile neutro (i pin colorati
+        // restano leggibili) e SENZA API key. I basemap CARTO, usati prima,
+        // ora restituiscono tile con la filigrana "API KEY REQUIRED".
+        L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+          { attribution: BASEMAP_ATTRIBUTION, maxZoom: BASEMAP_MAX_ZOOM }
+        ).addTo(map);
+        // Etichette (città, stati) come layer separato, sopra i confini.
+        L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+          { attribution: "", maxZoom: BASEMAP_MAX_ZOOM, pane: "overlayPane" }
+        ).addTo(map);
 
         for (const s of sites) {
           const hex = STATUS_HEX[s.status] ?? "#10b981";
