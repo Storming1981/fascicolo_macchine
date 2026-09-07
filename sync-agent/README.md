@@ -95,6 +95,12 @@ Su un PC sempre acceso con accesso al SQL Server, schedula **`run-sync-hidden.vb
 Il log finisce in `sync.log` nella cartella dell'agent. Un lock file (`.sync.lock`)
 impedisce esecuzioni sovrapposte.
 
+**Percorso di Node**: `run-sync.bat` non si affida al PATH di sistema, ma usa la
+cartella indicata da `NODE_DIR` (sul server del gestionale: `C:\nodejs`). Se Node
+viene spostato, correggere quella riga — altrimenti il sync si ferma. Se
+`node.exe` non c'è, il batch scrive l'errore in `sync.log` ed esce con codice 2,
+che il Task Scheduler mostra come *Last Run Result* `0x2`.
+
 ## Troubleshooting
 
 | Messaggio | Causa / rimedio |
@@ -104,3 +110,6 @@ impedisce esecuzioni sovrapposte.
 | `GET ... 503 Sync non configurato` | `SYNC_API_KEY` vuota in `.env.production` sulla VPS. |
 | `Errore connessione SQL Server` | PC non in rete con `192.168.1.144:1433`, credenziali errate o firewall. |
 | `0 fascicoli con commessa trovata` | I job non sono numerici / non presenti in `commess`: verifica in Anagrafica. |
+| `'npx' non è riconosciuto...` in `sync.log` | Node spostato o non nel PATH: correggi `NODE_DIR` in `run-sync.bat`. |
+| `ERRORE: node.exe non trovato` in `sync.log` | Stessa causa, rilevata dal batch: la cartella in `NODE_DIR` non esiste (o il task gira con un account che non la vede — evita percorsi dentro profili utente o unità di rete). |
+| Nessuna riga nuova in `sync.log` da giorni | Il task non parte affatto: controlla in Task Scheduler *Last Run Time* e che punti a `run-sync-hidden.vbs`. |
