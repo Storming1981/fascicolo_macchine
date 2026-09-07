@@ -678,6 +678,8 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 @media (max-width: 900px) {
   .ric-table { min-width: 560px; }
   .op-table { min-width: 420px; }
+  /* in compilazione la tabella ore ha una colonna in piu (rimuovi riga) */
+  .op-table.editable { min-width: 520px; }
 }
 .ric-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; padding: 0 6px 6px; }
 .ric-table td { padding: 3px 3px; }

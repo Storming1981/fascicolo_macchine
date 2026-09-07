@@ -38,10 +38,11 @@ type Revision = {
   } | null;
 };
 type OperatorHours = { name: string; matricola?: string | null; hours: number };
-type Timbratura = { name: string; start: string; end: string };
+// riga ore: entrata/uscita oppure ore dichiarate a mano (`hours`) senza orari
+type Timbratura = { name: string; start: string; end: string; hours?: number | null; manual?: boolean };
 // riga in tabella: uid stabile + `orig` = valore originale del timbratore (per evidenziare le modifiche)
-type SessionRow = Timbratura & { uid: string; orig?: Timbratura };
-type StoredTimbratura = Timbratura & { orig?: Timbratura };
+type SessionRow = Timbratura & { uid: string; orig?: { name: string; start: string; end: string } };
+type StoredTimbratura = Timbratura & { orig?: { name: string; start: string; end: string } };
 type Attachment = { id: string; path: string; filename: string; mime: string; kind: string };
 type Rapportino = {
   id: string;
@@ -238,6 +239,15 @@ export default function InterventoDetail({
 
   // squadra: responsabile (supervisore = techId) + partecipanti
   const participantIds = data.participants.map((p) => p.id);
+  // nomi proposti nel rapportino: prima la squadra, poi gli altri tecnici attivi
+  const operatorNames = (() => {
+    const team = [
+      techs.find((t) => t.id === data.techId)?.name,
+      ...data.participants.map((p) => p.name),
+      currentUserName,
+    ].filter((n): n is string => !!n);
+    return [...new Set([...team, ...techs.map((t) => t.name)])];
+  })();
   function setParticipants(ids: string[]) {
     patch({ participantIds: ids, assignedTechId: data.techId });
   }
@@ -306,11 +316,14 @@ export default function InterventoDetail({
         setOreTotal(typeof d.total === "number" ? d.total : null);
         const upd = d.updated ?? 0;
         const clr = d.cleared ?? 0;
-        if (upd === 0) alert("Ore già allineate: nessuna giornata da aggiornare.");
+        const skp = d.skipped ?? 0;
+        const manuali = skp ? ` ${skp} giornate con ore compilate a mano non sono state toccate.` : "";
+        if (upd === 0) alert(`Ore già allineate: nessuna giornata da aggiornare.${manuali}`);
         else
           alert(
             `Ore sincronizzate dal timbratore: ${upd} giornate aggiornate` +
-              (clr ? `, di cui ${clr} azzerate (timbrature spostate su un'altra commessa).` : ".")
+              (clr ? `, di cui ${clr} azzerate (timbrature spostate su un'altra commessa).` : ".") +
+              manuali
           );
       } else {
         alert(d?.error ?? "Errore nella sincronizzazione ore.");
@@ -711,6 +724,7 @@ export default function InterventoDetail({
                 oreByDay={oreByDay}
                 oreByDayOperator={oreByDayOperator}
                 sessionsByDay={sessionsByDay}
+                operatorNames={operatorNames}
                 interventoCode={data.code}
                 interventoTitle={data.title}
                 customerEmail={data.customerEmail}
@@ -829,6 +843,7 @@ export default function InterventoDetail({
                 oreByDay={oreByDay}
                 oreByDayOperator={oreByDayOperator}
                 sessionsByDay={sessionsByDay}
+                operatorNames={operatorNames}
                 interventoCode={data.code}
                 interventoTitle={data.title}
                 customerEmail={data.customerEmail}
@@ -883,6 +898,7 @@ function RapportinoDay({
   oreByDay,
   oreByDayOperator,
   sessionsByDay,
+  operatorNames,
   interventoCode,
   interventoTitle,
   customerEmail,
@@ -905,6 +921,8 @@ function RapportinoDay({
   oreByDay: Record<string, number>;
   oreByDayOperator: Record<string, Record<string, number>>;
   sessionsByDay: Record<string, Timbratura[]>;
+  /** nomi proposti nella tendina operatore (squadra + tecnici attivi) */
+  operatorNames: string[];
   interventoCode: string;
   interventoTitle: string;
   customerEmail: string | null;
@@ -941,11 +959,32 @@ function RapportinoDay({
   const uidRef = useRef(0);
   const nextUid = () => `s${uidRef.current++}`;
   const initialSessions: SessionRow[] = rapportino?.timbrature?.length
-    ? rapportino.timbrature.map((t) => ({ uid: nextUid(), name: t.name, start: t.start, end: t.end, orig: t.orig }))
+    ? rapportino.timbrature.map((t) => ({
+        uid: nextUid(),
+        name: t.name,
+        start: t.start,
+        end: t.end,
+        hours: t.hours ?? null,
+        manual: t.manual === true,
+        orig: t.orig,
+      }))
     : rapportino?.hoursByOperator?.length // vecchi rapportini: una riga per operatore senza orari
-      ? rapportino.hoursByOperator.map((o) => ({ uid: nextUid(), name: o.name, start: "", end: "" }))
+      ? rapportino.hoursByOperator.map((o) => ({
+          uid: nextUid(),
+          name: o.name,
+          start: "",
+          end: "",
+          hours: o.hours,
+          manual: true,
+        }))
       : [];
   const [sessions, setSessions] = useState<SessionRow[]>(initialSessions);
+  // true appena il tecnico tocca le ore a mano: da lì il timbratore non
+  // sovrascrive più la tabella (il rapportino non è vincolato alle timbrature)
+  const [hoursTouched, setHoursTouched] = useState(
+    (rapportino?.timbrature ?? []).some((t) => t.manual === true) ||
+      (!rapportino?.timbrature?.length && !!rapportino?.hoursByOperator?.length)
+  );
   const [techName, setTechName] = useState(rapportino?.techName ?? currentUserName);
   const [clientName, setClientName] = useState(rapportino?.clientName ?? "");
   const [plantHours, setPlantHours] = useState(
@@ -964,8 +1003,6 @@ function RapportinoDay({
   const [savedId, setSavedId] = useState<string | null>(rapportino?.id ?? null);
   // operatori ancora timbrati (uscita non registrata) per questo giorno
   const [openTechs, setOpenTechs] = useState<string[]>([]);
-  // avviso: chiusura bloccata perché ci sono timbrature aperte (salvata bozza)
-  const [blockNotice, setBlockNotice] = useState<string[] | null>(null);
   // composizione email (invio con Gmail)
   const [compose, setCompose] = useState(false);
   const [mailTo, setMailTo] = useState(customerEmail ?? "");
@@ -977,7 +1014,7 @@ function RapportinoDay({
 
   // sessioni timbrate quel giorno (dal timbratore) per il precompilamento
   const sessGiorno = sessionsByDay[date];
-  // ore di una sessione da "HH:MM"
+  // ore di una riga: da entrata/uscita, altrimenti quelle dichiarate a mano
   const rowHours = (s: Timbratura): number => {
     const m = (v: string) => {
       const p = v.match(/^(\d{1,2}):(\d{2})$/);
@@ -985,7 +1022,8 @@ function RapportinoDay({
     };
     const a = m(s.start);
     const b = m(s.end);
-    return a != null && b != null && b > a ? Math.round(((b - a) / 60) * 100) / 100 : 0;
+    if (a != null && b != null && b > a) return Math.round(((b - a) / 60) * 100) / 100;
+    return Math.max(0, s.hours ?? 0);
   };
   const totOperators = Math.round(sessions.reduce((n, s) => n + rowHours(s), 0) * 100) / 100;
 
@@ -996,19 +1034,46 @@ function RapportinoDay({
       name: s.name,
       start: s.start,
       end: s.end,
+      hours: null,
+      manual: false,
       orig: { name: s.name, start: s.start, end: s.end },
     }));
 
-  // Le timbrature sono SOLA LETTURA: si allineano sempre a quelle del timbratore
-  // per la giornata scelta (finché il rapportino non è chiuso).
+  // Precompilazione (non vincolante): se il timbratore ha sessioni per la
+  // giornata scelta e il tecnico non ha ancora messo mano alle ore, la tabella
+  // si allinea. Appena si modifica/aggiunge una riga a mano, non si tocca più.
   useEffect(() => {
-    if (readOnly) return;
+    if (readOnly || hoursTouched) return;
     if (sessGiorno && sessGiorno.length) setSessions(rowsFromTimbratore(sessGiorno));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, readOnly, JSON.stringify(sessGiorno ?? null)]);
+  }, [date, readOnly, hoursTouched, JSON.stringify(sessGiorno ?? null)]);
+
+  // Modifica di una riga ore: la marca come manuale (così non viene più
+  // sovrascritta dal timbratore né dalla sincronizzazione ore).
+  const setRow = (uid: string, patch: Partial<Timbratura>) => {
+    setHoursTouched(true);
+    setSessions((rs) => rs.map((r) => (r.uid === uid ? { ...r, ...patch, manual: true } : r)));
+  };
+  const addRow = () => {
+    setHoursTouched(true);
+    setSessions((rs) => [
+      ...rs,
+      { uid: nextUid(), name: rs.length ? "" : techName || currentUserName, start: "", end: "", hours: null, manual: true },
+    ]);
+  };
+  const delRow = (uid: string) => {
+    setHoursTouched(true);
+    setSessions((rs) => rs.filter((r) => r.uid !== uid));
+  };
+  /** Riporta la tabella alle timbrature del timbratore per la giornata. */
+  const importFromTimbratore = () => {
+    if (!sessGiorno?.length) return;
+    setSessions(rowsFromTimbratore(sessGiorno));
+    setHoursTouched(false);
+  };
 
   // Rileva se ci sono operatori ANCORA TIMBRATI (senza uscita) per la commessa
-  // in questa giornata: le ore sono parziali e la chiusura va bloccata.
+  // in questa giornata: le ore lette dal timbratore sono parziali (solo avviso).
   useEffect(() => {
     if (!bodyOpen || readOnly || !interventoId || !date) {
       setOpenTechs([]);
@@ -1032,7 +1097,7 @@ function RapportinoDay({
   const addRic = () => setRicambi((rs) => [...rs, { code: "", desc: "", qty: "", note: "" }]);
   const delRic = (i: number) => setRicambi((rs) => rs.filter((_, idx) => idx !== i));
 
-  async function save(kind: "draft" | "close" | "edit", force = false) {
+  async function save(kind: "draft" | "close" | "edit") {
     setErr(null);
     const fd = new FormData();
     const rid = savedId ?? rapportino?.id ?? null;
@@ -1045,8 +1110,15 @@ function RapportinoDay({
       "timbrature",
       JSON.stringify(
         sessions
-          .map((s) => ({ name: s.name.trim(), start: s.start.trim(), end: s.end.trim(), orig: s.orig }))
-          .filter((s) => s.name || s.start || s.end)
+          .map((s) => ({
+            name: s.name.trim(),
+            start: s.start.trim(),
+            end: s.end.trim(),
+            hours: rowHours(s) || null,
+            manual: s.manual === true,
+            orig: s.orig,
+          }))
+          .filter((s) => s.name || s.start || s.end || (s.hours ?? 0) > 0)
       ) // (l'uid resta lato client; `orig` = timbratura originale del timbratore)
     );
     fd.set("plantHours", plantHours);
@@ -1056,7 +1128,6 @@ function RapportinoDay({
     if (clientSig.current && !clientSig.current.isEmpty()) fd.set("clientSignature", clientSig.current.toDataURL() ?? "");
     for (const f of files) fd.append("attachments", f);
     if (kind === "close") fd.set("finalize", "1");
-    if (kind === "close" && force) fd.set("forceClose", "1");
     if (kind === "edit") fd.set("editNote", editNote);
 
     setBusy(kind);
@@ -1069,13 +1140,6 @@ function RapportinoDay({
       }
       // memorizza l'id per non creare doppioni ai salvataggi successivi
       if (d?.rapportinoId) setSavedId(d.rapportinoId);
-      // chiusura bloccata: operatori ancora timbrati → salvato in BOZZA
-      if (d?.blockedByOpenSessions) {
-        setBlockNotice(((d.openTechs ?? []) as string[]).filter(Boolean));
-        setFiles([]);
-        return; // resta aperto, mostra l'avviso
-      }
-      setBlockNotice(null);
       setFiles([]);
       setEditing(false);
       onDone();
@@ -1218,7 +1282,7 @@ function RapportinoDay({
             </div>
           )}
 
-          {/* Avviso: operatori ancora timbrati → le ore sono parziali */}
+          {/* Avviso: operatori ancora timbrati → le ore lette sono parziali */}
           {!readOnly && openTechs.length > 0 && (
             <div className="info-banner warn" style={{ marginBottom: 12 }}>
               <Icon name="clock" size={15} />
@@ -1226,16 +1290,117 @@ function RapportinoDay({
                 {openTechs.length === 1
                   ? `${openTechs[0]} non ha ancora registrato l'uscita`
                   : `${openTechs.length} operatori non hanno ancora registrato l'uscita`}{" "}
-                ({openTechs.join(", ")}). Le ore sono <strong>parziali</strong>: sincronizza
-                dopo l'uscita, poi firma e chiudi. La chiusura è bloccata fino ad allora.
+                ({openTechs.join(", ")}). Le ore lette dal timbratore sono <strong>parziali</strong>:
+                correggile qui se servono, il rapportino si può comunque firmare e chiudere.
               </span>
             </div>
           )}
 
-          {/* Ore per operatore — timbrature lette dal timbratore (SOLA LETTURA) */}
+          {/* Ore per operatore — compilabili a mano; il timbratore, se c'è, precompila */}
           <div className="field">
-            <span className="field-label">Ore per operatore (timbrature)</span>
-            {sessions.length > 0 ? (
+            <span className="field-label">Ore per operatore</span>
+            {!readOnly ? (
+              <>
+                <div className="table-wrap">
+                  <table className="op-table editable">
+                    <thead>
+                      <tr>
+                        <th>Operatore</th>
+                        <th style={{ width: 96 }}>Entrata</th>
+                        <th style={{ width: 96 }}>Uscita</th>
+                        <th style={{ width: 74 }}>Ore</th>
+                        <th style={{ width: 34 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sessions.map((s) => {
+                        const auto = rowHours(s) > 0 && !!s.start && !!s.end;
+                        const changed =
+                          !!s.orig && (s.start !== s.orig.start || s.end !== s.orig.end || s.name !== s.orig.name);
+                        return (
+                          <tr key={s.uid}>
+                            <td>
+                              <input
+                                value={s.name}
+                                list="rap-operatori"
+                                placeholder="Nome operatore"
+                                onChange={(e) => setRow(s.uid, { name: e.target.value })}
+                              />
+                              {s.orig && (
+                                <div className="muted small">
+                                  {changed
+                                    ? `timbratore: ${s.orig.start || "—"}–${s.orig.end || "—"}`
+                                    : "da timbratore"}
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <input
+                                type="time"
+                                className={s.orig && s.start !== s.orig.start ? "cell-edited" : undefined}
+                                value={s.start}
+                                onChange={(e) => setRow(s.uid, { start: e.target.value })}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="time"
+                                className={s.orig && s.end !== s.orig.end ? "cell-edited" : undefined}
+                                value={s.end}
+                                onChange={(e) => setRow(s.uid, { end: e.target.value })}
+                              />
+                            </td>
+                            <td>
+                              {auto ? (
+                                <input className="mono" value={rowHours(s).toFixed(2)} disabled />
+                              ) : (
+                                <input
+                                  className="mono"
+                                  inputMode="decimal"
+                                  placeholder="0"
+                                  value={s.hours != null ? String(s.hours) : ""}
+                                  onChange={(e) => {
+                                    const v = Number(e.target.value.replace(",", "."));
+                                    setRow(s.uid, { hours: e.target.value.trim() && Number.isFinite(v) ? v : null });
+                                  }}
+                                />
+                              )}
+                            </td>
+                            <td>
+                              <button className="icon-btn sm" onClick={() => delRow(s.uid)} aria-label="Rimuovi riga">
+                                <Icon name="trash" size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {sessions.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="muted small">
+                            Nessuna riga: aggiungi gli operatori e le ore della giornata.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <datalist id="rap-operatori">
+                  {operatorNames.map((n) => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
+                <div className="att-actions" style={{ marginTop: 8 }}>
+                  <button className="btn-ghost-sm" onClick={addRow} type="button">
+                    <Icon name="plus" size={13} /> Aggiungi operatore
+                  </button>
+                  {(sessGiorno?.length ?? 0) > 0 && (
+                    <button className="btn-ghost-sm" onClick={importFromTimbratore} type="button">
+                      <Icon name="clock" size={13} /> Riprendi dal timbratore
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : sessions.length > 0 ? (
               <div className="table-wrap">
               <table className="op-table ro">
                 <thead>
@@ -1286,8 +1451,11 @@ function RapportinoDay({
               </div>
             )}
             <div className="muted small" style={{ marginTop: 6 }}>
-              Totale giornata: <strong>{rapportino?.hoursWorked ?? totOperators} h</strong>
-              {!readOnly && " · dati letti dal timbratore (non modificabili)"}
+              Totale giornata: <strong>{readOnly ? (rapportino?.hoursWorked ?? totOperators) : totOperators} h</strong>
+              {!readOnly &&
+                (sessGiorno?.length
+                  ? " · precompilate dal timbratore, modificabili"
+                  : " · compila entrata/uscita oppure direttamente le ore")}
             </div>
           </div>
 
@@ -1672,29 +1840,6 @@ function RapportinoDay({
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Chiusura bloccata: operatori ancora timbrati → salvato in bozza */}
-          {blockNotice && !readOnly && (
-            <div className="info-banner warn" style={{ marginBottom: 12 }}>
-              <Icon name="clock" size={15} />
-              <span>
-                Chiusura bloccata:{" "}
-                {blockNotice.length ? <strong>{blockNotice.join(", ")}</strong> : "alcuni operatori"}{" "}
-                {blockNotice.length === 1 ? "è" : "sono"} ancora timbrati. Il rapportino è stato{" "}
-                <strong>salvato in bozza</strong>. Registra l&apos;uscita sul timbratore, premi
-                &quot;Sincronizza ore&quot;, poi firma e chiudi.{" "}
-                <button
-                  type="button"
-                  className="link-strong"
-                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
-                  onClick={() => save("close", true)}
-                  disabled={busy !== null}
-                >
-                  Chiudi comunque
-                </button>
-              </span>
             </div>
           )}
 
