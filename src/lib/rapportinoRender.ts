@@ -26,7 +26,7 @@ const isoDay = (d: Date) => {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 };
 
-type Timbratura = { name: string; start: string; end: string; hours?: number | null };
+type Timbratura = { name: string; start: string; end: string };
 const toMin = (hhmm: string): number | null => {
   const m = String(hhmm).match(/^(\d{1,2}):(\d{2})$/);
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
@@ -38,32 +38,25 @@ const sessionHours = (start: string, end: string): number => {
 };
 
 /**
- * Raggruppa le righe ore per operatore (con sessioni entrata/uscita + subtotale).
- * Le righe compilate a mano possono non avere orari: in quel caso valgono le
- * ore dichiarate. Se non ci sono righe (vecchi rapportini) ripiega su
- * hoursByOperator.
+ * Raggruppa le timbrature per operatore (con sessioni entrata/uscita + subtotale).
+ * Se non ci sono timbrature (vecchi rapportini) ripiega su hoursByOperator.
  */
 function operatorsForPdf(
   timbrature: unknown,
   hoursByOperator: unknown
 ): { name: string; sessions: { start: string; end: string; hours: number }[]; total: number }[] {
   const rows: Timbratura[] = Array.isArray(timbrature)
-    ? (timbrature as Record<string, unknown>[]).map((t) => {
-        const h = Number(t?.hours);
-        return {
-          name: String(t?.name ?? "").trim() || "—",
-          start: String(t?.start ?? ""),
-          end: String(t?.end ?? ""),
-          hours: Number.isFinite(h) ? h : null,
-        };
-      })
+    ? (timbrature as Record<string, unknown>[]).map((t) => ({
+        name: String(t?.name ?? "").trim() || "—",
+        start: String(t?.start ?? ""),
+        end: String(t?.end ?? ""),
+      }))
     : [];
   if (rows.length) {
     const map = new Map<string, { start: string; end: string; hours: number }[]>();
     for (const t of rows) {
       const arr = map.get(t.name) ?? [];
-      const fromClock = sessionHours(t.start, t.end);
-      arr.push({ start: t.start, end: t.end, hours: fromClock > 0 ? fromClock : Math.max(0, t.hours ?? 0) });
+      arr.push({ start: t.start, end: t.end, hours: sessionHours(t.start, t.end) });
       map.set(t.name, arr);
     }
     return [...map.entries()].map(([name, sessions]) => ({

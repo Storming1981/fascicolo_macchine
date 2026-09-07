@@ -134,8 +134,6 @@ export async function loadInterventoDetail(id: string) {
           name: string;
           start: string;
           end: string;
-          hours?: number | null;
-          manual?: boolean;
           orig?: { name: string; start: string; end: string };
         }[]) ?? [],
       attachments: r.attachments.map((a) => ({

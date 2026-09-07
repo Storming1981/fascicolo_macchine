@@ -3,6 +3,8 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { isFeedConfigured, fetchCommessaHours } from "@/lib/presenceFeed";
+import { renderRapportinoPdf } from "@/lib/rapportinoRender";
+import { saveBytes } from "@/lib/uploads";
 
 const isoDay = (d: Date) => {
   const off = d.getTimezoneOffset();
@@ -23,10 +25,6 @@ const hhmm = (iso: string | null): string => {
  * COMMESSA dell'intervento. Per ogni rapportino imposta hoursWorked = ore
  * timbrate su quel giorno per quella commessa. I rapportini già chiusi vengono
  * modificati registrando una revisione (log) con lo stato precedente.
- *
- * I rapportini con ore compilate a mano vengono SALTATI: il rapportino può
- * essere fatto anche senza timbratore e la sincronizzazione non deve
- * sovrascrivere quanto dichiarato dal tecnico.
  */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
@@ -39,7 +37,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   const { id } = await ctx.params;
   const intervento = await prisma.intervento.findUnique({
     where: { id },
-    include: { rapportini: true },
+    include: { rapportini: true, machine: { select: { code: true } } },
   });
   if (!intervento) return NextResponse.json({ error: "Intervento non trovato" }, { status: 404 });
   if (!intervento.commessa)
@@ -54,21 +52,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
 
   let updated = 0;
   let cleared = 0;
-  let skipped = 0;
   for (const r of intervento.rapportini) {
     const day = isoDay(r.date);
-
-    // Righe ore compilate/corrette a mano dal tecnico: la sincronizzazione non
-    // le tocca (il rapportino non è vincolato al timbratore).
-    const existingRows = Array.isArray(r.timbrature) ? (r.timbrature as Record<string, unknown>[]) : [];
-    const hasManualRows = existingRows.some((t) => t?.manual === true);
-    // rapportino con ore ma nessuna riga proveniente dal timbratore → compilato a mano
-    const compiledByHand =
-      !hasManualRows && (r.hoursWorked ?? 0) > 0 && existingRows.length > 0 && !existingRows.some((t) => t?.orig);
-    if (hasManualRows || compiledByHand) {
-      skipped++;
-      continue;
-    }
     // Ore del giorno su QUESTA commessa: 0 se non ce ne sono più (es. la
     // timbratura è stata riassegnata a un'altra commessa nel timbratore).
     const h = hours.byDay[day] ?? 0;
@@ -126,6 +111,23 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       where: { id: r.id },
       data: { hoursWorked: total, hoursByOperator: operators, timbrature },
     });
+    // Rapportino già firmato: il PDF archiviato conteneva le ore parziali del
+    // momento della firma → va rigenerato con le ore complete, perché è quello
+    // che poi si invia al cliente.
+    if (r.closed) {
+      const scope = intervento.machine?.code
+        ? `${intervento.machine.code}/interventi`
+        : `service/${intervento.code}`;
+      try {
+        const out = await renderRapportinoPdf(r.id);
+        if (out) {
+          const pdfPath = await saveBytes(out.bytes, scope, `rapportino-${r.id}.pdf`);
+          await prisma.rapportino.update({ where: { id: r.id }, data: { pdfPath } });
+        }
+      } catch {
+        // la mancata rigenerazione non deve far fallire la sincronizzazione
+      }
+    }
     updated++;
   }
 
@@ -133,7 +135,6 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     ok: true,
     updated,
     cleared,
-    skipped,
     total: hours.total,
     byDay: hours.byDay,
     byDayOperator: hours.byDayOperator,

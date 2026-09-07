@@ -7,19 +7,7 @@ import { renderRapportinoPdf } from "@/lib/rapportinoRender";
 
 type RicambioLine = { code: string; desc: string; qty: string; note: string };
 type OperatorLine = { name: string; matricola: string | null; hours: number };
-/**
- * Riga ore della giornata. Può arrivare dal timbratore (`orig` valorizzato) o
- * essere compilata a mano dal tecnico (`manual: true`): in quel caso gli orari
- * possono anche mancare e valgono le `hours` dichiarate.
- */
-type TimbraturaLine = {
-  name: string;
-  start: string;
-  end: string;
-  hours?: number | null;
-  manual?: boolean;
-  orig?: { name: string; start: string; end: string };
-};
+type TimbraturaLine = { name: string; start: string; end: string; orig?: { name: string; start: string; end: string } };
 
 function parseRicambi(raw: string): RicambioLine[] {
   try {
@@ -72,20 +60,17 @@ function parseOperators(raw: string): OperatorLine[] {
 }
 
 const HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
-/** Righe ore: [{ name, start:"HH:MM", end:"HH:MM", hours?, manual? }]. */
+/** Righe timbrature: [{ name, start:"HH:MM", end:"HH:MM" }]. */
 function parseTimbrature(raw: string): TimbraturaLine[] {
   try {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
     return arr
       .map((r) => {
-        const h = Number(String(r.hours ?? "").replace(",", "."));
         const row: TimbraturaLine = {
           name: String(r.name ?? "").trim(),
           start: HHMM.test(String(r.start ?? "")) ? String(r.start) : "",
           end: HHMM.test(String(r.end ?? "")) ? String(r.end) : "",
-          hours: Number.isFinite(h) && h > 0 ? Math.round(h * 100) / 100 : null,
-          manual: r.manual === true || r.manual === "true",
         };
         // preserva la timbratura originale del timbratore (per evidenziare le modifiche)
         const o = r.orig;
@@ -93,7 +78,7 @@ function parseTimbrature(raw: string): TimbraturaLine[] {
           row.orig = { name: String(o.name ?? ""), start: String(o.start ?? ""), end: String(o.end ?? "") };
         return row;
       })
-      .filter((r) => r.name || r.start || r.end || (r.hours ?? 0) > 0);
+      .filter((r) => r.name || r.start || r.end);
   } catch {
     return [];
   }
@@ -104,19 +89,14 @@ const toMin = (hhmm: string): number | null => {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 };
 
-/**
- * Da righe ore calcola totale e aggregato per operatore. Se la riga non ha
- * orari validi (compilazione manuale senza entrata/uscita) valgono le ore
- * dichiarate: il rapportino non dipende dal timbratore.
- */
+/** Da timbrature calcola totale e aggregato per operatore. */
 function hoursFromTimbrature(rows: TimbraturaLine[]): { total: number; byOperator: OperatorLine[] } {
   const byName = new Map<string, number>();
   let total = 0;
   for (const r of rows) {
     const s = toMin(r.start);
     const e = toMin(r.end);
-    const fromClock = s != null && e != null && e > s ? Math.round(((e - s) / 60) * 100) / 100 : 0;
-    const h = fromClock > 0 ? fromClock : Math.max(0, r.hours ?? 0);
+    const h = s != null && e != null && e > s ? Math.round(((e - s) / 60) * 100) / 100 : 0;
     total += h;
     const key = r.name || "—";
     byName.set(key, Math.round(((byName.get(key) ?? 0) + h) * 100) / 100);
@@ -343,9 +323,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (!finalize) return NextResponse.json({ ok: true, finalized: false, rapportinoId: rapportino.id });
 
-  // NB: la chiusura NON dipende dal timbratore esterno. Le timbrature ancora
-  // aperte restano un semplice avviso lato UI (le ore possono essere corrette
-  // o compilate a mano dal tecnico).
+  // La compilazione e la firma del rapportino sono parte del lavoro: si fanno
+  // MENTRE si è ancora timbrati, quindi la chiusura non aspetta l'uscita dal
+  // timbratore. Le ore restano quelle del timbratore e si completano dopo
+  // l'uscita ("Sincronizza ore"); il gate sta sull'INVIO del PDF, che resta
+  // bloccato finché ci sono timbrature aperte (vedi rapportino/[rid]/send).
 
   // --- Chiusura giornaliera → evento nel diario del fascicolo (del giorno) ---
   let diaryEventId: string | null = rapportino.diaryEventId;

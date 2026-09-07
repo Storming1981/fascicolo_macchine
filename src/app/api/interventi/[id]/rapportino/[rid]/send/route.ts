@@ -5,6 +5,12 @@ import { prisma } from "@/lib/db";
 import { renderRapportinoPdf } from "@/lib/rapportinoRender";
 import { readUploadBytes } from "@/lib/uploads";
 import { isGoogleConfigured, resolveSenderEmail, sendGmailAs, type MailAttachment } from "@/lib/google";
+import { isFeedConfigured, fetchOpenSessionsForCommessa } from "@/lib/presenceFeed";
+
+const isoDay = (d: Date) => {
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+};
 
 const emails = (raw: unknown): string[] =>
   String(raw ?? "")
@@ -15,6 +21,10 @@ const emails = (raw: unknown): string[] =>
 /**
  * Invia il PDF del rapportino via Gmail (account aziendale collegato).
  * Body: { to, cc?, subject, body }. Traccia l'invio su Rapportino.sentAt/sentTo.
+ *
+ * Il rapportino si compila e si firma mentre si è ancora in cantiere (timbrati):
+ * l'INVIO invece aspetta che tutte le timbrature della giornata siano chiuse,
+ * altrimenti si manderebbe al cliente un PDF con ore parziali.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string; rid: string }> }) {
   const user = await currentUser();
@@ -31,8 +41,34 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string; ri
     );
 
   const { id, rid } = await ctx.params;
-  const rap = await prisma.rapportino.findFirst({ where: { id: rid, interventoId: id }, select: { id: true } });
+  const rap = await prisma.rapportino.findFirst({
+    where: { id: rid, interventoId: id },
+    select: { id: true, date: true, intervento: { select: { commessa: true } } },
+  });
   if (!rap) return NextResponse.json({ error: "Rapportino non trovato" }, { status: 404 });
+
+  // --- Timbrature ancora aperte nella giornata → ore incomplete, invio negato ---
+  if (rap.intervento.commessa && isFeedConfigured()) {
+    try {
+      const openSessions = await fetchOpenSessionsForCommessa(rap.intervento.commessa);
+      const dayKey = isoDay(rap.date);
+      const stillIn = openSessions.filter((o) => isoDay(o.startedAt ?? new Date()) === dayKey);
+      if (stillIn.length > 0) {
+        const techs = stillIn.map((o) => o.tech).filter((t): t is string => !!t);
+        return NextResponse.json(
+          {
+            error:
+              `Timbrature ancora aperte per questa giornata${techs.length ? ` (${techs.join(", ")})` : ""}: ` +
+              "registra l'uscita dal timbratore, premi \"Sincronizza ore\" e poi invia il rapportino.",
+            openTechs: techs,
+          },
+          { status: 409 }
+        );
+      }
+    } catch {
+      // timbratore non raggiungibile → non blocchiamo l'invio
+    }
+  }
 
   const b = await req.json().catch(() => null);
   const to = emails(b?.to);
