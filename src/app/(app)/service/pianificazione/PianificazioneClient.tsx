@@ -65,6 +65,7 @@ export default function PianificazioneClient({
   techs,
   interventiRows,
   pending,
+  posBlocked = 0,
   allTechs,
   rangeLabel,
   canEdit,
@@ -79,6 +80,7 @@ export default function PianificazioneClient({
   techs: GanttTech[];
   interventiRows: InterventoRow[];
   pending: PendingItem[];
+  posBlocked?: number;
   allTechs: Tech[];
   rangeLabel: string;
   canEdit: boolean;
@@ -465,6 +467,20 @@ export default function PianificazioneClient({
             ))}
             {pending.length === 0 && <li className="muted small">Tutto pianificato 🎉</li>}
           </ul>
+          {posBlocked > 0 && (
+            <div className="info-banner warn" style={{ marginTop: 12 }}>
+              <Icon name="flag" size={15} />
+              <span>
+                <strong>{posBlocked}</strong>{" "}
+                {posBlocked === 1 ? "intervento è bloccato" : "interventi sono bloccati"} in
+                attesa del P.O.S.: non compaiono qui finché il responsabile non valida il Piano
+                Operativo di Sicurezza.{" "}
+                <Link href="/service/interventi" className="link-strong">
+                  Vedi gli interventi
+                </Link>
+              </span>
+            </div>
+          )}
         </section>
 
         <section className="card">

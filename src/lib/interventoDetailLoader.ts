@@ -91,6 +91,12 @@ export async function loadInterventoDetail(id: string) {
         }
       : null,
     techId: intervento.assignedTechId,
+    // P.O.S.: stato della validazione (il file sta nei documenti, category "pos")
+    posValidated: intervento.posValidated,
+    posValidatedAt: intervento.posValidatedAt?.toISOString() ?? null,
+    posValidatedByName: intervento.posValidatedByName,
+    posSignature: intervento.posSignature,
+    posNote: intervento.posNote,
     participants: intervento.participants.map((p) => ({ id: p.id, name: p.name })),
     scheduledStart: intervento.scheduledStart?.toISOString() ?? null,
     scheduledEnd: intervento.scheduledEnd?.toISOString() ?? null,

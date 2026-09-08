@@ -31,6 +31,7 @@ export type InterventoRow = {
   tech: string | null;
   assignedTechId: string | null;
   scheduledStart: string | null;
+  posValidated: boolean;
 };
 
 export type TrashedRow = {
@@ -43,7 +44,6 @@ export type TrashedRow = {
   deletedByName: string | null;
 };
 
-type Tech = { id: string; name: string; zona: string | null };
 export type CustomerOpt = {
   id: string;
   name: string;
@@ -55,20 +55,19 @@ const FILTERS: { key: string; label: string; test: (i: InterventoRow) => boolean
   { key: "tutti", label: "Tutti", test: () => true },
   { key: "p1", label: "Solo P1", test: (i) => i.priority === 1 },
   { key: "aperti", label: "Aperti", test: (i) => i.status !== "FATTURATO" },
-  { key: "daassegnare", label: "Da assegnare", test: (i) => !i.assignedTechId },
+  { key: "pos", label: "P.O.S. da validare", test: (i) => !i.posValidated },
+  { key: "daassegnare", label: "Da assegnare", test: (i) => i.posValidated && !i.assignedTechId },
 ];
 
 export default function InterventiBoard({
   interventi,
   trashed = [],
-  techs,
   customers,
   canCreate,
   canEdit,
 }: {
   interventi: InterventoRow[];
   trashed?: TrashedRow[];
-  techs: Tech[];
   customers: CustomerOpt[];
   canCreate: boolean;
   canEdit: boolean;
@@ -105,8 +104,16 @@ export default function InterventiBoard({
   }, [effInterventi, filtro]);
 
   async function changeStatus(id: string, status: InterventoStatus) {
-    const prev = interventi.find((i) => i.id === id)?.status;
+    const cur = interventi.find((i) => i.id === id);
+    const prev = cur?.status;
     if (prev === status) return;
+    // Vincolo P.O.S.: senza validazione l'intervento non esce dal primo step.
+    if (cur && !cur.posValidated && status !== "DOCUMENTAZIONE") {
+      alert(
+        "P.O.S. non validato: carica il Piano Operativo di Sicurezza e fallo validare dal responsabile prima di pianificare l'intervento."
+      );
+      return;
+    }
     setBusy(id);
     setLocalStatus((s) => ({ ...s, [id]: status })); // ottimistico
     try {
@@ -137,7 +144,8 @@ export default function InterventiBoard({
           <p>
             {interventi.length} interventi ·{" "}
             {interventi.filter((i) => i.priority === 1).length} P1 ·{" "}
-            {interventi.filter((i) => !i.assignedTechId).length} da assegnare
+            {interventi.filter((i) => !i.posValidated).length} in attesa di P.O.S. ·{" "}
+            {interventi.filter((i) => i.posValidated && !i.assignedTechId).length} da assegnare
           </p>
         </div>
         {canCreate && (
@@ -201,7 +209,7 @@ export default function InterventiBoard({
       )}
 
       {showNew && (
-        <NewInterventoModal techs={techs} customers={customers} onClose={() => setShowNew(false)} />
+        <NewInterventoModal customers={customers} onClose={() => setShowNew(false)} />
       )}
     </div>
   );
@@ -344,7 +352,11 @@ function Ticket({
         )}
       </div>
       <div className="ticket-foot">
-        {i.tech ? (
+        {!i.posValidated ? (
+          <span className="prio-chip" style={{ background: "#d9770622", color: "#b45309" }} title="P.O.S. da caricare/validare">
+            P.O.S.
+          </span>
+        ) : i.tech ? (
           <span className="tech-avatar" title={i.tech}>
             {initials(i.tech)}
           </span>
@@ -357,7 +369,8 @@ function Ticket({
           <select
             className="ticket-status-select"
             value={i.status}
-            disabled={busy}
+            disabled={busy || !i.posValidated}
+            title={!i.posValidated ? "P.O.S. da validare: stato bloccato" : undefined}
             onChange={(e) => onStatus(i.id, e.target.value as InterventoStatus)}
           >
             {INTERVENTO_STATUS_ORDER.map((s) => (
@@ -516,11 +529,9 @@ function Cestino({
 }
 
 function NewInterventoModal({
-  techs,
   customers,
   onClose,
 }: {
-  techs: Tech[];
   customers: CustomerOpt[];
   onClose: () => void;
 }) {
@@ -531,7 +542,6 @@ function NewInterventoModal({
   const [customerId, setCustomerId] = useState("");
   const [machineId, setMachineId] = useState("");
   const [siteId, setSiteId] = useState("");
-  const [assignedTechId, setAssignedTechId] = useState("");
   const [reportedBy, setReportedBy] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -562,9 +572,7 @@ function NewInterventoModal({
           customerId: customerId || undefined,
           machineId: machineId || undefined,
           siteId: siteId || undefined,
-          assignedTechId: assignedTechId || undefined,
           reportedBy: reportedBy || undefined,
-          status: assignedTechId ? "PIANIFICATO" : "NUOVO",
         }),
       });
       if (!res.ok) {
@@ -666,30 +674,16 @@ function NewInterventoModal({
             </label>
           )}
 
-          <div className="sig-row">
-            <label className="field">
-              <span className="field-label">Priorità</span>
-              <select value={priority} onChange={(e) => setPriority(Number(e.target.value))}>
-                {[1, 2, 3].map((p) => (
-                  <option key={p} value={p}>
-                    {PRIORITY_META[p].label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="field-label">Tecnico</span>
-              <select value={assignedTechId} onChange={(e) => setAssignedTechId(e.target.value)}>
-                <option value="">— Da assegnare —</option>
-                {techs.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                    {t.zona ? ` · ${t.zona}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label className="field">
+            <span className="field-label">Priorità</span>
+            <select value={priority} onChange={(e) => setPriority(Number(e.target.value))}>
+              {[1, 2, 3].map((p) => (
+                <option key={p} value={p}>
+                  {PRIORITY_META[p].label}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="field">
             <span className="field-label">Segnalato da</span>
@@ -699,6 +693,14 @@ function NewInterventoModal({
               placeholder="Nome contatto cliente"
             />
           </label>
+          <div className="info-banner" style={{ marginTop: 4 }}>
+            <Icon name="flag" size={15} />
+            <span>
+              L&apos;intervento nasce in <strong>Documentazione da validare</strong>: carica il
+              P.O.S. nella scheda e fallo validare dal responsabile: solo allora si potranno
+              assegnare i tecnici e le date.
+            </span>
+          </div>
           {err && <div className="form-error">{err}</div>}
         </div>
         <div className="modal-footer">

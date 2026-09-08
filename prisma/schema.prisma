@@ -51,6 +51,9 @@ enum CollaudoStatus {
 }
 
 enum InterventoStatus {
+  /// Primo step: l'intervento esiste ma la documentazione di sicurezza (P.O.S.)
+  /// non e' ancora stata caricata e validata dal responsabile → non pianificabile.
+  DOCUMENTAZIONE
   NUOVO
   PIANIFICATO
   IN_CORSO
@@ -86,6 +89,7 @@ model User {
   photo          String?  @db.Text // foto profilo (dataURL)
   reparto        String?  // reparto (timbratore): PRO, APV, UTE…
   siteManager    Boolean  @default(false) // responsabile di cantiere
+  posValidator   Boolean  @default(false) // puo' validare il P.O.S. degli interventi (responsabile sicurezza)
   appAccess      String?  // override guscio: "desktop" | "field" (null = default ruolo)
   customerId     String?  // per gli utenti CLIENTE: azienda cliente di appartenenza
   createdAt      DateTime @default(now())
@@ -99,6 +103,7 @@ model User {
   interventiAssegnati Intervento[] @relation("InterventoTech")
   interventiPartecipati Intervento[] @relation("InterventoParticipants")
   interventoDocs InterventoDocument[] @relation("InterventoDocUser")
+  posValidati    Intervento[] @relation("InterventoPosValidator")
   presences      TechPresence[]
   googleToken    GoogleToken?
 }
@@ -410,7 +415,7 @@ model Intervento {
   code          String           @unique // INT-2487
   title         String
   description   String?
-  status        InterventoStatus @default(NUOVO)
+  status        InterventoStatus @default(DOCUMENTAZIONE)
   type          String           @default("MANUTENZIONE") // INSTALLAZIONE | MANUTENZIONE | RIPARAZIONE | SOSTITUZIONE | COLLAUDO | FORMAZIONE | TAGLIO | ALTRO
   priority      Int              @default(3) // 1 = critico/P1, 2 = alto, 3 = normale
   channel       String?          // portale | whatsapp | telegram | email | telefono
@@ -426,6 +431,17 @@ model Intervento {
   completedAt   DateTime?
   invoicedAt    DateTime?
   slaDueAt      DateTime?
+  // P.O.S. (Piano Operativo di Sicurezza): documento obbligatorio prima di
+  // poter assegnare o pianificare l'intervento. Il file sta in
+  // InterventoDocument con category = "pos"; qui c'e' la VALIDAZIONE del
+  // responsabile (flag + firma), senza la quale l'intervento resta in
+  // stato DOCUMENTAZIONE.
+  posValidated       Boolean   @default(false)
+  posValidatedAt     DateTime?
+  posValidatedById   String?
+  posValidatedByName String?
+  posSignature       String?   // path firma del responsabile (/uploads/...)
+  posNote            String?
   // Cestino (soft-delete): interventi creati per errore o per test. Restano nel
   // DB ma spariscono da tutte le liste; ripristinabili dal Cestino.
   deletedAt     DateTime?
@@ -437,6 +453,7 @@ model Intervento {
   site       Site?       @relation(fields: [siteId], references: [id], onDelete: SetNull)
   machine    Machine?    @relation(fields: [machineId], references: [id], onDelete: SetNull)
   tech         User?     @relation("InterventoTech", fields: [assignedTechId], references: [id], onDelete: SetNull)
+  posValidator User?     @relation("InterventoPosValidator", fields: [posValidatedById], references: [id], onDelete: SetNull)
   participants  User[]    @relation("InterventoParticipants") // tecnici partecipanti (squadra)
   rapportini    Rapportino[]
   checklists    InterventoChecklist[]

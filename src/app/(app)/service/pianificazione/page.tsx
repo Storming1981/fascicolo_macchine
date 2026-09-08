@@ -82,7 +82,7 @@ export default async function PianificazionePage({
     };
   });
 
-  const [techs, scheduled, pending] = await Promise.all([
+  const [techs, scheduled, pending, posBlocked] = await Promise.all([
     prisma.user.findMany({
       where: { active: true },
       orderBy: { name: "asc" },
@@ -103,14 +103,20 @@ export default async function PianificazionePage({
         customer: { select: { name: true } },
       },
     }),
+    // Da pianificare: solo interventi con P.O.S. validato (gli altri sono bloccati)
     prisma.intervento.findMany({
       where: {
         status: { in: ["NUOVO", "PIANIFICATO"] },
+        posValidated: true,
         deletedAt: null,
         OR: [{ scheduledStart: null }, { scheduledStart: { lt: start } }],
       },
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
       select: { id: true, code: true, title: true, priority: true, assignedTechId: true, customer: { select: { name: true } } },
+    }),
+    // Bloccati dal P.O.S.: contano solo per avvisare il pianificatore
+    prisma.intervento.count({
+      where: { status: "DOCUMENTAZIONE", posValidated: false, deletedAt: null },
     }),
   ]);
 
@@ -253,6 +259,7 @@ export default async function PianificazionePage({
       techs={ganttTechs}
       interventiRows={interventiRows}
       pending={pendingItems}
+      posBlocked={posBlocked}
       allTechs={techs}
       rangeLabel={label}
       canEdit={canEdit}

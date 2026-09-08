@@ -7,6 +7,7 @@ import { INTERVENTO_TYPE_META, DEFAULT_INTERVENTO_TYPE } from "@/lib/domain";
 import type { InterventoStatus, Prisma } from "@prisma/client";
 
 const STATUSES: InterventoStatus[] = [
+  "DOCUMENTAZIONE",
   "NUOVO",
   "PIANIFICATO",
   "IN_CORSO",
@@ -53,7 +54,9 @@ export async function POST(req: Request) {
 
   const code = await nextInterventoCode();
   const priority = [1, 2, 3].includes(b.priority) ? b.priority : 3;
-  const status: InterventoStatus = STATUSES.includes(b.status) ? b.status : "NUOVO";
+  // Ogni intervento nasce in "Documentazione da validare": nessuna assegnazione
+  // e nessuna data finché il P.O.S. non è caricato e validato (src/lib/pos.ts).
+  const status: InterventoStatus = "DOCUMENTAZIONE";
   const type =
     typeof b.type === "string" && b.type in INTERVENTO_TYPE_META ? b.type : DEFAULT_INTERVENTO_TYPE;
 
@@ -70,9 +73,6 @@ export async function POST(req: Request) {
       customerId: b.customerId || null,
       siteId: b.siteId || null,
       machineId: b.machineId || null,
-      assignedTechId: b.assignedTechId || null,
-      scheduledStart: b.scheduledStart ? new Date(b.scheduledStart) : null,
-      scheduledEnd: b.scheduledEnd ? new Date(b.scheduledEnd) : null,
     },
   });
 

@@ -34,7 +34,11 @@ export type CampoItem = {
 };
 
 const GROUPS: { key: string; label: string; test: (s: InterventoStatus) => boolean }[] = [
-  { key: "aperti", label: "Da fare", test: (s) => s === "NUOVO" || s === "PIANIFICATO" || s === "IN_CORSO" },
+  {
+    key: "aperti",
+    label: "Da fare",
+    test: (s) => s === "DOCUMENTAZIONE" || s === "NUOVO" || s === "PIANIFICATO" || s === "IN_CORSO",
+  },
   { key: "chiusi", label: "Chiusi", test: (s) => s === "COMPLETATO" || s === "FATTURATO" },
   { key: "tutti", label: "Tutti", test: () => true },
 ];

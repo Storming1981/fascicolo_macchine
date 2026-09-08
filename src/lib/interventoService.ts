@@ -3,6 +3,7 @@ import { prisma } from "./db";
 import type { InterventoStatus } from "@prisma/client";
 
 export const INTERVENTO_STATUSES: InterventoStatus[] = [
+  "DOCUMENTAZIONE",
   "NUOVO",
   "PIANIFICATO",
   "IN_CORSO",

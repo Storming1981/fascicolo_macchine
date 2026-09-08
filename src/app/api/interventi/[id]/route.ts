@@ -4,9 +4,11 @@ import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { isClosedStatus } from "@/lib/interventoService";
 import { INTERVENTO_TYPE_META } from "@/lib/domain";
+import { POS_BLOCK_MESSAGE, touchesPlanning } from "@/lib/pos";
 import type { InterventoStatus, Prisma } from "@prisma/client";
 
 const STATUSES: InterventoStatus[] = [
+  "DOCUMENTAZIONE",
   "NUOVO",
   "PIANIFICATO",
   "IN_CORSO",
@@ -23,6 +25,25 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const { id } = await ctx.params;
   const b = await req.json().catch(() => null);
   if (!b) return NextResponse.json({ error: "Body non valido" }, { status: 400 });
+
+  // ── Vincolo P.O.S. ────────────────────────────────────────────────
+  // Finché il Piano Operativo di Sicurezza non è caricato e validato dal
+  // responsabile (flag + firma), l'intervento non si assegna, non si pianifica
+  // e non esce dallo stato "Documentazione da validare".
+  const current = await prisma.intervento.findUnique({
+    where: { id },
+    select: { posValidated: true, status: true },
+  });
+  if (!current) return NextResponse.json({ error: "Intervento non trovato" }, { status: 404 });
+  if (!current.posValidated) {
+    if (touchesPlanning(b))
+      return NextResponse.json({ error: POS_BLOCK_MESSAGE }, { status: 409 });
+    if (b.status && STATUSES.includes(b.status) && b.status !== "DOCUMENTAZIONE")
+      return NextResponse.json(
+        { error: `${POS_BLOCK_MESSAGE} L'intervento resta in "Documentazione da validare".` },
+        { status: 409 }
+      );
+  }
 
   const data: Prisma.InterventoUpdateInput = {};
   if (b.status && STATUSES.includes(b.status)) {

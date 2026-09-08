@@ -15,7 +15,8 @@
     "service:seed": "tsx scripts/seed-service.ts",
     "service:backfill-customers": "tsx scripts/backfill-customers.ts",
     "operators:import": "tsx scripts/import-operators.ts",
-    "service:enrich-customers": "tsx scripts/enrich-customers-erp.ts"
+    "service:enrich-customers": "tsx scripts/enrich-customers-erp.ts",
+    "service:backfill-pos": "tsx prisma/backfill-pos.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

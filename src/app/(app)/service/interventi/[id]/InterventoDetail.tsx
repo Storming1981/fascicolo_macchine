@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
+import PosCard from "@/components/PosCard";
 import {
   CHECKLIST_DEFS,
   CHECKLIST_TYPES,
@@ -20,6 +21,7 @@ import {
   INTERVENTO_TYPE_ORDER,
   interventoTypeMeta,
   PRIORITY_META,
+  POS_CATEGORY,
 } from "@/lib/domain";
 import type { InterventoStatus } from "@prisma/client";
 
@@ -89,6 +91,11 @@ type Data = {
   siteName: string | null;
   machine: { id: string; code: string; job: string; model: string } | null;
   techId: string | null;
+  posValidated: boolean;
+  posValidatedAt: string | null;
+  posValidatedByName: string | null;
+  posSignature: string | null;
+  posNote: string | null;
   participants: { id: string; name: string }[];
   scheduledStart: string | null;
   scheduledEnd: string | null;
@@ -138,6 +145,7 @@ export default function InterventoDetail({
   canEdit,
   canSign,
   canChecklist = false,
+  canValidatePos = false,
   googleConfigured = false,
   googleSender = null,
   campo = false,
@@ -154,6 +162,7 @@ export default function InterventoDetail({
   canEdit: boolean;
   canSign: boolean;
   canChecklist?: boolean;
+  canValidatePos?: boolean;
   googleConfigured?: boolean;
   googleSender?: string | null;
   campo?: boolean;
@@ -164,6 +173,11 @@ export default function InterventoDetail({
   const meta = INTERVENTO_STATUS_META[data.status];
   const prio = PRIORITY_META[data.priority] ?? PRIORITY_META[3];
   const tmeta = interventoTypeMeta(data.type);
+
+  // P.O.S.: finché non è validato l'intervento non si assegna e non si pianifica
+  const posDoc = data.documents.find((d) => d.category === POS_CATEGORY) ?? null;
+  const posOk = data.posValidated;
+  const canPlan = canEdit && posOk;
 
   const [savingMeta, setSavingMeta] = useState(false);
   async function patch(body: Record<string, unknown>) {
@@ -389,6 +403,17 @@ export default function InterventoDetail({
         </div>
       )}
 
+      {!posOk && (
+        <div className="info-banner warn" style={{ marginBottom: 18 }}>
+          <Icon name="flag" size={15} />
+          <span>
+            <strong>P.O.S. da validare.</strong> Questo intervento non può essere assegnato né
+            pianificato finché il Piano Operativo di Sicurezza non è caricato e validato dal
+            responsabile (vedi la card <em>P.O.S.</em> a fondo pagina).
+          </span>
+        </div>
+      )}
+
       <div className="grid-two">
         {/* Anagrafica intervento */}
         <section className="card" style={{ alignSelf: "start" }}>
@@ -466,7 +491,7 @@ export default function InterventoDetail({
             </div>
             <div className="field">
               <span className="field-label">Programmato — Inizio</span>
-              {canEdit ? (
+              {canPlan ? (
                 <input
                   type="datetime-local"
                   value={toLocalInput(data.scheduledStart)}
@@ -481,7 +506,7 @@ export default function InterventoDetail({
 
             <div className="field">
               <span className="field-label">Programmato — Fine</span>
-              {canEdit ? (
+              {canPlan ? (
                 <input
                   type="datetime-local"
                   value={toLocalInput(data.scheduledEnd)}
@@ -493,6 +518,7 @@ export default function InterventoDetail({
               ) : (
                 <span>{data.scheduledEnd ? new Date(data.scheduledEnd).toLocaleString("it-IT") : "—"}</span>
               )}
+              {canEdit && !posOk && <span className="muted small">Bloccato: P.O.S. da validare</span>}
             </div>
 
             <div className="field">
@@ -542,7 +568,7 @@ export default function InterventoDetail({
 
             <div className="field">
               <span className="field-label">Responsabile di cantiere (supervisore)</span>
-              {canEdit ? (
+              {canPlan ? (
                 <select
                   value={data.techId ?? ""}
                   onChange={(e) =>
@@ -563,7 +589,12 @@ export default function InterventoDetail({
                   ))}
                 </select>
               ) : (
-                techs.find((t) => t.id === data.techId)?.name ?? "Da assegnare"
+                <>
+                  {techs.find((t) => t.id === data.techId)?.name ?? "Da assegnare"}
+                  {canEdit && !posOk && (
+                    <span className="muted small">Bloccato: P.O.S. da validare</span>
+                  )}
+                </>
               )}
             </div>
 
@@ -574,7 +605,7 @@ export default function InterventoDetail({
                 {data.participants.map((p) => (
                   <span key={p.id} className="team-chip">
                     {p.name}
-                    {canEdit && (
+                    {canPlan && (
                       <button
                         type="button"
                         aria-label="Rimuovi"
@@ -586,7 +617,10 @@ export default function InterventoDetail({
                   </span>
                 ))}
               </div>
-              {canEdit && (
+              {canEdit && !posOk && (
+                <span className="muted small">Squadra bloccata: P.O.S. da validare</span>
+              )}
+              {canPlan && (
                 <select
                   value=""
                   onChange={(e) => {
@@ -646,7 +680,12 @@ export default function InterventoDetail({
             <div className="field">
               <span className="field-label">Stato</span>
               {canEdit ? (
-                <select value={data.status} onChange={(e) => patch({ status: e.target.value as InterventoStatus })}>
+                <select
+                  value={data.status}
+                  disabled={!posOk}
+                  title={!posOk ? "Stato bloccato finché il P.O.S. non è validato" : undefined}
+                  onChange={(e) => patch({ status: e.target.value as InterventoStatus })}
+                >
                   {INTERVENTO_STATUS_ORDER.map((s) => (
                     <option key={s} value={s}>
                       {INTERVENTO_STATUS_META[s].label}
@@ -788,10 +827,37 @@ export default function InterventoDetail({
         </div>
       </section>
 
-      {/* Documenti dell'intervento */}
+      {/* P.O.S. — documento vincolante per la pianificazione */}
+      <PosCard
+        interventoId={data.id}
+        doc={
+          posDoc
+            ? {
+                id: posDoc.id,
+                name: posDoc.name,
+                path: posDoc.path,
+                sizeBytes: posDoc.sizeBytes,
+                uploadedByName: posDoc.uploadedByName,
+                createdAt: posDoc.createdAt,
+              }
+            : null
+        }
+        state={{
+          validated: data.posValidated,
+          validatedAt: data.posValidatedAt,
+          validatedByName: data.posValidatedByName,
+          signature: data.posSignature,
+          note: data.posNote,
+        }}
+        canEdit={canEdit}
+        canValidate={canValidatePos}
+        onDone={() => router.refresh()}
+      />
+
+      {/* Altri documenti dell'intervento (nessun vincolo) */}
       <DocumentiCard
         interventoId={data.id}
-        documents={data.documents}
+        documents={data.documents.filter((d) => d.category !== POS_CATEGORY)}
         canEdit={canEdit && !campo}
         onDone={() => router.refresh()}
       />

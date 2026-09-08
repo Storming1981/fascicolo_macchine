@@ -30,11 +30,18 @@ export default async function NotifichePage() {
   if (!user) redirect("/login");
   if (!(await userCan(user.role, "service.view"))) redirect("/dashboard");
 
-  const [p1, recent, completed, chats] = await Promise.all([
+  const [p1, posPending, recent, completed, chats] = await Promise.all([
     prisma.intervento.findMany({
       where: { priority: 1, status: "NUOVO", assignedTechId: null, deletedAt: null },
       include: { customer: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
+    }),
+    // In attesa del P.O.S.: bloccati, non pianificabili
+    prisma.intervento.findMany({
+      where: { posValidated: false, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: { customer: { select: { name: true } }, documents: { where: { category: "pos" }, select: { id: true } } },
     }),
     prisma.intervento.findMany({
       where: { deletedAt: null },
@@ -64,6 +71,18 @@ export default async function NotifichePage() {
       icon: "flag",
       title: `SLA a rischio: ${i.code}`,
       desc: `P1 da assegnare · ${i.customer?.name ?? i.title}`,
+      at: i.createdAt,
+      href: `/service/interventi/${i.id}`,
+    });
+  for (const i of posPending)
+    items.push({
+      id: "pos-" + i.id,
+      tone: "warn",
+      icon: "flag",
+      title: `P.O.S. da validare: ${i.code}`,
+      desc:
+        (i.documents.length ? "Documento caricato, manca la firma del responsabile" : "P.O.S. non ancora caricato") +
+        ` · ${i.customer?.name ?? i.title}`,
       at: i.createdAt,
       href: `/service/interventi/${i.id}`,
     });
@@ -109,7 +128,7 @@ export default async function NotifichePage() {
       <div className="view-header">
         <div>
           <h1>Notifiche</h1>
-          <p>Alert SLA, interventi e conversazioni recenti</p>
+          <p>Alert SLA, P.O.S. da validare, interventi e conversazioni recenti</p>
         </div>
       </div>
 

@@ -36,6 +36,7 @@ export default async function PeoplePage() {
       photo: u.photo,
       reparto: u.reparto,
       siteManager: u.siteManager,
+      posValidator: u.posValidator,
       appAccess: u.appAccess,
       signs: c?._count._all ?? 0,
       last: c?._max.signedAt ? c._max.signedAt.toISOString() : null,

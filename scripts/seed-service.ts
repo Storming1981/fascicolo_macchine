@@ -121,6 +121,10 @@ async function main() {
       assignedTechId: t.status === "NUOVO" && t.priority === 3 ? null : techIds[t.tech] ?? null,
       completedAt: t.status === "COMPLETATO" || t.status === "FATTURATO" ? new Date() : null,
       startedAt: t.status === "IN_CORSO" ? new Date() : null,
+      // dati di esempio: P.O.S. già validato, altrimenti non sarebbero pianificabili
+      posValidated: true,
+      posValidatedAt: new Date(),
+      posValidatedByName: "Dati di esempio",
     };
   }
 

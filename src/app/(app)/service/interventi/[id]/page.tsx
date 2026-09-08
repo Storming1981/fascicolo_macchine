@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { loadInterventoDetail } from "@/lib/interventoDetailLoader";
 import { isGoogleConfigured, resolveSenderEmail } from "@/lib/google";
+import { canValidatePos } from "@/lib/pos";
 import InterventoDetail from "./InterventoDetail";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,7 @@ export default async function InterventoDetailPage({
   const canEdit = await userCan(user.role, "intervento.edit");
   const canSign = await userCan(user.role, "intervento.sign");
   const canChecklist = await userCan(user.role, "checklist.manage");
+  const canPos = canValidatePos(user);
   const googleConfigured = isGoogleConfigured();
   const googleSender = googleConfigured ? await resolveSenderEmail(user.id) : null;
 
@@ -46,6 +48,7 @@ export default async function InterventoDetailPage({
       canEdit={canEdit}
       canSign={canSign}
       canChecklist={canChecklist}
+      canValidatePos={canPos}
       googleConfigured={googleConfigured}
       googleSender={googleSender}
     />

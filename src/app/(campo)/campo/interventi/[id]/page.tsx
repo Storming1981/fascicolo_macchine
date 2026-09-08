@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { loadInterventoDetail } from "@/lib/interventoDetailLoader";
 import { isGoogleConfigured, resolveSenderEmail } from "@/lib/google";
+import { canValidatePos } from "@/lib/pos";
 import InterventoDetail from "@/app/(app)/service/interventi/[id]/InterventoDetail";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,7 @@ export default async function CampoInterventoPage({
       canEdit={canEdit}
       canSign={canSign}
       canChecklist={false}
+      canValidatePos={canValidatePos(user)}
       googleConfigured={googleConfigured}
       googleSender={googleSender}
       campo

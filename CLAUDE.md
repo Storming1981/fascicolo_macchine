@@ -208,6 +208,33 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
 - **Persone**: elenco operatori, firme, creazione operatore (solo ADMIN).
 - **Ricerca topbar intelligente** (`/api/search`): matricola componente / codice
   fascicolo / job → apre direttamente la macchina; testo generico → lista filtrata.
+- **P.O.S. — Piano Operativo di Sicurezza (vincolo di pianificazione)**:
+  ogni intervento nasce nello stato **DOCUMENTAZIONE** ("Documentazione da
+  validare"). Finché il P.O.S. non è **caricato** (file Word/PDF compilato a
+  mano con intestazione cliente, `InterventoDocument.category = "pos"`, uno solo
+  per intervento) **e validato** dal responsabile (flag di presa visione +
+  firma a penna o PIN), l'intervento **non si assegna e non si pianifica**;
+  poi passa automaticamente a NUOVO ed entra nel flusso normale. Gli altri
+  documenti restano liberi (upload a mano, nessun vincolo).
+  - Responsabile abilitato: flag **`User.posValidator`** dall'anagrafica utenti
+    (Persone → Anagrafica dipendente → *Validatore P.O.S.*); di fatto **Fausto
+    Zanotti**, più gli ADMIN. Logica in `src/lib/pos.ts` (`canValidatePos`,
+    `hasPosDocument`, `touchesPlanning`).
+  - Campi su `Intervento`: `posValidated`, `posValidatedAt`,
+    `posValidatedById` / `posValidatedByName`, `posSignature`, `posNote`.
+  - Enforcement **server-side**: `PATCH /api/interventi/[id]` rifiuta (409)
+    assegnazione tecnico / date / squadra e qualunque cambio di stato diverso da
+    DOCUMENTAZIONE; `POST /api/interventi` crea sempre in DOCUMENTAZIONE.
+    Il documento P.O.S. non si cancella se la validazione è attiva.
+  - API: `POST /api/interventi/[id]/pos` (valida: flag + firma) ·
+    `DELETE` (revoca: torna in DOCUMENTAZIONE se non è già partito).
+  - UI: card **P.O.S.** nella scheda intervento (`src/components/PosCard.tsx`),
+    banner di blocco, campi di pianificazione disabilitati, colonna kanban
+    "Documentazione da validare", filtro *P.O.S. da validare*, notifiche
+    dedicate e avviso nella Pianificazione (gli interventi bloccati non
+    compaiono tra i "Da pianificare").
+  - Backfill: `npm run service:backfill-pos` — grazia gli interventi storici
+    (marcati "Storico (pre-P.O.S.)") e abilita il validatore.
 - **Check list di collaudo M7.3** (`src/lib/checklist.ts`, 63 voci): card nello
   scopo Collaudo & Firme con stato (Da compilare / In corso / In attesa di
   approvazione / Approvato) e barra di avanzamento. Modal a tutta pagina con

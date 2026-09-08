@@ -975,7 +975,7 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .ai-tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
 
 /* ===== Service — dashboard / notifiche ===== */
-.svc-pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.svc-pipeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
 .svc-pipe { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; background: var(--bg-3); }
 .svc-pipe-top { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-2); }
 .svc-pipe-count { font-size: 24px; font-weight: 700; color: var(--navy); margin-top: 6px; }

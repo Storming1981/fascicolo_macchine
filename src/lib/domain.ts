@@ -31,6 +31,7 @@ export const INTERVENTO_STATUS_META: Record<
   InterventoStatus,
   { label: string; color: string }
 > = {
+  DOCUMENTAZIONE: { label: "Documentazione da validare", color: "#d97706" },
   NUOVO: { label: "Nuovo", color: "#1d6fb8" },
   PIANIFICATO: { label: "Pianificato", color: "#8b5cf6" },
   IN_CORSO: { label: "In corso", color: "#2f6aed" },
@@ -39,12 +40,27 @@ export const INTERVENTO_STATUS_META: Record<
 };
 
 export const INTERVENTO_STATUS_ORDER: InterventoStatus[] = [
+  "DOCUMENTAZIONE",
   "NUOVO",
   "PIANIFICATO",
   "IN_CORSO",
   "COMPLETATO",
   "FATTURATO",
 ];
+
+/**
+ * P.O.S. — Piano Operativo di Sicurezza. Documento obbligatorio: finche' non e'
+ * caricato (InterventoDocument con questa categoria) E validato dal
+ * responsabile (flag + firma), l'intervento resta in "Documentazione da
+ * validare" e non puo' essere ne' assegnato ne' pianificato.
+ */
+export const POS_CATEGORY = "pos";
+export const POS_LABEL = "P.O.S. — Piano Operativo di Sicurezza";
+
+/** Stati che presuppongono un P.O.S. validato (tutti tranne il primo step). */
+export function statusRequiresPos(s: InterventoStatus): boolean {
+  return s !== "DOCUMENTAZIONE";
+}
 
 /**
  * Tipologia intervento (targhettizzazione): colore usato con alpha per tinte

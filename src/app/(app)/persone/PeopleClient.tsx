@@ -21,6 +21,7 @@ type U = {
   photo: string | null;
   reparto: string | null;
   siteManager: boolean;
+  posValidator: boolean;
   appAccess: string | null;
   signs: number;
   last: string | null;
@@ -244,6 +245,11 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
                           <Icon name="pin" size={11} /> Resp. cantiere
                         </span>
                       )}
+                      {u.posValidator && (
+                        <span className="prio-chip" style={{ background: "#d9770622", color: "#b45309" }} title="Può validare il P.O.S. degli interventi">
+                          <Icon name="flag" size={11} /> Valida P.O.S.
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="mono small">{u.email}</td>
@@ -438,6 +444,7 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
   });
   const [photo, setPhoto] = useState<string | null>(user.photo);
   const [siteManager, setSiteManager] = useState(user.siteManager);
+  const [posValidator, setPosValidator] = useState(user.posValidator);
   const [appAccess, setAppAccess] = useState<string>(user.appAccess ?? "");
   const [saving, setSaving] = useState(false);
   const [e, setE] = useState<string | null>(null);
@@ -467,6 +474,7 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
         badgeId: f.badgeId,
         zona: f.zona,
         siteManager,
+        posValidator,
         appAccess: appAccess || "",
       };
       if (photo !== user.photo) body.photo = photo ?? "";
@@ -572,6 +580,18 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
               <label className="flex-inline" style={{ gap: 8, cursor: "pointer" }}>
                 <input type="checkbox" checked={siteManager} onChange={(ev) => setSiteManager(ev.target.checked)} />
                 <span>Responsabile di cantiere</span>
+              </label>
+            </div>
+            <div className="form-row" style={{ justifyContent: "flex-end" }}>
+              <label className="flex-inline" style={{ gap: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={posValidator}
+                  onChange={(ev) => setPosValidator(ev.target.checked)}
+                />
+                <span title="Può mettere flag e firma sul P.O.S., sbloccando la pianificazione">
+                  Validatore P.O.S. (sicurezza)
+                </span>
               </label>
             </div>
             <div className="form-row">

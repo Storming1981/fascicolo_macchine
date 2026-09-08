@@ -25,7 +25,7 @@ export default async function InterventiPage() {
     ? {}
     : { OR: [{ assignedTechId: user.id }, { participants: { some: { id: user.id } } }] };
 
-  const [rows, trashedRows, techs, customerRows] = await Promise.all([
+  const [rows, trashedRows, customerRows] = await Promise.all([
     prisma.intervento.findMany({
       where: { ...scopeWhere, deletedAt: null },
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
@@ -49,11 +49,6 @@ export default async function InterventiPage() {
         customer: { select: { name: true } },
         machine: { select: { code: true, job: true } },
       },
-    }),
-    prisma.user.findMany({
-      where: { active: true },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, zona: true },
     }),
     prisma.customer.findMany({
       orderBy: { name: "asc" },
@@ -88,6 +83,7 @@ export default async function InterventiPage() {
     tech: i.tech?.name ?? null,
     assignedTechId: i.assignedTechId,
     scheduledStart: i.scheduledStart ? i.scheduledStart.toISOString() : null,
+    posValidated: i.posValidated,
   }));
 
   const trashed: TrashedRow[] = trashedRows.map((i) => ({
@@ -104,7 +100,6 @@ export default async function InterventiPage() {
     <InterventiBoard
       interventi={interventi}
       trashed={trashed}
-      techs={techs}
       customers={customers}
       canCreate={canCreate}
       canEdit={canEdit}
