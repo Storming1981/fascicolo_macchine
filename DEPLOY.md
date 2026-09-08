@@ -149,10 +149,26 @@ Punti chiave già inclusi: `client_max_body_size 32m` (upload foto/documenti fin
 ```bash
 cd /srv/machines-zato-app
 git pull
-docker compose build app
+docker compose build app tools                     # ATTENZIONE: anche `tools`
 docker compose run --rm tools npx prisma db push   # solo se lo schema è cambiato
 docker compose up -d
 docker image prune -f
+```
+
+> **Ricostruisci sempre anche `tools`, non solo `app`.** L'immagine `tools`
+> contiene una *copia* del codice (quindi di `prisma/schema.prisma`): se resta
+> vecchia, `prisma db push` confronta il DB con lo **schema vecchio** e risponde
+> allegramente *"The database is already in sync"* senza applicare nulla. Poi
+> l'app nuova parte contro un DB senza le colonne nuove e va in errore.
+> Verifica sempre l'esito sul DB, es.:
+> ```bash
+> sudo -u postgres psql -d fascicolo_macchine >   -c "\d \"Intervento\"" | grep pos
+> ```
+
+Se l'aggiornamento porta uno **script di migrazione dati** (es.
+`service:backfill-pos`), eseguilo **dopo il `db push` e prima di `up -d`**:
+```bash
+docker compose run --rm tools npm run service:backfill-pos
 ```
 
 ---
