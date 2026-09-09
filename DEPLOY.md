@@ -173,6 +173,60 @@ docker compose run --rm tools npm run service:backfill-pos
 
 ---
 
+## 8-bis. ZATO Brain (prima attivazione)
+
+Il Brain aggiunge tabelle nuove (`KnowledgeSource`, `KnowledgeChunk`,
+`KnowledgeTerm`, `BrainThread`, `BrainMessage`), quindi dopo il `git pull` serve
+il `db push` — e va ricostruita anche l'immagine `tools`, come sempre.
+
+```bash
+cd /srv/machines-zato-app
+git pull
+docker compose build app tools
+docker compose run --rm tools npx prisma db push
+```
+
+Poi la chiave in `.env.production`:
+
+```bash
+nano .env.production      # ANTHROPIC_API_KEY=sk-ant-...
+docker compose up -d      # il container rilegge l'env solo se ricreato
+```
+
+Infine si popola la base di conoscenza:
+
+```bash
+docker compose run --rm tools npm run brain:seed   # dizionario tecnico (43 voci)
+docker compose run --rm tools npm run brain:sync   # rapportini, chat, diari, articoli
+```
+
+Verifica che l'indice sia popolato:
+```bash
+sudo -u postgres psql -d fascicolo_macchine   -c 'SELECT count(*) AS fonti FROM "KnowledgeSource";
+      SELECT count(*) AS frammenti FROM "KnowledgeChunk";
+      SELECT count(*) AS termini FROM "KnowledgeTerm";'
+```
+
+**Senza `ANTHROPIC_API_KEY` l'app parte lo stesso**: la scheda *Chiedi al Brain*
+mostra un avviso e restano spenti OCR, descrizione disegni ed espansione query.
+Tutto il resto (fascicoli, service, rapportini) funziona come prima.
+
+### Aggiornamento notturno del corpus
+
+`brain:sync` è idempotente (rilavora solo ciò che è cambiato): va messo a cron.
+
+```bash
+# /etc/cron.d/machines-zato-brain
+30 2 * * * root cd /srv/machines-zato-app && docker compose run --rm tools npm run brain:sync >> /var/log/brain-sync.log 2>&1
+```
+
+### Costi
+
+Ogni domanda costa qualche centesimo (~$0.04 misurato su corpus reale, con la
+prompt cache attiva dal secondo messaggio). L'indicizzazione dei documenti
+testuali è **gratuita**: l'AI interviene solo su PDF scansionati (OCR) e
+immagini. La stima per richiesta è mostrata sotto ogni risposta nella UI.
+
 ## 9. Backup (consigliato: cron giornaliero)
 
 ```bash

@@ -44,21 +44,7 @@ export default function KnowledgeList({
   });
 
   return (
-    <div className="view">
-      <div className="view-header">
-        <div>
-          <h1>Knowledge ZATO</h1>
-          <p>Procedure, know-how e documentazione del macromondo ZATO</p>
-        </div>
-        {canManage && (
-          <button className="btn-primary" onClick={() => setShowNew(true)}>
-            <Icon name="plus" size={15} /> Nuovo articolo
-          </button>
-        )}
-      </div>
-
-      <RecurringIssuesPanel canManage={canManage} />
-
+    <div>
       <div className="kb-toolbar">
         <div className="search" style={{ maxWidth: 340 }}>
           <Icon name="search" size={15} color="var(--muted)" />
@@ -74,6 +60,11 @@ export default function KnowledgeList({
             </button>
           ))}
         </div>
+        {canManage && (
+          <button className="btn-primary" style={{ marginLeft: "auto" }} onClick={() => setShowNew(true)}>
+            <Icon name="plus" size={15} /> Nuovo articolo
+          </button>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -120,7 +111,7 @@ type Insight = {
   data: { summary: string; issues: RecurringIssue[] };
 };
 
-function RecurringIssuesPanel({ canManage }: { canManage: boolean }) {
+export function RecurringIssuesPanel({ canManage }: { canManage: boolean }) {
   const [insight, setInsight] = useState<Insight | null | undefined>(undefined);
   const [aiConfigured, setAiConfigured] = useState(true);
   const [busy, setBusy] = useState(false);

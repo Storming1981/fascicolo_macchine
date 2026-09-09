@@ -171,6 +171,7 @@ model Machine {
   customerRef Customer?    @relation(fields: [customerId], references: [id])
   interventi  Intervento[]
   conversations Conversation[]
+  knowledgeSources KnowledgeSource[]
 
   @@index([customerId])
 }
@@ -386,6 +387,7 @@ model Customer {
   machines      Machine[]
   conversations Conversation[]
   users         User[]         @relation("CustomerUsers") // accessi portale cliente
+  knowledgeSources KnowledgeSource[]
 }
 
 /// Cantiere / stabilimento di un cliente (con geolocalizzazione per la mappa).
@@ -689,4 +691,187 @@ model KnowledgeInsight {
   createdAt       DateTime @default(now())
 
   @@index([scope])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ZATO BRAIN — knowledge base indicizzata + assistente AI
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Tipo di sorgente di conoscenza. I primi sono CARICATI a mano, gli ultimi
+/// sono DERIVATI automaticamente dal corpus operativo (rapportini, chat, diario).
+enum KnowledgeSourceType {
+  MANUAL // manuale macchina / libretto d'uso (PDF, Word)
+  PROCEDURE // procedura standard (installazione, manutenzione, taglio…)
+  CASE // caso specifico risolto (lesson learned)
+  DRAWING // disegno tecnico / schema elettrico-idraulico (immagine o PDF)
+  VIDEO // video di procedura standard
+  BULLETIN // bollettino tecnico / nota di service
+  SPARE // listino / catalogo ricambi
+  ARTICLE // articolo scritto in Knowledge (KnowledgeArticle)
+  RAPPORTINO // derivato: rapportino di intervento in cantiere
+  CHAT // derivato: conversazione di cantiere
+  DIARY // derivato: evento del diario macchina
+  OTHER
+}
+
+enum KnowledgeStatus {
+  PENDING // caricato, in coda di indicizzazione
+  PROCESSING
+  READY
+  FAILED
+}
+
+/// Chi può vedere la fonte (e quindi riceverne citazioni nelle risposte).
+/// INTERNAL = solo operatori ZATO; CUSTOMER = anche il portale cliente.
+enum KnowledgeVisibility {
+  INTERNAL
+  CUSTOMER
+}
+
+/// Una sorgente di conoscenza: un documento caricato (PDF/Word/immagine/video)
+/// oppure un contenuto derivato dal corpus operativo. Il testo utile viene
+/// estratto UNA VOLTA all'ingestione e spezzato in KnowledgeChunk: a runtime il
+/// modello riceve solo i chunk pertinenti, mai il documento intero.
+model KnowledgeSource {
+  id          String              @id @default(cuid())
+  type        KnowledgeSourceType @default(MANUAL)
+  title       String
+  description String?
+  status      KnowledgeStatus     @default(PENDING)
+  error       String?
+  visibility  KnowledgeVisibility @default(INTERNAL)
+
+  // File / media
+  filePath   String? // /uploads/knowledge/...
+  fileName   String?
+  mimeType   String?
+  sizeBytes  Int?
+  pageCount  Int?
+  videoUrl   String? // link esterno (YouTube/Vimeo) in alternativa al file
+  posterPath String? // copertina del video
+  durationSec Int?
+
+  // Ambito: a cosa si applica questa conoscenza
+  plantType  String? // BLUE DEVIL, BLUE SHARK, …
+  model      String? // CONTAINER ELETTRICO, MULINO 16-13, …
+  machineId  String? // fascicolo specifico (opzionale)
+  customerId String? // conoscenza riservata a un cliente (opzionale)
+  lang       String  @default("it")
+  tags       String[] @default([])
+
+  // Provenienza dei contenuti DERIVATI (per reindicizzazione idempotente)
+  originKind String? // "rapportino" | "conversation" | "diary" | "article"
+  originId   String?
+
+  // Indicizzazione
+  contentHash    String? // sha256 del testo estratto: evita reindicizzazioni inutili
+  extractedChars Int     @default(0)
+  chunkCount     Int     @default(0)
+  tokensEstimate Int     @default(0)
+  ocrUsed        Boolean @default(false) // testo ricavato via AI (PDF scansionato / immagine)
+  indexedAt      DateTime?
+
+  uploadedById   String?
+  uploadedByName String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  machine  Machine?  @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  chunks   KnowledgeChunk[]
+
+  @@unique([originKind, originId])
+  @@index([type])
+  @@index([status])
+  @@index([plantType])
+  @@index([machineId])
+  @@index([customerId])
+}
+
+/// Frammento indicizzato di una sorgente (~450 token). `tsv` è il vettore di
+/// ricerca full-text italiano, popolato via SQL raw (Prisma non tipizza tsvector).
+model KnowledgeChunk {
+  id       String @id @default(cuid())
+  sourceId String
+  seq      Int
+  /// Breadcrumb leggibile ("Manuale BLUE DEVIL › Cambio lame › p. 42"):
+  /// entra nel prompt come titolo del documento, così la citazione è parlante.
+  breadcrumb String
+  heading    String?
+  page       Int?
+  text       String
+  tokens     Int    @default(0)
+  /// Timestamp del video (secondi) per i chunk di trascrizione: permette di
+  /// proporre il video già posizionato sul passaggio giusto.
+  videoAt    Int?
+  tsv        Unsupported("tsvector")?
+  createdAt  DateTime @default(now())
+
+  source KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, seq])
+  @@index([sourceId])
+  @@index([tsv], type: Gin)
+}
+
+/// Dizionario tecnico ZATO: gergo di cantiere / sinonimi / abbreviazioni → termine
+/// canonico. Serve a due cose: espandere le query di ricerca (un tecnico scrive
+/// "il rotore si pianta", il manuale dice "bloccaggio del rotore") e a dare al
+/// modello il vocabolario giusto nel system prompt (in prompt cache).
+model KnowledgeTerm {
+  id         String   @id @default(cuid())
+  term       String   @unique // termine canonico
+  aliases    String[] @default([]) // sinonimi, gergo, refusi comuni, inglese
+  definition String? // spiegazione breve per il modello e per gli operatori
+  category   String   @default("Generale") // Meccanica | Idraulica | Elettrico | Sicurezza | Processo | Commerciale
+  plantType  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([category])
+}
+
+/// Conversazione con lo ZATO Brain (interna o dal portale cliente).
+model BrainThread {
+  id         String   @id @default(cuid())
+  title      String   @default("Nuova domanda")
+  scope      String   @default("internal") // internal | portal
+  userId     String?
+  userName   String?
+  customerId String?
+  machineId  String? // contesto: macchina di riferimento
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  messages BrainMessage[]
+
+  @@index([userId])
+  @@index([customerId])
+  @@index([scope])
+}
+
+model BrainMessage {
+  id       String @id @default(cuid())
+  threadId String
+  role     String // user | assistant
+  content  String @db.Text
+  /// Fonti usate: [{ sourceId, title, type, page, breadcrumb, filePath, videoAt }]
+  sources  Json   @default("[]")
+  /// Citazioni puntuali restituite dalla Citations API di Claude
+  citations Json  @default("[]")
+  /// Immagini allegate dall'utente (foto guasto, disegno tecnico)
+  images   String[] @default([])
+  model    String?
+  inputTokens     Int @default(0)
+  outputTokens    Int @default(0)
+  cacheReadTokens Int @default(0)
+  latencyMs       Int @default(0)
+  /// Feedback dell'operatore: 1 utile, -1 non utile
+  rating     Int?
+  ratingNote String?
+  createdAt  DateTime @default(now())
+
+  thread BrainThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
 }

@@ -149,6 +149,110 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   `BLUE DEVIL` (dati MATRICOLE = trituratori); 181 con modello "Da definire"
   impostati a `CORPO TRITURATORE`. Script: `prisma/backfill-plant.ts`.
 
+## ZATO Brain — Knowledge & assistente AI
+
+Il "cervellone" aziendale: risponde a domande di assistenza citando la
+documentazione ZATO, sia agli operatori interni sia ai clienti dal portale.
+
+### Principio guida: il documento si legge una volta sola
+
+L'estrazione del testo avviene **all'ingestione**, non a ogni domanda. Un manuale
+da 300 pagine (~400k token) non viene mai rispedito al modello: a runtime partono
+solo i ~12 frammenti pertinenti (~5k token). Da qui tutte le scelte sotto.
+
+### Pipeline (`src/lib/brain/`)
+
+| File | Ruolo |
+|------|-------|
+| `config.ts` | Modelli, parametri di indicizzazione/retrieval, stima costi |
+| `client.ts` | Client Anthropic condiviso (SDK ufficiale), errori leggibili |
+| `extract.ts` | PDF (pdfjs, righe ricostruite dalle coordinate), DOCX (mammoth via HTML per tenere i titoli), testo, immagini |
+| `chunk.ts` | Chunk ~450 token con breadcrumb `Manuale › Sezione › p. 42` |
+| `indexer.ts` | Scrittura chunk + `tsvector` italiano; idempotente via `contentHash` |
+| `glossary.ts` | **Dizionario ZATO**: gergo di cantiere → termine del manuale |
+| `retrieve.ts` | Espansione query (Haiku) + full-text + boost + dedup per fonte |
+| `ask.ts` | System prompt in **prompt cache**, documenti con **Citations API**, streaming |
+| `corpus.ts` | Rapportini, chat, diari e articoli resi cercabili come i manuali |
+
+### Due modelli, due ruoli
+
+- **Risposte**: `claude-opus-5` (`BRAIN_ANSWER_MODEL`), thinking adattivo, effort medium.
+- **Lavoro ausiliario**: `claude-haiku-4-5` (`BRAIN_UTILITY_MODEL`) per espansione
+  query, OCR delle pagine scansionate, descrizione dei disegni tecnici.
+
+Il system prompt (regole + dizionario intero) è stabile e va in `cache_control`:
+si paga pieno una volta, poi al 10%. Per questo il dizionario può essere generoso.
+
+### Come vengono trattati i formati
+
+- **PDF nativi** → testo estratto per pagina, righe ricostruite (i manuali a due
+  colonne altrimenti escono a insalata e il retrieval peggiora).
+- **PDF scansionati** → le sole pagine senza testo vanno a Claude come documento
+  PDF nativo, a blocchi di 5, con tetto di 40 pagine (`INDEX.ocrMaxPages`).
+- **Word** → solo `.docx` (mammoth). Il `.doc` va convertito.
+- **Disegni tecnici e foto** → descritti **una volta** da Claude e indicizzati come
+  testo cercabile: a runtime la ricerca lavora su testo, l'immagine non viene
+  più rispedita al modello.
+- **Video** → il filmato non passa mai dal modello. Si indicizzano titolo e
+  capitoli con timestamp (`02:15 Sezionamento`): il Brain propone il video già
+  posizionato sul minuto giusto.
+
+### Retrieval
+
+1. Il **dizionario** espande la domanda (gratuito, deterministico).
+2. Haiku produce 2-4 riformulazioni con il lessico dei manuali.
+3. Full-text Postgres (`websearch_to_tsquery`, italiano) su tutte le query;
+   se la passata in AND è a vuoto si ripiega su una passata in **OR** (senza,
+   "collaudo BLUE DEVIL" non restituirebbe nulla).
+4. Boost: tipo fonte (manuale > chat), match tipologia/modello/fascicolo,
+   decadimento per età sui contenuti operativi.
+5. Massimo 3 frammenti per fonte → meglio quattro documenti diversi che quattro
+   pagine consecutive dello stesso manuale.
+
+### Corpus vivo (il feedback loop chiesto dal committente)
+
+`syncCorpus()` rende cercabili **rapportini** (lavorazioni, problematiche,
+ricambi), **chat di cantiere**, **diario macchina** e **articoli**. Ogni contenuto
+derivato è una `KnowledgeSource` con chiave `(originKind, originId)`: la
+sincronizzazione è idempotente. Restano sempre `visibility = INTERNAL`, quindi
+non raggiungono mai il portale cliente.
+
+Il **feedback** sulle risposte (`BrainMessage.rating`) non riaddestra nulla: serve
+a far emergere le domande a cui la knowledge base non sa rispondere — cioè la
+lista dei documenti da caricare.
+
+### Sicurezza dei dati
+
+- `KnowledgeVisibility`: `INTERNAL` (solo ZATO) o `CUSTOMER` (anche portale).
+- Nel portale il retrieval filtra a `CUSTOMER` **e** scarta le fonti riservate ad
+  altri clienti; il system prompt cambia tono e vieta dati interni.
+- Permesso nuovo `knowledge.ask` (interrogare il Brain); `knowledge.manage`
+  governa caricamento documenti, dizionario e sync del corpus.
+
+### UI
+
+- **/knowledge** a schede: *Chiedi al Brain* · *Documenti* · *Dizionario* ·
+  *Articoli* · *Problematiche*. Componente chat: `src/components/BrainChat.tsx`
+  (streaming SSE, fonti espandibili, allegato foto, voto utile/non utile, costo
+  stimato). Stili in `src/app/brain.css`.
+- **/portale**: scheda *Assistenza tecnica* accanto agli interventi, stesso
+  componente con `variant="portal"` (niente allegati, niente diagnostica interna).
+
+### Operatività
+
+```
+npm run brain:seed      # dizionario di partenza (43 voci del gergo ZATO)
+npm run brain:sync      # reindicizza il corpus operativo — da mettere a cron notturno
+npm run brain:pending   # riprova i documenti rimasti in coda o falliti
+```
+
+`ANTHROPIC_API_KEY` in `.env`. **Senza chiave l'app funziona lo stesso**: la
+scheda Brain mostra un avviso, l'indicizzazione dei documenti testuali continua
+a funzionare, si perdono solo OCR, descrizione immagini ed espansione query.
+
+Stato attuale in sviluppo: 202 fonti (188 diari, 9 rapportini, 3 articoli,
+2 chat), 401 frammenti, 43 termini a dizionario. Nessun manuale ancora caricato.
+
 ## Struttura cartelle
 
 ```
@@ -158,6 +262,7 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   src/app/                    pagine App Router
   src/app/api/                API routes
   src/lib/                    db, auth, dominio, costanti componenti
+  src/lib/brain/              ZATO Brain: estrazione, chunking, indice, retrieval, risposta
   src/components/             componenti UI
   public/                     logo ZATO, asset
   uploads/                    file caricati (foto, firme, documenti) — non versionato
@@ -176,6 +281,7 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
 - [x] API (macchine, stato, intervento, firma, upload foto/documenti, import, utenti)
 - [x] Import Excel/CSV (formato MATRICOLE) + seed 6 macchine esempio + 7 utenti
 - [x] Build di produzione verde + smoke test end-to-end
+- [x] ZATO Brain: knowledge indicizzata (PDF/Word/immagini/video) + assistente AI con citazioni, interno e su portale cliente
 
 ## Funzionalità implementate
 

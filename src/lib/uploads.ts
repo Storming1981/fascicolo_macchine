@@ -3,7 +3,9 @@ import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
 
-const ROOT = path.resolve(process.cwd(), process.env.UPLOAD_DIR || "./uploads");
+import { UPLOAD_ROOT as ROOT, uploadLocalPath } from "./uploadPath";
+
+export { uploadLocalPath };
 
 async function ensureDir(dir: string) {
   await fs.mkdir(dir, { recursive: true });

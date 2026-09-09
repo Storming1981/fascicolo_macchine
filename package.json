@@ -16,20 +16,27 @@
     "service:backfill-customers": "tsx scripts/backfill-customers.ts",
     "operators:import": "tsx scripts/import-operators.ts",
     "service:enrich-customers": "tsx scripts/enrich-customers-erp.ts",
-    "service:backfill-pos": "tsx prisma/backfill-pos.ts"
+    "service:backfill-pos": "tsx prisma/backfill-pos.ts",
+    "brain:seed": "tsx scripts/brain-sync.ts seed",
+    "brain:sync": "tsx scripts/brain-sync.ts sync",
+    "brain:pending": "tsx scripts/brain-sync.ts pending"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "@prisma/client": "^6.2.1",
     "bcryptjs": "^2.4.3",
     "jose": "^5.9.6",
+    "mammoth": "^1.12.2",
     "next": "^16.2.6",
     "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.10.38",
     "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "server-only": "^0.0.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Icon from "@/components/Icon";
+import BrainChat from "@/components/BrainChat";
 import { INTERVENTO_STATUS_META } from "@/lib/domain";
 import type { InterventoStatus } from "@prisma/client";
 
@@ -23,7 +24,8 @@ type Msg = {
   sentAt: string;
 };
 
-export default function PortaleClient() {
+export default function PortaleClient({ brainConfigured = false }: { brainConfigured?: boolean }) {
+  const [mode, setMode] = useState<"interventi" | "brain">("interventi");
   const [items, setItems] = useState<Item[]>([]);
   const [sel, setSel] = useState<Item | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -86,6 +88,22 @@ export default function PortaleClient() {
   return (
     <>
       <InstallHint />
+
+      <div className="kb-tabs portal-tabs">
+        <button
+          className={"kb-tab" + (mode === "interventi" ? " active" : "")}
+          onClick={() => setMode("interventi")}
+        >
+          <Icon name="wrench" size={15} /> I tuoi interventi
+        </button>
+        <button className={"kb-tab" + (mode === "brain" ? " active" : "")} onClick={() => setMode("brain")}>
+          <Icon name="boost" size={15} /> Assistenza tecnica
+        </button>
+      </div>
+
+      {mode === "brain" ? (
+        <BrainChat endpoint="/api/portale/brain" variant="portal" configured={brainConfigured} />
+      ) : (
     <div className="portal-grid">
       <aside className="portal-list">
         <h2>I tuoi interventi</h2>
@@ -175,6 +193,7 @@ export default function PortaleClient() {
         )}
       </section>
     </div>
+      )}
     </>
   );
 }

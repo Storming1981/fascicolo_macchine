@@ -19,6 +19,7 @@ export type PermAction =
   | "chat.import"
   | "knowledge.view"
   | "knowledge.manage"
+  | "knowledge.ask"
   | "checklist.manage";
 
 export const PERM_ACTIONS: { key: PermAction; label: string }[] = [
@@ -38,7 +39,8 @@ export const PERM_ACTIONS: { key: PermAction; label: string }[] = [
   { key: "chat.send", label: "Inviare messaggi nel portale chat" },
   { key: "chat.import", label: "Importare storico chat WhatsApp/Telegram" },
   { key: "knowledge.view", label: "Consultare la Knowledge base" },
-  { key: "knowledge.manage", label: "Creare / modificare articoli Knowledge" },
+  { key: "knowledge.manage", label: "Creare / modificare articoli e documenti Knowledge" },
+  { key: "knowledge.ask", label: "Interrogare lo ZATO Brain (assistente AI)" },
   { key: "checklist.manage", label: "Compilare / gestire le check list di cantiere" },
 ];
 
@@ -69,6 +71,7 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
       "chat.import",
       "knowledge.view",
       "knowledge.manage",
+      "knowledge.ask",
       "checklist.manage",
     ].map((k) => [k, true])
   ) as Partial<Record<PermAction, boolean>>,
@@ -99,10 +102,11 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     "chat.import": true,
     "knowledge.view": true,
     "knowledge.manage": true,
+    "knowledge.ask": true,
   },
-  MONTATORE: { "machine.create": true, "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
-  CABLATORE: { "machine.create": true, "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
-  PROGRAMMATORE: { "machine.create": true, "machine.intervention": true, "machine.sign": true, "knowledge.view": true },
+  MONTATORE: { "machine.create": true, "machine.intervention": true, "machine.sign": true, "knowledge.view": true, "knowledge.ask": true },
+  CABLATORE: { "machine.create": true, "machine.intervention": true, "machine.sign": true, "knowledge.view": true, "knowledge.ask": true },
+  PROGRAMMATORE: { "machine.create": true, "machine.intervention": true, "machine.sign": true, "knowledge.view": true, "knowledge.ask": true },
   COLLAUDATORE: {
     "machine.create": true,
     "machine.intervention": true,
@@ -112,6 +116,7 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     "intervento.viewAll": true,
     "intervento.sign": true,
     "knowledge.view": true,
+    "knowledge.ask": true,
   },
   // Tecnico di campo: accede al Service ma vede SOLO i propri interventi
   // (intervento.viewAll assente). NON modifica i "Dati intervento"
@@ -126,8 +131,9 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     // chat dell'intervento in Campo (leggere/scrivere, interno e pubblico)
     "chat.send": true,
     "knowledge.view": true,
+    "knowledge.ask": true,
   },
-  LOGISTICA: { "machine.edit": true, "service.view": true, "knowledge.view": true },
+  LOGISTICA: { "machine.edit": true, "service.view": true, "knowledge.view": true, "knowledge.ask": true },
 };
 
 /** Valuta un permesso. ADMIN può sempre tutto (non si può autobloccare). */
