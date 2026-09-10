@@ -213,11 +213,49 @@ Tutto il resto (fascicoli, service, rapportini) funziona come prima.
 
 ### Aggiornamento notturno del corpus
 
-`brain:sync` è idempotente (rilavora solo ciò che è cambiato): va messo a cron.
+`brain:sync` è idempotente (rilavora solo ciò che è cambiato) e va schedulato:
+senza, il Brain resta fermo alla fotografia dell'ultima esecuzione e non sa
+nulla dei rapportini compilati da allora.
+
+> **Su questa VPS non esiste alcun demone cron.** `/etc/cron.d/` c'è ma non lo
+> legge nessuno: la macchina usa solo **systemd timer** (certbot, logrotate,
+> apt-daily). Un file in `cron.d` resterebbe lettera morta senza dare errore.
+
+Già installato e attivo (`/etc/systemd/system/machines-zato-brain.{service,timer}`):
+
+```ini
+# machines-zato-brain.service
+[Unit]
+Description=ZATO Brain - reindicizzazione del corpus operativo
+After=docker.service postgresql.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/machines-zato-app
+ExecStart=/usr/bin/docker compose run --rm tools npm run brain:sync
+TimeoutStartSec=1800
+```
+```ini
+# machines-zato-brain.timer
+[Unit]
+Description=Reindicizzazione notturna dello ZATO Brain
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true          # recupera il giro saltato se la VPS era spenta
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
+```
+
+L'host è in **UTC**: le 02:30 sono le 04:30 italiane d'estate, 03:30 d'inverno.
 
 ```bash
-# /etc/cron.d/machines-zato-brain
-30 2 * * * root cd /srv/machines-zato-app && docker compose run --rm tools npm run brain:sync >> /var/log/brain-sync.log 2>&1
+systemctl list-timers machines-zato-brain.timer   # quando scatta la prossima volta
+sudo systemctl start machines-zato-brain.service  # eseguirlo subito
+journalctl -u machines-zato-brain.service -n 30   # l'output degli ultimi giri
 ```
 
 ### Costi
