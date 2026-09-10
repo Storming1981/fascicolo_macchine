@@ -92,23 +92,47 @@ async function extractPdf(file: string): Promise<Extraction> {
  * pagina cambia a ogni pagina) e si scarta ciò che ricorre su almeno il 40%
  * delle pagine.
  */
-function stripRunningHeaders(pages: ExtractedPage[]): number {
+export function stripRunningHeaders(pages: ExtractedPage[]): number {
   if (pages.length < 5) return 0;
-  const EDGE = 3; // righe esaminate in cima e in fondo a ogni pagina
+
+  // Cinque righe e non tre: il piè di pagina si spezza spesso su piu' righe
+  // ("BLUE DEVIL" / "GF 4000 II" / "96 / 105" / "Versione 01 - Revisione 1.0"),
+  // e con una finestra corta la prima riga restava dentro. Ma la finestra non
+  // deve mai coprire l'intera pagina: su una pagina di sette righe verrebbe
+  // considerato "bordo" anche il corpo, e con una soglia bassa si cancellerebbe
+  // il contenuto. Un'intestazione e' sempre una frazione piccola della pagina.
+  const bordoDi = (n: number) => Math.min(5, Math.floor(n / 3));
+
   const norm = (l: string) =>
     l.trim().replace(/\d+/g, "#").replace(/\s+/g, " ").toLowerCase();
 
+  // Un titolo numerato ("6.2.1 Accensione") non e' mai un'intestazione di
+  // pagina: va protetto, perche' e' proprio quello che rende parlante il
+  // breadcrumb del frammento nelle citazioni.
+  // Dopo il numero ci vuole una LETTERA: senza, "67 / 105" (il numero di pagina)
+  // passava per titolo di sezione e restava dentro.
+  const titolo = (l: string) => /^\s*\d+(\.\d+)*[.)]?\s+[A-Za-zÀ-ÿ]/.test(l);
+
+  const bordi = (lines: string[]) => {
+    const e = bordoDi(lines.length);
+    return e === 0 ? [] : [...lines.slice(0, e), ...lines.slice(-e)];
+  };
+
   const counts = new Map<string, number>();
   for (const p of pages) {
-    const lines = p.text.split("\n");
-    const edges = [...lines.slice(0, EDGE), ...lines.slice(-EDGE)];
-    for (const l of new Set(edges.map(norm))) {
+    const lines = bordi(p.text.split("\n")).filter((l) => !titolo(l));
+    for (const l of new Set(lines.map(norm))) {
       if (l.length < 4 || l.length > 120) continue;
       counts.set(l, (counts.get(l) ?? 0) + 1);
     }
   }
 
-  const soglia = Math.max(3, Math.floor(pages.length * 0.4));
+  // Soglia bassa di proposito. Un manuale in parte nativo e in parte scansionato
+  // ha DUE forme dello stesso piè di pagina (pdfjs unisce le righe, l'OCR le
+  // separa): ognuna copre solo meta' documento, e col 40% non passava nessuna
+  // delle due. Una riga di bordo che ricorre identica — numeri esclusi — su un
+  // sesto delle pagine e' un'intestazione, non contenuto.
+  const soglia = Math.max(3, Math.ceil(pages.length * 0.15));
   const ripetute = new Set(
     [...counts.entries()].filter(([, n]) => n >= soglia).map(([l]) => l)
   );
@@ -117,10 +141,11 @@ function stripRunningHeaders(pages: ExtractedPage[]): number {
   let rimosse = 0;
   for (const p of pages) {
     const lines = p.text.split("\n");
+    const e = bordoDi(lines.length);
     p.text = lines
       .filter((l, i) => {
-        const bordo = i < EDGE || i >= lines.length - EDGE;
-        if (!bordo || !ripetute.has(norm(l))) return true;
+        const bordo = e > 0 && (i < e || i >= lines.length - e);
+        if (!bordo || titolo(l) || !ripetute.has(norm(l))) return true;
         rimosse++;
         return false;
       })

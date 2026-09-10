@@ -19,7 +19,8 @@
     "service:backfill-pos": "tsx prisma/backfill-pos.ts",
     "brain:seed": "tsx scripts/brain-sync.ts seed",
     "brain:sync": "tsx scripts/brain-sync.ts sync",
-    "brain:pending": "tsx scripts/brain-sync.ts pending"
+    "brain:pending": "tsx scripts/brain-sync.ts pending",
+    "brain:test-headers": "tsx scripts/test-header-strip.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
