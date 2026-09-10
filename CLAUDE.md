@@ -187,8 +187,12 @@ si paga pieno una volta, poi al 10%. Per questo il dizionario può essere genero
 
 - **PDF nativi** → testo estratto per pagina, righe ricostruite (i manuali a due
   colonne altrimenti escono a insalata e il retrieval peggiora).
-- **PDF scansionati** → le sole pagine senza testo vanno a Claude come documento
-  PDF nativo, a blocchi di 5, con tetto di 40 pagine (`INDEX.ocrMaxPages`).
+- **PDF scansionati** (la norma per i manuali ZATO: il GF4000 ha 105 pagine e
+  516 caratteri di testo estraibile in tutto) → le sole pagine senza testo
+  vengono **ritagliate con pdf-lib in un PDF a sé** e mandate a Claude a blocchi
+  di 5. Il ritaglio non è un'ottimizzazione: mandando il manuale intero si supera
+  il limite di 100 pagine per documento dell'API e ogni chiamata fallisce.
+  Tetto di 200 pagine (`BRAIN_OCR_MAX_PAGES`), sotto l'euro a manuale.
 - **Word** → solo `.docx` (mammoth). Il `.doc` va convertito.
 - **Disegni tecnici e foto** → descritti **una volta** da Claude e indicizzati come
   testo cercabile: a runtime la ricerca lavora su testo, l'immagine non viene
@@ -208,6 +212,17 @@ si paga pieno una volta, poi al 10%. Per questo il dizionario può essere genero
    decadimento per età sui contenuti operativi.
 5. Massimo 3 frammenti per fonte → meglio quattro documenti diversi che quattro
    pagine consecutive dello stesso manuale.
+
+### L'indicizzazione non sta nella richiesta HTTP
+
+Un manuale scansionato richiede ~10 minuti di OCR: qualunque proxy chiude prima.
+L'upload salva il file, risponde in un secondo e prosegue con `after()`; la
+sorgente resta in `PROCESSING` e la scheda Documenti si aggiorna da sola ogni 5
+secondi. Prima l'utente vedeva un **504 mentre il lavoro finiva bene**, che è il
+modo peggiore di sbagliare: si rischia di ricaricare lo stesso file.
+
+Se il container viene riavviato a metà lavoro la sorgente resta in `PROCESSING`:
+si recupera con `npm run brain:pending`.
 
 ### Corpus vivo (il feedback loop chiesto dal committente)
 
@@ -250,8 +265,21 @@ npm run brain:pending   # riprova i documenti rimasti in coda o falliti
 scheda Brain mostra un avviso, l'indicizzazione dei documenti testuali continua
 a funzionare, si perdono solo OCR, descrizione immagini ed espansione query.
 
-Stato attuale in sviluppo: 202 fonti (188 diari, 9 rapportini, 3 articoli,
-2 chat), 401 frammenti, 43 termini a dizionario. Nessun manuale ancora caricato.
+### Trappole già pagate (non ripeterle)
+
+- **Il worker di pdfjs non finisce nel build standalone.** pdfjs in Node carica
+  un "fake worker" con un import costruito a runtime: il tracer di Next non lo
+  vede e nell'immagine resta il solo `pdf.mjs`. Il `Dockerfile` copia a mano
+  `pdf.worker.mjs` (2,3 MB). In locale non si vede: lì `node_modules` è completo.
+- **`server-only` rompe gli script CLI.** tsx lo risolve in CJS e il pacchetto
+  lancia. I moduli `brain/` usati da `brain:sync` non lo importano; resta solo
+  in `ask.ts`, che gira unicamente dalle route.
+- **Il proxy ha bisogno di un `location /api/` suo** (timeout 600s, buffering
+  off, 64m) — vedi `DEPLOY.md`.
+
+Stato in produzione: manuale GF4000 indicizzato (105 pagine scansionate → 346
+frammenti, 177k caratteri via OCR), più il corpus operativo (190 diari, 11
+rapportini, 3 articoli, chat) e 43 termini a dizionario.
 
 ## Struttura cartelle
 
