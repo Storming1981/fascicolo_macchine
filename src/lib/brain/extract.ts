@@ -69,7 +69,65 @@ async function extractPdf(file: string): Promise<Extraction> {
     page.cleanup();
   }
   await doc.destroy();
-  return { pages, pageCount, ocrUsed: false };
+
+  const rimosse = stripRunningHeaders(pages);
+  return {
+    pages,
+    pageCount,
+    ocrUsed: false,
+    note: rimosse ? `${rimosse} righe di testata/piè di pagina rimosse` : undefined,
+  };
+}
+
+/**
+ * Toglie testate e piè di pagina che si ripetono su tutte le pagine.
+ *
+ * Senza questo passaggio ogni pagina produce un frammento fantasma tipo
+ * "BLUE DEVIL GF 4000 II 16 / 105 — Versione 01": 70 caratteri che contengono
+ * il nome della macchina. Sono corti (quindi ts_rank li premia) e nominano
+ * l'impianto (quindi agganciano ogni domanda che lo nomina), così un manuale da
+ * 105 pagine risponde con 105 piè di pagina e il contenuto vero non emerge mai.
+ *
+ * Si guardano solo le righe di bordo, si normalizzano i numeri (il numero di
+ * pagina cambia a ogni pagina) e si scarta ciò che ricorre su almeno il 40%
+ * delle pagine.
+ */
+function stripRunningHeaders(pages: ExtractedPage[]): number {
+  if (pages.length < 5) return 0;
+  const EDGE = 3; // righe esaminate in cima e in fondo a ogni pagina
+  const norm = (l: string) =>
+    l.trim().replace(/\d+/g, "#").replace(/\s+/g, " ").toLowerCase();
+
+  const counts = new Map<string, number>();
+  for (const p of pages) {
+    const lines = p.text.split("\n");
+    const edges = [...lines.slice(0, EDGE), ...lines.slice(-EDGE)];
+    for (const l of new Set(edges.map(norm))) {
+      if (l.length < 4 || l.length > 120) continue;
+      counts.set(l, (counts.get(l) ?? 0) + 1);
+    }
+  }
+
+  const soglia = Math.max(3, Math.floor(pages.length * 0.4));
+  const ripetute = new Set(
+    [...counts.entries()].filter(([, n]) => n >= soglia).map(([l]) => l)
+  );
+  if (ripetute.size === 0) return 0;
+
+  let rimosse = 0;
+  for (const p of pages) {
+    const lines = p.text.split("\n");
+    p.text = lines
+      .filter((l, i) => {
+        const bordo = i < EDGE || i >= lines.length - EDGE;
+        if (!bordo || !ripetute.has(norm(l))) return true;
+        rimosse++;
+        return false;
+      })
+      .join("\n")
+      .trim();
+  }
+  return rimosse;
 }
 
 /**
@@ -284,8 +342,14 @@ export async function extractFile(
     const thin = out.pages.filter((p) => p.text.length < INDEX.minCharsPerPage).length;
     if (thin > 0 && context.allowOcr !== false) {
       const { filled, note } = await ocrPdfPages(file, out.pages);
-      if (filled > 0) return { ...out, ocrUsed: true, note };
-      if (note) return { ...out, note };
+      // Dopo l'OCR le testate ricompaiono (la trascrizione è fedele): si
+      // ripulisce di nuovo, altrimenti tornano i frammenti-piè di pagina.
+      const dopoOcr = filled > 0 ? stripRunningHeaders(out.pages) : 0;
+      const note2 = [out.note, note, dopoOcr ? `${dopoOcr} righe ripetute rimosse dopo l'OCR` : ""]
+        .filter(Boolean)
+        .join(" · ");
+      if (filled > 0) return { ...out, ocrUsed: true, note: note2 || undefined };
+      if (note2) return { ...out, note: note2 };
     }
     return out;
   }

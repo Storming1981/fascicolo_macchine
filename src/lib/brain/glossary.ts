@@ -71,6 +71,17 @@ export const SEED_TERMS: (Omit<Term, "plantType" | "definition"> & { definition?
   { term: "Fungo di emergenza", aliases: ["emergenza", "pulsante di emergenza", "e-stop", "arresto di emergenza"], category: "Sicurezza" },
   { term: "Rapportino", aliases: ["rapporto di intervento", "foglio lavoro", "report giornaliero", "rapportino giornaliero"], category: "Cantiere", definition: "Rapporto giornaliero compilato in cantiere: ore, lavorazioni, ricambi, problematiche." },
 
+  // ── Comandi macchina ──
+  // Lo stemmer italiano di Postgres NON lega il verbo al sostantivo:
+  // "accendere" -> accend, "accensione" -> accension. Chi scrive "come accendo
+  // l'impianto" non troverebbe mai il capitolo "6.2.1 Accensione". Queste voci
+  // colmano proprio quel salto.
+  { term: "Accensione", aliases: ["accendere", "accendo", "avviare", "avviamento", "far partire", "mettere in moto", "dare tensione", "start", "avvio"], category: "Processo", definition: "Sequenza di avvio dell'impianto; l'ordine dei gruppi va rispettato (centralina, lubrificazione, nastri, rotore)." },
+  { term: "Arresto", aliases: ["spegnere", "spegnimento", "fermare", "arrestare", "stop", "fermo macchina", "fine ciclo"], category: "Processo", definition: "Arresto ordinato dell'impianto, distinto dall'arresto di emergenza." },
+  { term: "Messa in servizio", aliases: ["primo avviamento", "commissioning", "avviamento iniziale", "collaudo in campo"], category: "Processo", definition: "Primo avviamento dell'impianto: di competenza dei tecnici della ditta costruttrice." },
+  { term: "Verifiche preliminari", aliases: ["controlli prima dell avvio", "check prima di partire", "controlli preliminari"], category: "Processo" },
+  { term: "Ciclo di lavoro", aliases: ["produzione", "lavorazione", "marcia", "esercizio"], category: "Processo" },
+
   // ── Manutenzione ──
   { term: "Manutenzione preventiva", aliases: ["manutenzione programmata", "tagliando", "controllo periodico"], category: "Manutenzione" },
   { term: "Ingrassaggio", aliases: ["lubrificazione", "grasso", "punti di ingrassaggio", "ingrassatore"], category: "Manutenzione" },

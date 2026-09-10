@@ -121,7 +121,12 @@ export async function planQuery(
                 description:
                   "2-4 riformulazioni della domanda con il lessico dei manuali tecnici. " +
                   "Includi sinonimi, nomi dei componenti e codici/allarmi citati. " +
-                  "Se la domanda fa riferimento al contesto precedente, esplicitalo.",
+                  "Se la domanda fa riferimento al contesto precedente, esplicitalo. " +
+                  "NON aggiungere il nome della macchina o della tipologia di impianto " +
+                  "(BLUE DEVIL, CAYMAN…): quello si filtra a parte, e dentro i capitoli " +
+                  "il nome del prodotto non compare quasi mai. " +
+                  "Usa i sostantivi dei titoli di capitolo, non i verbi della domanda " +
+                  "(il manuale scrive 'accensione', non 'accendere').",
               },
               plantType: {
                 type: "string",
