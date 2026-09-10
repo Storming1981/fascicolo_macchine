@@ -102,7 +102,12 @@ export default function PortaleClient({ brainConfigured = false }: { brainConfig
       </div>
 
       {mode === "brain" ? (
-        <BrainChat endpoint="/api/portale/brain" variant="portal" configured={brainConfigured} />
+        <BrainChat
+          endpoint="/api/portale/brain"
+          threadsEndpoint="/api/portale/brain/threads"
+          variant="portal"
+          configured={brainConfigured}
+        />
       ) : (
     <div className="portal-grid">
       <aside className="portal-list">

@@ -34,6 +34,9 @@ type Msg = {
   stats?: { costUsd: number; latencyMs: number; cacheReadTokens: number } | null;
 };
 
+/** Una conversazione salvata: le domande restano, cambiare pagina non le perde. */
+type Thread = { id: string; title: string; updatedAt: string; messages: number };
+
 const TYPE_LABEL: Record<string, string> = {
   MANUAL: "Manuale",
   PROCEDURE: "Procedura",
@@ -63,6 +66,7 @@ const SUGGESTIONS_PORTAL = [
 
 export default function BrainChat({
   endpoint = "/api/brain/ask",
+  threadsEndpoint = "/api/brain/threads",
   variant = "internal",
   configured = true,
   machineId,
@@ -70,6 +74,8 @@ export default function BrainChat({
   compact = false,
 }: {
   endpoint?: string;
+  /** Base delle API per elenco/dettaglio delle conversazioni salvate. */
+  threadsEndpoint?: string;
   variant?: "internal" | "portal";
   configured?: boolean;
   machineId?: string;
@@ -81,6 +87,9 @@ export default function BrainChat({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [restoring, setRestoring] = useState(true);
   const [images, setImages] = useState<{ mediaType: string; data: string; preview: string }[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -90,6 +99,91 @@ export default function BrainChat({
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, status]);
+
+  const loadThreads = useCallback(async (): Promise<Thread[]> => {
+    try {
+      const r = await fetch(threadsEndpoint);
+      if (!r.ok) return [];
+      const d = await r.json();
+      const list: Thread[] = d.threads ?? [];
+      setThreads(list);
+      return list;
+    } catch {
+      return [];
+    }
+  }, [threadsEndpoint]);
+
+  /** Rilegge una conversazione dal database e la rimette a schermo com'era. */
+  const openThread = useCallback(
+    async (id: string) => {
+      setShowHistory(false);
+      try {
+        const r = await fetch(`${threadsEndpoint}/${id}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const msgs: Msg[] = (d.thread?.messages ?? []).map(
+          (m: {
+            id: string;
+            role: string;
+            content: string;
+            sources?: BrainSource[];
+            images?: string[];
+            rating?: number | null;
+            model?: string | null;
+            latencyMs?: number;
+          }) => ({
+            id: m.id,
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: m.content,
+            sources: Array.isArray(m.sources) ? m.sources : [],
+            images: Array.isArray(m.images) ? m.images : [],
+            rating: m.rating ?? null,
+          })
+        );
+        setMessages(msgs);
+        setThreadId(id);
+      } catch {
+        /* se non si riesce a rileggerla si resta su quella corrente */
+      }
+    },
+    [threadsEndpoint]
+  );
+
+  // All'avvio si riprende l'ultima conversazione: chi va a cercare un dato e
+  // torna sulla pagina deve ritrovare quello che aveva chiesto, non una schermata
+  // vuota da cui ricominciare.
+  useEffect(() => {
+    if (!configured) {
+      setRestoring(false);
+      return;
+    }
+    let annullato = false;
+    (async () => {
+      const list = await loadThreads();
+      if (!annullato && list.length > 0) await openThread(list[0].id);
+      if (!annullato) setRestoring(false);
+    })();
+    return () => {
+      annullato = true;
+    };
+  }, [configured, loadThreads, openThread]);
+
+  function newThread() {
+    setMessages([]);
+    setThreadId(null);
+    setShowHistory(false);
+    setStatus("");
+  }
+
+  async function deleteThread(id: string) {
+    if (!confirm("Eliminare questa conversazione?")) return;
+    await fetch(`${threadsEndpoint}/${id}`, { method: "DELETE" }).catch(() => {});
+    const list = await loadThreads();
+    if (threadId === id) {
+      if (list.length > 0) await openThread(list[0].id);
+      else newThread();
+    }
+  }
 
   const addImages = useCallback(async (files: FileList | null) => {
     if (!files) return;
@@ -171,6 +265,7 @@ export default function BrainChat({
     } finally {
       setBusy(false);
       setStatus("");
+      void loadThreads(); // una domanda nuova crea (o rinomina) la conversazione
     }
   }
 
@@ -249,10 +344,73 @@ export default function BrainChat({
     );
   }
 
+  const current = threads.find((t) => t.id === threadId);
+
   return (
     <div className={"brain" + (compact ? " brain-compact" : "")}>
+      <div className="brain-topbar">
+        <button
+          className={"brain-histbtn" + (showHistory ? " on" : "")}
+          onClick={() => setShowHistory((o) => !o)}
+          title="Conversazioni salvate"
+        >
+          <Icon name="clock" size={15} />
+          Conversazioni
+          {threads.length > 0 && <span className="brain-count">{threads.length}</span>}
+        </button>
+        <span className="brain-current">{current?.title ?? "Nuova domanda"}</span>
+        <button className="brain-newbtn" onClick={newThread} disabled={busy}>
+          <Icon name="plus" size={14} /> Nuova
+        </button>
+      </div>
+
+      <div className="brain-body">
+        {showHistory && (
+          <aside className="brain-history">
+            {threads.length === 0 ? (
+              <p className="brain-history-empty">
+                Nessuna conversazione salvata. Le domande che fai restano qui.
+              </p>
+            ) : (
+              threads.map((t) => (
+                <div
+                  key={t.id}
+                  className={"brain-histitem" + (t.id === threadId ? " active" : "")}
+                >
+                  <button onClick={() => void openThread(t.id)}>
+                    <span className="brain-histitem-title">{t.title}</span>
+                    <span className="brain-histitem-meta">
+                      {new Date(t.updatedAt).toLocaleDateString("it-IT", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "2-digit",
+                      })}
+                      {" · "}
+                      {Math.ceil(t.messages / 2)} domand{Math.ceil(t.messages / 2) === 1 ? "a" : "e"}
+                    </span>
+                  </button>
+                  <button
+                    className="brain-histdel"
+                    onClick={() => void deleteThread(t.id)}
+                    aria-label="Elimina conversazione"
+                    title="Elimina"
+                  >
+                    <Icon name="trash" size={13} />
+                  </button>
+                </div>
+              ))
+            )}
+          </aside>
+        )}
+
+      <div className="brain-main">
       <div className="brain-stream" ref={scrollRef}>
-        {messages.length === 0 && (
+        {restoring && messages.length === 0 && (
+          <div className="brain-welcome">
+            <p>Recupero le tue conversazioni…</p>
+          </div>
+        )}
+        {!restoring && messages.length === 0 && (
           <div className="brain-welcome">
             <div className="brain-badge">
               <Icon name="doc" size={18} color="var(--accent)" />
@@ -402,6 +560,8 @@ export default function BrainChat({
           Le risposte sono generate dall&apos;AI sui documenti ZATO. Verifica sempre sul manuale prima di
           operare sull&apos;impianto.
         </div>
+      </div>
+      </div>
       </div>
     </div>
   );
