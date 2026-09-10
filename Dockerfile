@@ -58,6 +58,12 @@ COPY --from=builder /app/.next/static ./.next/static
 # Client Prisma (engine) — necessario a runtime
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# Worker di pdfjs (estrazione testo dai PDF nella Knowledge). In Node pdfjs usa
+# un "fake worker" che carica con un import costruito a runtime: il tracer di
+# Next non lo vede, nello standalone finisce solo pdf.mjs e l'upload di un PDF
+# muore con «Setting up fake worker failed». Sono 2,3 MB, non serve il pacchetto
+# intero (37 MB).
+COPY --from=builder /app/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs ./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs
 
 # I file caricati (foto, firme, PDF) vivono su volume persistente
 RUN mkdir -p /data/uploads && chown -R nextjs:nodejs /data /app
