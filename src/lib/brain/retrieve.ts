@@ -82,7 +82,14 @@ export async function planQuery(
   glossary?: Term[]
 ): Promise<QueryPlan> {
   const gloss = glossary ?? (await loadGlossary());
-  const { terms } = expandWithGlossary(question, gloss);
+  // Del dizionario serve il termine CANONICO, non gli alias. Gli alias servono a
+  // riconoscere il gergo nella domanda ("accendere"), ma trasformarli tutti in
+  // query separate fa più danno che bene: cercando anche "avviamento",
+  // "far partire", "dare tensione" si tirava dentro il capitolo "5.7 PRIMO
+  // AVVIAMENTO" (che è tutt'altro: la messa in servizio a cura del costruttore)
+  // e si diluiva il punteggio della sezione giusta, "6.2.1 Accensione".
+  const { matched } = expandWithGlossary(question, gloss);
+  const terms = matched.map((m) => m.term);
   const base: QueryPlan = {
     queries: [question],
     glossaryTerms: terms,
@@ -372,9 +379,15 @@ export async function searchKnowledge(
   limit = 20
 ): Promise<Passage[]> {
   const glossary = await loadGlossary();
-  const { terms } = expandWithGlossary(query, glossary);
+  const { matched } = expandWithGlossary(query, glossary);
   return retrieve(
-    { queries: [query], glossaryTerms: terms.slice(0, 4), plantType: null, model: null, smallTalk: false },
+    {
+      queries: [query],
+      glossaryTerms: matched.map((m) => m.term).slice(0, 4),
+      plantType: null,
+      model: null,
+      smallTalk: false,
+    },
     scope
   ).then((r) => r.slice(0, limit));
 }
