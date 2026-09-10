@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
@@ -8,8 +8,6 @@ import { isSupportedDocument } from "@/lib/brain/extract";
 import type { KnowledgeSourceType, KnowledgeVisibility, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
-// L'estrazione di un manuale di centinaia di pagine (con eventuale OCR) è lenta.
-export const maxDuration = 300;
 
 const TYPES: KnowledgeSourceType[] = [
   "MANUAL",
@@ -166,8 +164,18 @@ export async function POST(req: Request) {
     },
   });
 
-  // Indicizzazione sincrona: l'operatore vuole sapere subito se il documento è
-  // leggibile o se il PDF è una scansione da trattare.
-  const result = await indexSource(source.id, { force: true });
-  return NextResponse.json({ ok: result.ok, id: source.id, result });
+  // L'indicizzazione NON sta dentro la richiesta: un manuale scansionato di 105
+  // pagine richiede una decina di minuti di OCR, e il proxy chiude la
+  // connessione molto prima. Il risultato era il peggiore possibile — l'utente
+  // vedeva un 504 mentre il lavoro finiva bene in silenzio. Si risponde subito,
+  // il documento resta "In lavorazione" e la lista si aggiorna da sola.
+  after(async () => {
+    try {
+      await indexSource(source.id, { force: true });
+    } catch {
+      // indexSource marca già la sorgente come FAILED con il motivo.
+    }
+  });
+
+  return NextResponse.json({ ok: true, id: source.id, queued: true });
 }

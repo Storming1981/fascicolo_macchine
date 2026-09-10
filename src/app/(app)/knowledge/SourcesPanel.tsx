@@ -53,7 +53,7 @@ const TYPE_LABEL: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   READY: "Indicizzato",
   PENDING: "In coda",
-  PROCESSING: "In lavorazione",
+  PROCESSING: "Estrazione in corso…",
   FAILED: "Errore",
 };
 
@@ -88,6 +88,16 @@ export default function SourcesPanel({ canManage }: { canManage: boolean }) {
     void load();
   }, [load]);
 
+  // Finche' un documento e' in coda o in lavorazione la lista si aggiorna da
+  // sola: l'indicizzazione di un manuale scansionato dura minuti e nessuno resta
+  // a premere F5 per sapere se e' finita.
+  const working = rows.some((r) => r.status === "PENDING" || r.status === "PROCESSING");
+  useEffect(() => {
+    if (!working) return;
+    const t = setInterval(() => void load(), 5000);
+    return () => clearInterval(t);
+  }, [working, load]);
+
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
     return rows.filter((r) => {
@@ -107,15 +117,15 @@ export default function SourcesPanel({ canManage }: { canManage: boolean }) {
   const totals = useMemo(() => {
     const chunks = rows.reduce((s, r) => s + r.chunkCount, 0);
     const failed = rows.filter((r) => r.status === "FAILED").length;
+    const working = rows.filter((r) => r.status === "PENDING" || r.status === "PROCESSING").length;
     const uploaded = rows.filter((r) => !r.originKind).length;
-    return { chunks, failed, uploaded, total: rows.length };
+    return { chunks, failed, working, uploaded, total: rows.length };
   }, [rows]);
 
   async function reindex(id: string) {
-    setNotice("Reindicizzazione in corso…");
     const r = await fetch(`/api/knowledge/sources/${id}/reindex`, { method: "POST" });
     const d = await r.json().catch(() => null);
-    setNotice(r.ok ? `Reindicizzato: ${d?.result?.chunks ?? 0} frammenti` : d?.error ?? "Errore");
+    setNotice(r.ok ? "Reindicizzazione avviata: la lista si aggiorna da sola." : d?.error ?? "Errore");
     await load();
   }
 
@@ -149,12 +159,20 @@ export default function SourcesPanel({ canManage }: { canManage: boolean }) {
       <div className="kb-stats">
         <Stat label="Fonti indicizzate" value={String(totals.total)} hint={`${totals.uploaded} caricate a mano`} />
         <Stat label="Frammenti cercabili" value={totals.chunks.toLocaleString("it-IT")} hint="unità di ricerca" />
-        <Stat
-          label="Da sistemare"
-          value={String(totals.failed)}
-          hint={totals.failed ? "documenti non leggibili" : "tutto a posto"}
-          alert={totals.failed > 0}
-        />
+        {totals.working > 0 ? (
+          <Stat
+            label="In lavorazione"
+            value={String(totals.working)}
+            hint="estrazione testo in corso"
+          />
+        ) : (
+          <Stat
+            label="Da sistemare"
+            value={String(totals.failed)}
+            hint={totals.failed ? "documenti non leggibili" : "tutto a posto"}
+            alert={totals.failed > 0}
+          />
+        )}
       </div>
 
       {notice && (
@@ -331,11 +349,7 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       return;
     }
     setBusy(true);
-    setProgress(
-      file && file.type === "application/pdf"
-        ? "Estraggo il testo dal PDF… i manuali scansionati richiedono qualche minuto."
-        : "Indicizzo il documento…"
-    );
+    setProgress("Carico il file…");
     try {
       const fd = new FormData();
       fd.set("type", type);
@@ -354,10 +368,8 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         setError(d?.error ?? `Errore ${r.status}`);
         return;
       }
-      if (!d.ok) {
-        setError(d?.result?.error ?? "Documento caricato ma non indicizzabile: nessun testo estratto.");
-        return;
-      }
+      // Il file è salvato; l'estrazione prosegue sul server e può durare minuti
+      // su un manuale scansionato. Si chiude qui: l'esito compare nella lista.
       onDone();
     } catch {
       setError("Errore di rete durante il caricamento");
@@ -495,7 +507,7 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
             Annulla
           </button>
           <button className="btn-primary" onClick={() => void submit()} disabled={busy}>
-            {busy ? "Indicizzo…" : "Carica e indicizza"}
+            {busy ? "Carico…" : "Carica e indicizza"}
           </button>
         </div>
       </div>
