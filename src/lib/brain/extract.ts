@@ -87,20 +87,35 @@ async function ocrPdfPages(
 
   const target = empty.slice(0, INDEX.ocrMaxPages);
   const skipped = empty.length - target.length;
-  const b64 = (await fs.readFile(file)).toString("base64");
+
+  // Si ritagliano le sole pagine da trascrivere in un PDF a sé stante. Mandare
+  // il manuale intero a ogni chiamata sarebbe sbagliato due volte: oltre le 100
+  // pagine l'API rifiuta il documento (ed è il caso della maggior parte dei
+  // manuali ZATO), e si spedirebbero decine di MB per leggerne cinque pagine.
+  const { PDFDocument } = await import("pdf-lib");
+  const source = await PDFDocument.load(await fs.readFile(file));
+
   let filled = 0;
+  const failures: string[] = [];
 
   for (let i = 0; i < target.length; i += INDEX.ocrPagesPerCall) {
     const batch = target.slice(i, i + INDEX.ocrPagesPerCall);
-    const nums = batch.map((p) => p.page);
     try {
+      const slice = await PDFDocument.create();
+      const copied = await slice.copyPages(
+        source,
+        batch.map((p) => p.page - 1)
+      );
+      for (const page of copied) slice.addPage(page);
+      const b64 = Buffer.from(await slice.save()).toString("base64");
+
       const res = await client.messages.create({
         model: UTILITY_MODEL,
-        max_tokens: 8000,
+        max_tokens: 16000,
         system:
-          "Trascrivi fedelmente il testo tecnico delle pagine indicate di un manuale di impianti " +
-          "industriali ZATO. Mantieni titoli, numerazione dei paragrafi, tabelle (in testo), " +
-          "codici articolo e unità di misura. Non riassumere, non commentare. " +
+          "Trascrivi fedelmente il testo tecnico di un manuale di impianti industriali ZATO. " +
+          "Mantieni titoli, numerazione dei paragrafi, tabelle (in testo), codici articolo e " +
+          "unità di misura. Non riassumere, non commentare. " +
           "Se una pagina è solo un disegno, descrivila brevemente fra parentesi quadre.",
         messages: [
           {
@@ -112,34 +127,44 @@ async function ocrPdfPages(
               },
               {
                 type: "text",
+                // Il documento allegato contiene SOLO le pagine da trascrivere,
+                // rinumerate da 1: il modello non deve sapere nulla del manuale
+                // originale, la corrispondenza la rifacciamo noi qui sotto.
                 text:
-                  `Trascrivi SOLO le pagine ${nums.join(", ")}. ` +
-                  `Per ciascuna usa esattamente l'intestazione "=== PAGINA <n> ===" seguita dal testo.`,
+                  `Trascrivi tutte le ${batch.length} pagine del documento allegato, nell'ordine. ` +
+                  `Per ciascuna usa esattamente l'intestazione "=== PAGINA <n> ===" (n da 1 a ` +
+                  `${batch.length}) seguita dal testo della pagina.`,
               },
             ],
           },
         ],
       });
+
       const out = res.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text)
         .join("\n");
-      for (const p of batch) {
-        const re = new RegExp(`=== PAGINA ${p.page} ===\\n([\\s\\S]*?)(?:=== PAGINA |$)`);
+      batch.forEach((p, n) => {
+        const re = new RegExp(`=== PAGINA ${n + 1} ===\\s*\\n([\\s\\S]*?)(?:=== PAGINA |$)`);
         const text = cleanText(out.match(re)?.[1] ?? "");
         if (text.length >= INDEX.minCharsPerPage) {
           p.text = text;
           filled++;
         }
-      }
-    } catch {
-      // Una pagina non trascritta non deve far fallire l'intero documento.
+      });
+    } catch (e) {
+      // Un blocco fallito non deve far cadere l'intero documento, ma il motivo
+      // va riportato: ingoiarlo in silenzio lascia l'operatore davanti a un
+      // "nessun testo estratto" senza sapere cosa sistemare.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (failures.length < 3) failures.push(msg.slice(0, 160));
     }
   }
 
   const bits: string[] = [];
   if (filled) bits.push(`${filled} pagine trascritte con AI (documento scansionato)`);
   if (skipped) bits.push(`${skipped} pagine oltre il limite di ${INDEX.ocrMaxPages} non trascritte`);
+  if (failures.length) bits.push(`trascrizione fallita su alcuni blocchi: ${failures.join(" · ")}`);
   return { filled, note: bits.join(" · ") || undefined };
 }
 

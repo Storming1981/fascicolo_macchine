@@ -32,8 +32,14 @@ export const INDEX = {
   minCharsPerPage: 90,
   /** Pagine per chiamata di OCR AI (batch: meno richieste, meno overhead). */
   ocrPagesPerCall: 5,
-  /** Tetto di pagine su cui fare OCR automatico (oltre serve conferma esplicita). */
-  ocrMaxPages: 40,
+  /**
+   * Tetto di pagine trascrivibili con l'AI per documento. I manuali ZATO
+   * scansionati stanno sulle 100-150 pagine: con un tetto basso se ne
+   * indicizzerebbe solo l'inizio, che e' peggio di non indicizzarli affatto
+   * (il Brain risponderebbe con meta' procedura). Con le pagine ritagliate una
+   * a una il costo resta sotto l'euro a manuale, una volta sola.
+   */
+  ocrMaxPages: Number(process.env.BRAIN_OCR_MAX_PAGES) || 200,
 };
 
 export const RETRIEVAL = {

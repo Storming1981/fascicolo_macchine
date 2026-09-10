@@ -106,7 +106,12 @@ export async function indexSource(sourceId: string, opts: { force?: boolean } = 
       where: { id: sourceId },
       data: {
         status: chunks.length > 0 ? "READY" : "FAILED",
-        error: chunks.length > 0 ? null : "Nessun testo indicizzabile estratto dal documento",
+        // La nota dell'estrazione (pagine scansionate, blocchi OCR falliti…) e'
+        // l'unico indizio su cosa sistemare: va mostrata, non buttata.
+        error:
+          chunks.length > 0
+            ? null
+            : ["Nessun testo indicizzabile estratto dal documento", note].filter(Boolean).join(" — "),
         contentHash,
         extractedChars: chars,
         chunkCount: chunks.length,
