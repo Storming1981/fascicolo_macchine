@@ -131,6 +131,21 @@ sudo certbot --nginx -d machines.zatospa.it
 Punti chiave già inclusi: `client_max_body_size 32m` (upload foto/documenti fino a
 25 MB) e gli header `X-Forwarded-*`.
 
+**Blocco `location /api/` separato** — non è un dettaglio estetico, senza quello
+la Knowledge non funziona:
+
+| Impostazione | Perché |
+|---|---|
+| `proxy_read_timeout 600s` | indicizzare un manuale (estrazione + OCR) supera i **60s di default**: si prende un 504 a lavoro iniziato |
+| `proxy_buffering off` | le risposte del Brain sono in streaming SSE; con il buffering la pagina resta ferma e poi sputa tutto in blocco |
+| `client_max_body_size 64m` | i video di procedura arrivano a 60 MB (limite applicativo); a 32m tornerebbe un 413 |
+
+> Su questa VPS il proxy **non è nginx di sistema**: è il container
+> `qsystem-nginx`, con le conf montate dall'host in sola lettura da
+> `/opt/q-system/nginx/conf.d/`. Si modifica lì e si ricarica con
+> `docker exec qsystem-nginx nginx -t && docker exec qsystem-nginx nginx -s reload`.
+> Lo stesso proxy serve anche q-system e finance: dopo un reload verificali.
+
 ---
 
 ## 7. Dopo il primo avvio
