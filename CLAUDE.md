@@ -265,6 +265,46 @@ npm run brain:pending   # riprova i documenti rimasti in coda o falliti
 scheda Brain mostra un avviso, l'indicizzazione dei documenti testuali continua
 a funzionare, si perdono solo OCR, descrizione immagini ed espansione query.
 
+### Qualità del retrieval: quattro cause, un solo sintomo
+
+"Come accendo il BLUE DEVIL" non trovava la procedura, che sta a pagina 67 del
+manuale (`6.2.1 Accensione`). Quattro bug distinti davano lo stesso sintomo, e
+solo il quarto era evidente. Vale la pena conoscerli tutti: si ripresenteranno
+con ogni manuale nuovo.
+
+1. **I piè di pagina si mangiavano il manuale.** Ogni pagina finiva in un
+   frammento a sé (`BLUE DEVIL GF 4000 II — 16 / 105`): cortissimo (e `ts_rank`
+   premia i corti) e col nome della macchina dentro (quindi agganciava ogni
+   domanda che la nominasse). Col tetto di 3 frammenti per fonte, il manuale
+   rispondeva **solo** con quelli. → `stripRunningHeaders()`.
+2. **Il nome macchina nelle query.** Haiku scriveva "sequenza di avviamento
+   BLUE DEVIL", ma dentro i capitoli il nome del prodotto non compare: la
+   ricerca è in AND, quindi escludeva proprio le pagine buone. La tipologia era
+   già un filtro sui metadati. → istruzione esplicita in `planQuery`.
+3. **Lo stemmer italiano non lega verbo e sostantivo**: `accendere` → `accend`,
+   `accensione` → `accension`. Zero risultati. → voci di dizionario che
+   coprono i verbi di cantiere.
+4. **Le voci di elenco numerate passavano per titoli.** `headingOf()` apriva un
+   frammento a ogni "1. Aprire l'accesso principale": la procedura si spezzava
+   passo per passo e i passi restavano staccati dalla parola "Accensione", cioè
+   da come li si cerca. Ora fa titolo solo la numerazione gerarchica
+   (`6.2.1 Accensione`) e i capitoli maiuscoli (`7 MANUTENZIONE`).
+5. **Del dizionario si cerca il termine canonico, non gli alias.** Gli alias
+   servono a riconoscere il gergo; usarli come query separate tirava dentro
+   "5.7 PRIMO AVVIAMENTO" (la messa in servizio del costruttore, tutt'altra
+   cosa) e diluiva la sezione giusta.
+
+`npm run brain:test-headers` copre la pulizia delle testate e il riconoscimento
+dei titoli: entrambe le regole hanno trappole (un titolo di capitolo ripetuto
+non va cancellato; "67 / 105" non è un titolo numerato) trovate dal test e non
+in produzione.
+
+**Come si diagnostica**: non tirare a indovinare sul ranking. Si guarda cosa
+contengono davvero i frammenti che hanno vinto
+(`SELECT page, length(text), left(text,120) FROM "KnowledgeChunk" …`) — in
+questo caso bastava a capire tutto. Utile anche `to_tsvector('italian', …)`
+per verificare le radici delle parole.
+
 ### Trappole già pagate (non ripeterle)
 
 - **Il worker di pdfjs non finisce nel build standalone.** pdfjs in Node carica
@@ -277,9 +317,9 @@ a funzionare, si perdono solo OCR, descrizione immagini ed espansione query.
 - **Il proxy ha bisogno di un `location /api/` suo** (timeout 600s, buffering
   off, 64m) — vedi `DEPLOY.md`.
 
-Stato in produzione: manuale GF4000 indicizzato (105 pagine scansionate → 346
-frammenti, 177k caratteri via OCR), più il corpus operativo (190 diari, 11
-rapportini, 3 articoli, chat) e 43 termini a dizionario.
+Stato in produzione: 207 fonti, 884 frammenti, 48 termini a dizionario. Due
+manuali scansionati indicizzati via OCR (GF4000 BLUE DEVIL 105 pagine → 226
+frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
 
 ## Struttura cartelle
 
