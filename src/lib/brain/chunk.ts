@@ -12,12 +12,31 @@ export type Chunk = {
 };
 
 /** Riconosce un titolo di sezione: markdown, numerazione "4.2.1", o riga in MAIUSCOLO. */
-function headingOf(line: string): string | null {
+export function headingOf(line: string): string | null {
   const t = line.trim();
   if (!t || t.length > 110) return null;
+
   const md = t.match(/^#{1,6}\s+(.*)$/);
   if (md) return md[1].trim();
-  if (/^\d+(\.\d+){0,3}[.)]?\s+\S/.test(t) && t.length < 90) return t;
+
+  // Numerazione gerarchica ("6.2.1 Accensione", "5.7 PRIMO AVVIAMENTO"):
+  // e' sempre un titolo di capitolo.
+  if (/^\d+\.\d+(\.\d+){0,2}[.)]?\s+\S/.test(t) && t.length < 90) return t;
+
+  // Numero singolo: quasi sempre e' una VOCE DI ELENCO, non un titolo.
+  // "1. Aprire l'accesso principale" e' un passo della procedura: trattarlo da
+  // titolo spezzava la procedura in un frammento per passo e, peggio, staccava
+  // i passi dal capitolo che li introduce ("6.2.1 Accensione") — che e' proprio
+  // la parola con cui li si cerca. Fa eccezione il capitolo di primo livello
+  // scritto in maiuscolo ("7 MANUTENZIONE").
+  const singolo = t.match(/^\d+[.)]?\s+(\S.*)$/);
+  if (singolo) {
+    const resto = singolo[1];
+    const lettere = resto.replace(/[^A-Za-zÀ-ÿ]/g, "");
+    const maiuscolo = lettere.length >= 3 && lettere === lettere.toUpperCase();
+    return maiuscolo && resto.length < 60 ? t : null;
+  }
+
   const letters = t.replace(/[^A-Za-zÀ-ÿ]/g, "");
   if (letters.length >= 4 && letters === letters.toUpperCase() && !/[.;:]$/.test(t)) return t;
   return null;

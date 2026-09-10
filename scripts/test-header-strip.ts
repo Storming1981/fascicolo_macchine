@@ -39,3 +39,30 @@ for (const [nome, val, atteso] of esiti) {
 }
 console.log("\nesempio pagina 67:\n" + JSON.stringify(pages[66].text));
 process.exitCode = ok ? 0 : 1;
+
+/* ── Riconoscimento dei titoli di sezione ─────────────────────────────────
+   Una voce di elenco numerata NON e' un titolo: scambiarla per tale spezza la
+   procedura in un frammento per passo e stacca i passi dal capitolo che li
+   introduce, cioe' dalla parola con cui l'operatore li cerca. */
+import { headingOf } from "@/lib/brain/chunk";
+
+const casi: [string, boolean][] = [
+  ["6.2.1 Accensione", true],
+  ["5.7 PRIMO AVVIAMENTO", true],
+  ["7 MANUTENZIONE", true],
+  ["MANUALE DI USO E MANUTENZIONE", true],
+  ["1. Aprire l'accesso principale", false],
+  ["2. Portare l'interruttore GENERAL1 in \"ON\";", false],
+  ["10. Mantenere premuto per 2 secondi il pulsante ON;", false],
+  ["3. Verificare che la spia POWER sia accesa;", false],
+];
+
+console.log("\n--- riconoscimento titoli ---");
+let ok2 = true;
+for (const [riga, atteso] of casi) {
+  const esito = headingOf(riga) !== null;
+  const buono = esito === atteso;
+  ok2 = ok2 && buono;
+  console.log(`${buono ? "OK " : "KO "} ${atteso ? "titolo    " : "elenco    "} ${riga}`);
+}
+if (!ok2) process.exitCode = 1;
