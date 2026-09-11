@@ -265,12 +265,13 @@ npm run brain:pending   # riprova i documenti rimasti in coda o falliti
 scheda Brain mostra un avviso, l'indicizzazione dei documenti testuali continua
 a funzionare, si perdono solo OCR, descrizione immagini ed espansione query.
 
-### Qualità del retrieval: quattro cause, un solo sintomo
+### Qualità del retrieval: otto cause, un solo sintomo
 
 "Come accendo il BLUE DEVIL" non trovava la procedura, che sta a pagina 67 del
-manuale (`6.2.1 Accensione`). Quattro bug distinti davano lo stesso sintomo, e
-solo il quarto era evidente. Vale la pena conoscerli tutti: si ripresenteranno
-con ogni manuale nuovo.
+manuale (`6.2.1 Accensione`), e "quali controlli preliminari" ignorava la 68
+(`6.2.2 Controlli preliminari`). Otto bug distinti davano lo stesso sintomo, e
+nessuno era evidente. Vale la pena conoscerli tutti: si ripresenteranno con
+ogni manuale nuovo.
 
 1. **I piè di pagina si mangiavano il manuale.** Ogni pagina finiva in un
    frammento a sé (`BLUE DEVIL GF 4000 II — 16 / 105`): cortissimo (e `ts_rank`
@@ -293,6 +294,29 @@ con ogni manuale nuovo.
    servono a riconoscere il gergo; usarli come query separate tirava dentro
    "5.7 PRIMO AVVIAMENTO" (la messa in servizio del costruttore, tutt'altra
    cosa) e diluiva la sezione giusta.
+
+6. **La ricerca in AND non regge una domanda scritta per esteso.** Misurato:
+   `"Quali controlli preliminare devo fare prima di avviare un Blue Devil"` →
+   **0 frammenti**; `"controlli preliminari"` → 5, fra cui la sezione che si
+   chiama proprio così. L'OR c'era ma scattava solo a fallimento dell'AND e
+   valeva il 60%, quindi la sezione giusta finiva sotto alle tabelle che
+   ripetono la parola — Postgres **non pesa i termini rari**, la ripetizione
+   batte la pertinenza. Ora le due passate si sommano e si prende il meglio.
+7. **Il titolo di sezione vale ×1.8**, ma solo sui termini distintivi. Chi
+   chiede "i controlli preliminari" intende il capitolo che si chiama così. Col
+   premio su qualunque parola, però, `impianto` promuoveva "1.2 DATI
+   IDENTIFICATIVI DELL'IMPIANTO" a ogni domanda: fuori i nomi di prodotto (la
+   tipologia è già un filtro sui metadati) e le parole onnipresenti.
+8. **Occhio alle radici che collidono.** `prima` e `primo` hanno lo stesso
+   stem, quindi "cosa faccio **prima** di avviare" si agganciava a "5.6
+   **PRIMO** AVVIAMENTO", che parla d'altro. Le parole che non discriminano
+   stanno in `STOPWORDS`.
+
+**Non si tocca il ranking senza la suite.** Tre volte di fila una correzione ha
+risolto una domanda e rotto un'altra:
+`docker compose run --rm tools npx tsx scripts/test-retrieval.ts` fissa
+domanda → sezione attesa nei primi cinque risultati. Va eseguita dopo ogni
+modifica a `retrieve.ts`, `chunk.ts` o al dizionario.
 
 `npm run brain:test-headers` copre la pulizia delle testate e il riconoscimento
 dei titoli: entrambe le regole hanno trappole (un titolo di capitolo ripetuto
