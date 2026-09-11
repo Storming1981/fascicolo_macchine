@@ -121,6 +121,15 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
 - `Signature` — firma digitale collegata a evento/collaudo (operatore, metodo, immagine, hash)
 - `Photo` — foto di produzione/intervento (path su disco, categoria, autore)
 - `Document` — documenti allegati (PDF schemi, manuali, dichiarazioni CE)
+- **Ruoli** (`Role`): oltre ai ruoli operativi, due responsabili con guscio
+  desktop — `RESPONSABILE_CANTIERI` (tutti i permessi) e
+  `RESPONSABILE_PRODUZIONE` (fascicolo/produzione: creazione, stato, interventi
+  a diario, firme, import, check list; Service in sola lettura; niente gestione
+  operatori/impostazioni). Aggiungere un ruolo tocca sei punti: enum in
+  `schema.prisma`, `ROLE_LABEL` (`domain.ts`, detta l'ordine negli elenchi),
+  `DEFAULT_PERMISSIONS` (`permissions.ts`), `DEFAULT_APP_ACCESS`
+  (`appAccess.ts`), `DEFAULT_NAV` (`nav.ts`) e la whitelist `ROLES` in
+  `api/users/route.ts`.
 - `Setting` — configurazione runtime (key/value Json): `plantConfig` (tipologie
   e modelli editabili) e `permissions` (matrice permessi per ruolo)
 - `MachineMilestone` — date di cambio stato (key/date/source). Per ora inserite
@@ -444,6 +453,11 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   diario** le variazioni ("Anagrafica fascicolo aggiornata: campo vecchio → nuovo").
 - **Import Excel/CSV**: anteprima (dry-run) + conferma; salta job già presenti.
 - **Persone**: elenco operatori, firme, creazione operatore (solo ADMIN).
+  Gli **accessi al portale cliente** (utenti con ruolo `CLIENTE`) sono **nascosti
+  di default**: si gestiscono dalla scheda del cliente e qui gonfierebbero solo
+  l'elenco. Filtro in barra *Operatori / Accessi portale / Tutti*; il ruolo
+  `CLIENTE` non e' assegnabile dalla modale "Nuovo operatore" (quegli utenti
+  nascono con il `customerId` agganciato).
 - **Ricerca topbar intelligente** (`/api/search`): matricola componente / codice
   fascicolo / job → apre direttamente la macchina; testo generico → lista filtrata.
 - **P.O.S. — Piano Operativo di Sicurezza (vincolo di pianificazione)**:

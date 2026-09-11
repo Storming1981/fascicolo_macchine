@@ -28,6 +28,11 @@ type U = {
 };
 
 const ROLES = Object.keys(ROLE_LABEL) as Role[];
+// CLIENTE non e' un ruolo che si assegna a mano: quegli utenti nascono da
+// "Accesso portale cliente" nella scheda del cliente, con il customerId
+// agganciato. Resta selezionabile solo in modifica, per non falsare la tendina
+// di un accesso portale gia' esistente.
+const STAFF_ROLES = ROLES.filter((r) => r !== "CLIENTE");
 
 export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: boolean }) {
   const router = useRouter();
@@ -36,6 +41,9 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
+  // Gli accessi al portale sono utenti con ruolo CLIENTE: si gestiscono dalla
+  // scheda del cliente, qui riempirebbero solo l'elenco → nascosti di default.
+  const [kind, setKind] = useState<"staff" | "portal" | "all">("staff");
   const [perPage, setPerPage] = useState(20);
   const [page, setPage] = useState(1);
   const [syncing, setSyncing] = useState(false);
@@ -54,7 +62,12 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
     }
   }
 
+  const staffCount = users.filter((u) => u.role !== "CLIENTE").length;
+  const portalCount = users.length - staffCount;
   const filtered = users.filter((u) => {
+    const isPortal = u.role === "CLIENTE";
+    if (kind === "staff" && isPortal) return false;
+    if (kind === "portal" && !isPortal) return false;
     if (!q.trim()) return true;
     const t = q.toLowerCase();
     return (
@@ -156,7 +169,7 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
       <div className="view-header">
         <div>
           <h1>Persone &amp; Firme</h1>
-          <p>Operatori autorizzati ad accedere e firmare gli interventi</p>
+          <p>Operatori autorizzati ad accedere e firmare gli interventi · gli accessi al portale cliente si gestiscono dalla scheda del cliente</p>
         </div>
         {isAdmin && (
           <div className="flex-inline" style={{ gap: 8 }}>
@@ -182,6 +195,26 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
               setPage(1);
             }}
           />
+        </div>
+        <div className="filters">
+          {(
+            [
+              ["staff", "Operatori", staffCount],
+              ["portal", "Accessi portale", portalCount],
+              ["all", "Tutti", users.length],
+            ] as const
+          ).map(([key, label, n]) => (
+            <button
+              key={key}
+              className={"chip-btn" + (kind === key ? " active" : "")}
+              onClick={() => {
+                setKind(key);
+                setPage(1);
+              }}
+            >
+              {label} <span className="chip-n">{n}</span>
+            </button>
+          ))}
         </div>
         <span className="flex-inline" style={{ gap: 8, marginLeft: "auto" }}>
           <span className="muted small">Righe</span>
@@ -352,7 +385,7 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
                 >
-                  {ROLES.map((r) => (
+                  {STAFF_ROLES.map((r) => (
                     <option key={r} value={r}>
                       {ROLE_LABEL[r]}
                     </option>

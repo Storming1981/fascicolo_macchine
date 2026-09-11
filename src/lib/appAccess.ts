@@ -25,6 +25,7 @@ export type AppAccessMatrix = Record<string, AppProfile>;
 export const DEFAULT_APP_ACCESS: AppAccessMatrix = {
   ADMIN: "desktop",
   RESPONSABILE_CANTIERI: "desktop",
+  RESPONSABILE_PRODUZIONE: "desktop",
   CAPO_OFFICINA: "desktop",
   MONTATORE: "field",
   CABLATORE: "field",

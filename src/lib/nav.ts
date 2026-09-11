@@ -47,6 +47,17 @@ export const DEFAULT_NAV: NavVisibility = {
   ADMIN: on(ALL),
   RESPONSABILE_CANTIERI: on(ALL),
   CAPO_OFFICINA: on(ALL),
+  // Responsabile produzione: fascicolo + panoramica service, senza le voci
+  // operative del service (chat, pianificazione, notifiche).
+  RESPONSABILE_PRODUZIONE: on([
+    "dashboard",
+    "macchine",
+    "persone",
+    "service",
+    "interventi",
+    "clienti",
+    "knowledge",
+  ]),
   MONTATORE: on(["dashboard", "macchine", "persone", "knowledge"]),
   CABLATORE: on(["dashboard", "macchine", "persone", "knowledge"]),
   PROGRAMMATORE: on(["dashboard", "macchine", "persone", "knowledge"]),

@@ -7,6 +7,7 @@ import type { Role } from "@prisma/client";
 const ROLES: Role[] = [
   "ADMIN",
   "RESPONSABILE_CANTIERI",
+  "RESPONSABILE_PRODUZIONE",
   "CAPO_OFFICINA",
   "MONTATORE",
   "CABLATORE",

@@ -18,6 +18,7 @@ enum Role {
   TECNICO_CAMPO
   LOGISTICA
   CLIENTE // utente esterno: accesso al portale del proprio cliente (solo chat pubbliche)
+  RESPONSABILE_PRODUZIONE
 }
 
 enum MachineStatus {

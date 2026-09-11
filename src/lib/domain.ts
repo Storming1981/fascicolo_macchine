@@ -105,6 +105,7 @@ export const PRIORITY_META: Record<number, { label: string; short: string; color
 export const ROLE_LABEL: Record<Role, string> = {
   ADMIN: "Amministratore",
   RESPONSABILE_CANTIERI: "Responsabile cantieri",
+  RESPONSABILE_PRODUZIONE: "Responsabile produzione",
   CAPO_OFFICINA: "Capo officina",
   MONTATORE: "Operatore montaggio",
   CABLATORE: "Cablatore elettrico",

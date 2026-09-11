@@ -84,6 +84,22 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     "users.manage": true,
     "settings.manage": true,
   },
+  // Responsabile produzione: governa il fascicolo e la produzione (creazione,
+  // stato/avanzamento, interventi a diario, firme, import massivo) e vede il
+  // Service in sola lettura. Non gestisce operatori né impostazioni.
+  RESPONSABILE_PRODUZIONE: {
+    "machine.create": true,
+    "machine.edit": true,
+    "machine.intervention": true,
+    "machine.sign": true,
+    "machine.import": true,
+    "users.manage": false,
+    "settings.manage": false,
+    "service.view": true,
+    "intervento.viewAll": true,
+    "knowledge.view": true,
+    "checklist.manage": true,
+  },
   CAPO_OFFICINA: {
     "machine.create": true,
     "machine.edit": true,
