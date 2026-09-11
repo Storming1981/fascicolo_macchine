@@ -291,6 +291,14 @@ const STOPWORDS = new Set([
   "che", "con", "come", "cosa", "del", "della", "delle", "dei", "degli", "dal", "dalla",
   "per", "non", "una", "uno", "gli", "sul", "sulla", "nel", "nella", "quando", "quale",
   "quali", "quanto", "quante", "dove", "posso", "devo", "fare", "sono", "essere", "ogni",
+  // Avverbi e ausiliari: non discriminano, e qualcuno fa danni veri. "prima"
+  // ha la stessa radice di "primo", quindi la domanda "cosa faccio PRIMA di
+  // avviare" si agganciava al capitolo "5.6 PRIMO AVVIAMENTO" — che parla
+  // d'altro (la messa in servizio del costruttore).
+  "prima", "dopo", "durante", "mentre", "ancora", "sempre", "anche", "solo",
+  "molto", "poco", "tutto", "tutti", "tutte", "questo", "questa", "questi",
+  "queste", "quello", "quella", "serve", "servono", "bisogna", "occorre",
+  "voglio", "vorrei", "dimmi", "spiegami", "mio", "mia", "miei",
   "the", "and", "for", "with",
 ]);
 
