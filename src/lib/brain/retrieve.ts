@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { RETRIEVAL, UTILITY_MODEL } from "./config";
 import { anthropic } from "./client";
 import { expandWithGlossary, loadGlossary, type Term } from "./glossary";
+import { PLANT_TYPES } from "@/lib/plant";
 
 export type Passage = {
   chunkId: string;
@@ -234,6 +235,8 @@ async function searchOnce(query: string, scope: RetrievalScope, limit: number): 
   // uno chiede "i controlli preliminari" intende il capitolo che si chiama
   // così, ed è il segnale più affidabile che abbiamo.
   const loose = or ? Prisma.sql`to_tsquery('italian', ${or})` : Prisma.sql`websearch_to_tsquery('italian', ${q})`;
+  const tq = titleQuery(q);
+  const titolo = tq ? Prisma.sql`to_tsquery('italian', ${tq})` : null;
 
   return prisma.$queryRaw<Row[]>`
     SELECT c."id", c."sourceId", c."seq", c."breadcrumb", c."page", c."videoAt",
@@ -242,13 +245,35 @@ async function searchOnce(query: string, scope: RetrievalScope, limit: number): 
              ts_rank_cd(c."tsv", websearch_to_tsquery('italian', ${q}), 32),
              ts_rank_cd(c."tsv", ${loose}, 32) * 0.6
            ) AS rank,
-           (to_tsvector('italian', c."breadcrumb") @@ ${loose}) AS "titleHit"
+           ${titolo ? Prisma.sql`(to_tsvector('italian', c."breadcrumb") @@ ${titolo})` : Prisma.sql`false`} AS "titleHit"
     FROM "KnowledgeChunk" c
     JOIN "KnowledgeSource" s ON s."id" = c."sourceId"
     WHERE ${where}
       AND (c."tsv" @@ websearch_to_tsquery('italian', ${q}) OR c."tsv" @@ ${loose})
     ORDER BY rank DESC
     LIMIT ${limit}`;
+}
+
+/**
+ * Parole da NON usare per il premio "sta nel titolo di sezione": nomi di
+ * prodotto e termini onnipresenti. Senza questo filtro il premio scattava su
+ * "impianto" e promuoveva "1.2 DATI IDENTIFICATIVI DELL'IMPIANTO" o "4.6.2
+ * Dimensioni di ingombro" a qualunque domanda — il contrario di quello che
+ * serve. La tipologia impianto e' gia' un filtro sui metadati.
+ */
+const TITOLO_IGNORA = new Set([
+  ...PLANT_TYPES.flatMap((p) => p.toLowerCase().split(/\s+/)),
+  "impianto", "impianti", "macchina", "macchine", "manuale", "uso",
+  "manutenzione", "generale", "generali", "dati", "cayman", "shredder",
+]);
+
+/** Come orQuery, ma senza i termini troppo generici: serve a capire se la
+ *  domanda nomina davvero il TITOLO di una sezione. */
+function titleQuery(q: string): string | null {
+  const words = (orQuery(q) ?? "")
+    .split(" | ")
+    .filter((w) => w && !TITOLO_IGNORA.has(w));
+  return words.length ? words.join(" | ") : null;
 }
 
 /** Parole significative della domanda unite in OR, in sintassi to_tsquery. */
