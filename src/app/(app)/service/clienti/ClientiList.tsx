@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon, { Flag } from "@/components/Icon";
 import { COUNTRIES } from "@/lib/domain";
+import { fmtDate } from "@/lib/format";
+
+/** Accesso al portale cliente (utente con ruolo CLIENTE agganciato al cliente). */
+export type PortalAccess = { email: string; active: boolean; since: string };
 
 export type CustomerRow = {
   id: string;
@@ -18,6 +22,8 @@ export type CustomerRow = {
   sites: number;
   interventi: number;
   machines: number;
+  /** null = credenziali mai create. */
+  portal: PortalAccess | null;
 };
 
 export default function ClientiList({
@@ -29,20 +35,32 @@ export default function ClientiList({
 }) {
   const [q, setQ] = useState("");
   const [showNew, setShowNew] = useState(false);
-  const filtered = clienti.filter(
-    (c) =>
-      !q.trim() ||
-      c.name.toLowerCase().includes(q.toLowerCase()) ||
-      c.code.toLowerCase().includes(q.toLowerCase()) ||
-      (c.city ?? "").toLowerCase().includes(q.toLowerCase())
-  );
+  const [portalFilter, setPortalFilter] = useState<"all" | "yes" | "no">("all");
+  const withPortal = clienti.filter((c) => c.portal).length;
+  const filtered = clienti.filter((c) => {
+    const term = q.trim().toLowerCase();
+    if (
+      term &&
+      !c.name.toLowerCase().includes(term) &&
+      !c.code.toLowerCase().includes(term) &&
+      !(c.city ?? "").toLowerCase().includes(term) &&
+      !(c.portal?.email ?? "").toLowerCase().includes(term)
+    )
+      return false;
+    if (portalFilter === "yes" && !c.portal) return false;
+    if (portalFilter === "no" && c.portal) return false;
+    return true;
+  });
 
   return (
     <div className="view">
       <div className="view-header">
         <div>
           <h1>Clienti &amp; Cantieri</h1>
-          <p>{clienti.length} aziende · anagrafica condivisa con i fascicoli</p>
+          <p>
+            {clienti.length} aziende · {withPortal} con accesso al portale · anagrafica
+            condivisa con i fascicoli
+          </p>
         </div>
         {canManage && (
           <button className="btn-primary" onClick={() => setShowNew(true)}>
@@ -56,10 +74,27 @@ export default function ClientiList({
           <div className="search" style={{ maxWidth: 320 }}>
             <Icon name="search" size={15} color="var(--muted)" />
             <input
-              placeholder="Cerca nome, codice, città…"
+              placeholder="Cerca nome, codice, città, email portale…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
+          </div>
+          <div className="filters">
+            {(
+              [
+                ["all", "Tutti", clienti.length],
+                ["yes", "Con portale", withPortal],
+                ["no", "Senza portale", clienti.length - withPortal],
+              ] as const
+            ).map(([key, label, n]) => (
+              <button
+                key={key}
+                className={"chip-btn" + (portalFilter === key ? " active" : "")}
+                onClick={() => setPortalFilter(key)}
+              >
+                {label} <span className="chip-n">{n}</span>
+              </button>
+            ))}
           </div>
         </div>
         <div className="table-wrap">
@@ -70,6 +105,7 @@ export default function ClientiList({
               <th>Cliente</th>
               <th>Sede</th>
               <th>Contratto</th>
+              <th>Portale</th>
               <th>Cantieri</th>
               <th>Interventi</th>
               <th>Macchine</th>
@@ -112,6 +148,30 @@ export default function ClientiList({
                     "—"
                   )}
                 </td>
+                <td>
+                  {c.portal ? (
+                    <>
+                      <span
+                        className="status-chip"
+                        style={
+                          c.portal.active
+                            ? { background: "#10b98122", color: "#0a7d52" }
+                            : { background: "#f59e0b1f", color: "#b45309" }
+                        }
+                        title={`${c.portal.email} · credenziali create il ${fmtDate(
+                          c.portal.since
+                        )}`}
+                      >
+                        {c.portal.active ? "Attivo" : "Sospeso"}
+                      </span>
+                      <div className="mono muted small" style={{ marginTop: 3 }}>
+                        {c.portal.email}
+                      </div>
+                    </>
+                  ) : (
+                    <span className="muted small">Non attivato</span>
+                  )}
+                </td>
                 <td className="mono">{c.sites}</td>
                 <td className="mono">{c.interventi}</td>
                 <td className="mono">{c.machines}</td>
@@ -128,7 +188,7 @@ export default function ClientiList({
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="empty-state">
+                <td colSpan={9} className="empty-state">
                   Nessun cliente.
                 </td>
               </tr>
