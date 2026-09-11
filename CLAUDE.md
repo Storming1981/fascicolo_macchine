@@ -224,6 +224,46 @@ modo peggiore di sbagliare: si rischia di ricaricare lo stesso file.
 Se il container viene riavviato a metà lavoro la sorgente resta in `PROCESSING`:
 si recupera con `npm run brain:pending`.
 
+### Costi: dove vanno davvero i soldi
+
+Misurato sul campo (non stimato), dopo i primi due giorni di uso:
+
+| Voce | Costo | Note |
+|---|---|---|
+| Risposta singola | **~$0,09** | Opus 5, ~3.600 token input + ~1.250 output + scrittura cache |
+| OCR di un manuale scansionato | **~$0,40** | 1.586 token/pagina, misurati con `count_tokens` |
+| Espansione query (Haiku) | trascurabile | ~$0,002 a domanda |
+
+Il primo conto fu di €10 in due giorni, e **l'80% erano reindicizzazioni**: sei
+giri di OCR sugli stessi due manuali durante il debug del retrieval. Da qui le
+tre difese, tutte già attive:
+
+1. **Il testo estratto si tiene** (`extractCache` + `extractHash` = sha del
+   FILE). Reindicizzare serve quasi sempre a migliorare chunking o ranking, non
+   perché il PDF sia cambiato. Misurato: da **632 secondi e $0,40 a 0 secondi e
+   $0**. Per forzare davvero la rilettura: `POST …/reindex?reextract=1`.
+2. **Cache delle risposte** (`BrainAnswerCache`, `src/lib/brain/answerCache.ts`).
+   La prompt cache di Anthropic copre il system prompt, **non** i documenti
+   recuperati né la generazione: una domanda ripetuta costava quasi come la
+   prima. Misurato: **$0,0920 / 19.656 ms → $0,0000 / 8 ms**. La chiave include
+   la versione della knowledge base, quindi ogni caricamento o reindicizzazione
+   fa decadere tutto da solo. Si memorizza **solo la prima domanda di una
+   conversazione**: un "e i guanti?" dipende dal contesto precedente e riusarlo
+   darebbe risposte a caso.
+3. **Prompt cache a 1 ora** invece dei 5 minuti di default: 12 risposte su 26
+   non leggevano un solo token dalla cache perché fra una domanda e l'altra
+   passano minuti. Scrive a 2x invece di 1.25x e si ripaga alla prima lettura
+   evitata.
+
+> **I token SCRITTI in cache vanno contati.** Prima non li tracciavo e il costo
+> per risposta sembrava $0,04 quando era $0,09. Ora `cacheWriteTokens` sta in
+> `BrainMessage` e in `estimateCostUsd`.
+
+Leve di qualità/costo **non** applicate (decisione del committente): `effort`
+da `medium` a `low` (curve quasi piatte sulle domande di conoscenza: 1-3 punti
+per un terzo/metà del costo) e modello più economico per le risposte
+(sconsigliato: Haiku peggiora molto sul tecnico).
+
 ### Corpus vivo (il feedback loop chiesto dal committente)
 
 `syncCorpus()` rende cercabili **rapportini** (lavorazioni, problematiche,
