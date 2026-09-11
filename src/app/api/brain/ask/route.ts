@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { askBrain, titleFor, type AskEvent, type AskImage, type UsedSource, type Citation } from "@/lib/brain/ask";
 import { isBrainConfigured } from "@/lib/brain/config";
+import { lookupAnswer, storeAnswer } from "@/lib/brain/answerCache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -75,6 +76,7 @@ export async function POST(req: Request) {
     data: { threadId: thread.id, role: "user", content: question, images: [] },
   });
 
+  const started = Date.now();
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -86,11 +88,51 @@ export async function POST(req: Request) {
       let answer = "";
       let sources: UsedSource[] = [];
       const citations: Citation[] = [];
-      let usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
+      let usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
       let model = "";
       let latencyMs = 0;
 
+      const cacheScope = {
+        audience: "internal" as const,
+        plantType: typeof body?.plantType === "string" ? body.plantType : null,
+        machineId: typeof body?.machineId === "string" ? body.machineId : null,
+      };
+
       try {
+        // Domanda già posta (stessa knowledge base, stesso ambito, nessuna
+        // immagine, inizio conversazione): si riusa la risposta invece di
+        // ripagarla. Si riproduce lo streaming perché la UI non deve accorgersene.
+        const hit = await lookupAnswer(question, cacheScope, {
+          hasHistory: history.length > 0,
+          hasImages: images.length > 0,
+        });
+        if (hit) {
+          send({ type: "sources", sources: hit.sources });
+          for (const c of hit.citations) send({ type: "citation", citation: c });
+          for (let i = 0; i < hit.answer.length; i += 24)
+            send({ type: "text", delta: hit.answer.slice(i, i + 24) });
+          send({
+            type: "done",
+            usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+            costUsd: 0,
+            model: hit.model ?? "cache",
+            latencyMs: Date.now() - started,
+          });
+          const saved = await prisma.brainMessage.create({
+            data: {
+              threadId: thread.id,
+              role: "assistant",
+              content: hit.answer,
+              sources: hit.sources as unknown as object,
+              citations: hit.citations as unknown as object,
+              model: hit.model,
+              fromCache: true,
+            },
+          });
+          send({ type: "thread", id: thread.id, title: thread.title, messageId: saved.id });
+          return;
+        }
+
         for await (const ev of askBrain({
           question,
           history,
@@ -124,8 +166,20 @@ export async function POST(req: Request) {
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
             cacheReadTokens: usage.cacheReadTokens,
+            cacheWriteTokens: usage.cacheWriteTokens,
             latencyMs,
           },
+        });
+        await storeAnswer({
+          question,
+          scope: cacheScope,
+          answer,
+          sources,
+          citations,
+          model,
+          usage,
+          hasHistory: history.length > 0,
+          hasImages: images.length > 0,
         });
         send({ type: "thread", id: thread.id, title: thread.title, messageId: saved.id });
       } catch (e) {

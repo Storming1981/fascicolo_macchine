@@ -54,5 +54,11 @@ services:
     network_mode: host
     env_file:
       - .env.production
+    environment:
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      # Gli script di manutenzione leggono i file caricati (reindicizzazione,
+      # brain:pending): senza il volume trovano solo il database.
+      - /srv/machines-zato/uploads:/data/uploads
     profiles: ["tools"]
     command: ["npx", "prisma", "db", "push"]

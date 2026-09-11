@@ -38,7 +38,7 @@ export type AskEvent =
   | { type: "citation"; citation: Citation }
   | {
       type: "done";
-      usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number };
+      usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
       costUsd: number;
       model: string;
       latencyMs: number;
@@ -209,15 +209,19 @@ export async function* askBrain(input: AskInput): AsyncGenerator<AskEvent> {
   yield { type: "status", message: "Elaboro la risposta…" };
 
   const seen = new Set<string>();
-  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
+  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
 
   try {
     const stream = client.messages.stream({
       model: ANSWER_MODEL,
       max_tokens: 4000,
-      // Il system prompt è stabile: cache_control lo rende quasi gratis dal
-      // secondo messaggio in poi.
-      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+      // Il system prompt (regole + dizionario intero) è stabile e vale ~4k token.
+      // TTL di un'ora invece dei 5 minuti di default: fra una domanda e l'altra
+      // passano minuti, non secondi, e con la finestra corta metà delle richieste
+      // pagava il prefisso a prezzo pieno (misurato: 12 risposte su 26 senza un
+      // solo token letto da cache). La scrittura costa 2x invece di 1.25x, e si
+      // ripaga alla prima lettura evitata.
+      system: [{ type: "text", text: system, cache_control: { type: "ephemeral", ttl: "1h" } }],
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },
       messages,
@@ -247,6 +251,7 @@ export async function* askBrain(input: AskInput): AsyncGenerator<AskEvent> {
       } else if (event.type === "message_start") {
         usage.inputTokens = event.message.usage.input_tokens ?? 0;
         usage.cacheReadTokens = event.message.usage.cache_read_input_tokens ?? 0;
+        usage.cacheWriteTokens = event.message.usage.cache_creation_input_tokens ?? 0;
       }
     }
     await stream.done();

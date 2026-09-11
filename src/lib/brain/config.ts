@@ -67,12 +67,20 @@ const PRICES: Record<string, { in: number; out: number; cached: number }> = {
 
 export function estimateCostUsd(
   model: string,
-  usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number }
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  }
 ): number {
   const p = PRICES[model] ?? PRICES["claude-opus-5"];
   return (
     (usage.inputTokens / 1e6) * p.in +
     (usage.outputTokens / 1e6) * p.out +
-    ((usage.cacheReadTokens ?? 0) / 1e6) * p.cached
+    ((usage.cacheReadTokens ?? 0) / 1e6) * p.cached +
+    // Scrivere in cache con TTL a un'ora costa 2x l'input: senza questa voce il
+    // conto sembra più basso di quello che è.
+    ((usage.cacheWriteTokens ?? 0) / 1e6) * p.in * 2
   );
 }

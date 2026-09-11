@@ -765,6 +765,12 @@ model KnowledgeSource {
 
   // Indicizzazione
   contentHash    String? // sha256 del testo estratto: evita reindicizzazioni inutili
+  /// Testo gia' estratto dal file, pagina per pagina ([{page,text}]).
+  /// Reindicizzare (per migliorare chunking o ranking) NON deve rifare l'OCR:
+  /// costa ~0,40$ e dieci minuti a manuale, e il testo non e' cambiato.
+  extractCache   Json?
+  /// sha256 del FILE: se combacia, extractCache e' ancora valido.
+  extractHash    String?
   extractedChars Int     @default(0)
   chunkCount     Int     @default(0)
   tokensEstimate Int     @default(0)
@@ -865,6 +871,11 @@ model BrainMessage {
   inputTokens     Int @default(0)
   outputTokens    Int @default(0)
   cacheReadTokens Int @default(0)
+  /// Token scritti in cache (costano 1.25x, o 2x con TTL a un'ora): senza
+  /// questo numero il conto del costo e' sottostimato.
+  cacheWriteTokens Int @default(0)
+  /// Risposta servita dalla cache invece che rigenerata.
+  fromCache        Boolean @default(false)
   latencyMs       Int @default(0)
   /// Feedback dell'operatore: 1 utile, -1 non utile
   rating     Int?
@@ -874,4 +885,32 @@ model BrainMessage {
   thread BrainThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId])
+}
+
+
+/// Risposte gia' date, riutilizzabili.
+///
+/// La prompt cache abbatte il costo del system prompt, ma non quello dei
+/// documenti recuperati ne' della generazione: una stessa domanda ripetuta
+/// costa ogni volta come la prima. Nel portale clienti le domande si ripetono
+/// molto ("ogni quanto cambio l'olio"), quindi la seconda in poi e' gratis.
+///
+/// La chiave include la versione della knowledge base: appena si carica o
+/// reindicizza un documento, tutte le risposte in cache decadono da sole.
+model BrainAnswerCache {
+  key        String   @id // sha256(domanda normalizzata + ambito + versione KB)
+  question   String
+  answer     String   @db.Text
+  sources    Json     @default("[]")
+  citations  Json     @default("[]")
+  scope      String   @default("internal")
+  model      String?
+  /// Quanto sarebbe costata la rigenerazione: serve a mostrare il risparmio.
+  savedUsd   Float    @default(0)
+  hits       Int      @default(0)
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@index([scope])
+  @@index([lastUsedAt])
 }

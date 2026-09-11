@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { currentClient } from "@/lib/portalAuth";
 import { askBrain, titleFor, type AskEvent, type UsedSource } from "@/lib/brain/ask";
 import { isBrainConfigured } from "@/lib/brain/config";
+import { lookupAnswer, storeAnswer } from "@/lib/brain/answerCache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -78,11 +79,44 @@ export async function POST(req: Request) {
 
       let answer = "";
       let sources: UsedSource[] = [];
-      let usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
+      let usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
       let model = "";
       let latencyMs = 0;
 
+      // Nel portale la cache rende molto: i clienti fanno le stesse domande
+      // ("ogni quanto la manutenzione", "come si accende"). La chiave include il
+      // cliente, quindi nessuno vede risposte tarate su un altro parco macchine.
+      const cacheScope = { audience: "portal" as const, customerId: client.customerId };
+
       try {
+        const hit = await lookupAnswer(question, cacheScope, {
+          hasHistory: history.length > 0,
+          hasImages: false,
+        });
+        if (hit) {
+          send({ type: "sources", sources: hit.sources });
+          for (let i = 0; i < hit.answer.length; i += 24)
+            send({ type: "text", delta: hit.answer.slice(i, i + 24) });
+          send({
+            type: "done",
+            usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+            costUsd: 0,
+            model: hit.model ?? "cache",
+            latencyMs: 0,
+          });
+          await prisma.brainMessage.create({
+            data: {
+              threadId: thread.id,
+              role: "assistant",
+              content: hit.answer,
+              sources: hit.sources as unknown as object,
+              model: hit.model,
+              fromCache: true,
+            },
+          });
+          return;
+        }
+
         for await (const ev of askBrain({
           question,
           history,
@@ -111,8 +145,20 @@ export async function POST(req: Request) {
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
             cacheReadTokens: usage.cacheReadTokens,
+            cacheWriteTokens: usage.cacheWriteTokens,
             latencyMs,
           },
+        });
+        await storeAnswer({
+          question,
+          scope: cacheScope,
+          answer,
+          sources,
+          citations: [],
+          model,
+          usage,
+          hasHistory: history.length > 0,
+          hasImages: false,
         });
       } catch (e) {
         send({ type: "error", message: e instanceof Error ? e.message : "Errore inatteso" });

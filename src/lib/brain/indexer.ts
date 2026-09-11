@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { KnowledgeSource } from "@prisma/client";
+import { Prisma, type KnowledgeSource } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { chunkPages, chunkTranscript, type Chunk } from "./chunk";
 import { extractFile } from "./extract";
@@ -15,6 +15,17 @@ import { estimateTokens } from "./config";
 
 function hash(s: string): string {
   return crypto.createHash("sha256").update(s).digest("hex");
+}
+
+/** sha256 del file su disco: dice se il testo estratto e' ancora valido. */
+async function hashFile(publicPath: string): Promise<string | null> {
+  try {
+    const { promises: fs } = await import("fs");
+    const { uploadLocalPath } = await import("@/lib/uploadPath");
+    return hash((await fs.readFile(uploadLocalPath(publicPath))).toString("base64"));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -75,7 +86,11 @@ export type IndexResult = {
  * cambiato (stesso hash) non tocca i chunk, così un "reindicizza tutto" su
  * centinaia di documenti non rifà lavoro inutile.
  */
-export async function indexSource(sourceId: string, opts: { force?: boolean } = {}): Promise<IndexResult> {
+export async function indexSource(
+  sourceId: string,
+  /** `force` rifa' i chunk; `reextract` rifa' anche l'estrazione (e l'OCR). */
+  opts: { force?: boolean; reextract?: boolean } = {}
+): Promise<IndexResult> {
   const source = await prisma.knowledgeSource.findUnique({ where: { id: sourceId } });
   if (!source) return { ok: false, chunks: 0, chars: 0, tokens: 0, ocrUsed: false, error: "Sorgente non trovata" };
 
@@ -85,7 +100,15 @@ export async function indexSource(sourceId: string, opts: { force?: boolean } = 
   });
 
   try {
-    const { chunks, chars, ocrUsed, note, pageCount } = await buildChunks(source);
+    if (opts.reextract)
+      await prisma.knowledgeSource.update({
+        where: { id: sourceId },
+        data: { extractHash: null, extractCache: Prisma.DbNull },
+      });
+    const fresh = opts.reextract
+      ? await prisma.knowledgeSource.findUniqueOrThrow({ where: { id: sourceId } })
+      : source;
+    const { chunks, chars, ocrUsed, note, pageCount } = await buildChunks(fresh);
     const contentHash = hash(chunks.map((c) => c.text).join("\n"));
 
     if (!opts.force && source.contentHash === contentHash && source.status === "READY") {
@@ -162,11 +185,29 @@ async function buildChunks(source: KnowledgeSource): Promise<{
   }
 
   if (source.filePath && source.mimeType) {
-    const ex = await extractFile(source.filePath, source.mimeType, {
-      title: source.title,
-      plantType: source.plantType,
-      model: source.model,
-    });
+    // Il testo gia' estratto si riusa. Reindicizzare serve quasi sempre a
+    // migliorare chunking o ranking, non perche' il file sia cambiato: rifare
+    // l'OCR costerebbe ~0,40$ e dieci minuti a manuale per riottenere le stesse
+    // identiche pagine. Si ricontrolla l'hash del file, non la data.
+    const fileHash = await hashFile(source.filePath);
+    const cached =
+      fileHash && source.extractHash === fileHash && Array.isArray(source.extractCache)
+        ? (source.extractCache as unknown as { page: number; text: string }[])
+        : null;
+
+    const ex = cached
+      ? { pages: cached, pageCount: source.pageCount ?? cached.length, ocrUsed: source.ocrUsed, note: "testo riusato dalla precedente estrazione (nessun OCR)" }
+      : await extractFile(source.filePath, source.mimeType, {
+          title: source.title,
+          plantType: source.plantType,
+          model: source.model,
+        });
+
+    if (!cached && fileHash)
+      await prisma.knowledgeSource.update({
+        where: { id: source.id },
+        data: { extractHash: fileHash, extractCache: ex.pages as unknown as object },
+      });
     // La descrizione manuale è conoscenza aggiunta dall'operatore: entra come
     // primo chunk, non va persa.
     const pages = source.description?.trim()
