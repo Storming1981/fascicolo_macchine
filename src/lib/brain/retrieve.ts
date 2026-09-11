@@ -187,6 +187,8 @@ type Row = {
   text: string;
   tokens: number;
   rank: number;
+  /** true se la parola cercata compare nel titolo di sezione del frammento. */
+  titleHit: boolean;
 };
 
 /**
@@ -214,35 +216,37 @@ async function searchOnce(query: string, scope: RetrievalScope, limit: number): 
     );
 
   const where = Prisma.join(filters, " AND ");
-
-  // Passata 1: websearch_to_tsquery, che mette i termini in AND. Precisa, ma
-  // basta una parola assente dal corpus per non trovare nulla.
-  const strict = await prisma.$queryRaw<Row[]>`
-    SELECT c."id", c."sourceId", c."seq", c."breadcrumb", c."page", c."videoAt",
-           c."text", c."tokens",
-           ts_rank_cd(c."tsv", websearch_to_tsquery('italian', ${q}), 32) AS rank
-    FROM "KnowledgeChunk" c
-    JOIN "KnowledgeSource" s ON s."id" = c."sourceId"
-    WHERE ${where}
-      AND c."tsv" @@ websearch_to_tsquery('italian', ${q})
-    ORDER BY rank DESC
-    LIMIT ${limit}`;
-  if (strict.length > 0) return strict;
-
-  // Passata 2 (solo se la prima è a vuoto): gli stessi termini in OR. Un tecnico
-  // che chiede "collaudo BLUE DEVIL" deve ottenere qualcosa anche se nessun
-  // documento contiene tutte e tre le parole. ts_rank_cd premia comunque i
-  // chunk che ne contengono di più.
   const or = orQuery(q);
-  if (!or) return [];
+
+  // Due passate INSIEME, non una in ripiego dell'altra.
+  //
+  // `websearch_to_tsquery` mette i termini in AND: preciso, ma una domanda
+  // scritta per esteso non trova quasi mai nulla ("quali controlli preliminare
+  // devo fare prima di avviare un Blue Devil" → zero frammenti, perché nessun
+  // capitolo contiene tutte quelle parole). Facendo scattare l'OR solo quando
+  // l'AND era a vuoto, la sezione giusta arrivava penalizzata del 40% e finiva
+  // sotto a tabelle di manutenzione che ripetono una delle parole: Postgres non
+  // pesa i termini rari, quindi "controlli" ripetuto dieci volte batte
+  // "Controlli preliminari" detto una volta al punto giusto.
+  //
+  // Si prende quindi il meglio delle due (l'AND resta il segnale forte) e si
+  // segnala a parte se la parola cercata sta nel TITOLO della sezione: quando
+  // uno chiede "i controlli preliminari" intende il capitolo che si chiama
+  // così, ed è il segnale più affidabile che abbiamo.
+  const loose = or ? Prisma.sql`to_tsquery('italian', ${or})` : Prisma.sql`websearch_to_tsquery('italian', ${q})`;
+
   return prisma.$queryRaw<Row[]>`
     SELECT c."id", c."sourceId", c."seq", c."breadcrumb", c."page", c."videoAt",
            c."text", c."tokens",
-           ts_rank_cd(c."tsv", to_tsquery('italian', ${or}), 32) * 0.6 AS rank
+           GREATEST(
+             ts_rank_cd(c."tsv", websearch_to_tsquery('italian', ${q}), 32),
+             ts_rank_cd(c."tsv", ${loose}, 32) * 0.6
+           ) AS rank,
+           (to_tsvector('italian', c."breadcrumb") @@ ${loose}) AS "titleHit"
     FROM "KnowledgeChunk" c
     JOIN "KnowledgeSource" s ON s."id" = c."sourceId"
     WHERE ${where}
-      AND c."tsv" @@ to_tsquery('italian', ${or})
+      AND (c."tsv" @@ websearch_to_tsquery('italian', ${q}) OR c."tsv" @@ ${loose})
     ORDER BY rank DESC
     LIMIT ${limit}`;
 }
@@ -281,7 +285,7 @@ export async function retrieve(plan: QueryPlan, scope: RetrievalScope): Promise<
 
   // Fusione: somma dei rank con peso decrescente per le riformulazioni, più un
   // bonus per i chunk trovati da query diverse.
-  const acc = new Map<string, { row: Row; score: number; hits: number }>();
+  const acc = new Map<string, { row: Row; score: number; hits: number; title: boolean }>();
   results.forEach((rows, qi) => {
     const weight = qi === 0 ? 1 : 0.8; // la domanda originale pesa di più
     for (const row of rows) {
@@ -289,8 +293,9 @@ export async function retrieve(plan: QueryPlan, scope: RetrievalScope): Promise<
       if (cur) {
         cur.score += row.rank * weight;
         cur.hits++;
+        cur.title = cur.title || row.titleHit;
       } else {
-        acc.set(row.id, { row, score: row.rank * weight, hits: 1 });
+        acc.set(row.id, { row, score: row.rank * weight, hits: 1, title: row.titleHit });
       }
     }
   });
@@ -315,11 +320,15 @@ export async function retrieve(plan: QueryPlan, scope: RetrievalScope): Promise<
 
   const now = Date.now();
   const scored: Passage[] = [];
-  for (const { row, score, hits } of acc.values()) {
+  for (const { row, score, hits, title } of acc.values()) {
     const s = byId.get(row.sourceId);
     if (!s) continue;
 
     let boost = TYPE_BOOST[s.type] ?? 1;
+    // Il titolo di sezione e' il segnale piu' affidabile: chi chiede "i controlli
+    // preliminari" vuole il capitolo che si chiama cosi', non la tabella di
+    // manutenzione che ripete la parola "controlli".
+    if (title) boost *= 1.8;
     boost *= 1 + Math.min(hits - 1, 3) * 0.12; // trovato da più riformulazioni
     if (plan.plantType && s.plantType === plan.plantType) boost *= 1.3;
     if (scope.plantType && s.plantType === scope.plantType) boost *= 1.25;
