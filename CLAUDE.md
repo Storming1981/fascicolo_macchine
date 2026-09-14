@@ -453,11 +453,15 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   diario** le variazioni ("Anagrafica fascicolo aggiornata: campo vecchio → nuovo").
 - **Note macchina** (linguetta *Note*, dopo QR & Etichetta): appunti liberi su
   settaggi particolari e aggiustaggi dedicati, firmati con autore + data/ora.
-  **Modificabili ma non cancellabili**: non esiste un DELETE (405) e ogni
-  modifica salva il testo sostituito in `MachineNoteRevision` (chi e quando),
-  consultabile da *Versioni precedenti*. Aggiunge chi ha `machine.intervention`
-  o `machine.edit`; modifica l'autore oppure chi ha `machine.edit`.
-  API: `POST /api/machines/[id]/notes`, `PATCH /api/machines/[id]/notes/[noteId]`.
+  Ogni modifica salva il testo sostituito in `MachineNoteRevision` (chi e
+  quando), consultabile da *Versioni precedenti*. La **cancellazione è logica**:
+  la nota va nel **Cestino** (`deletedAt`/`deletedByName`), visibile dal filtro
+  *Note / Cestino* con chi l'ha eliminata e quando, e si **ripristina**; nel
+  cestino non si modifica (409). Dal DB non si cancella mai. Aggiunge chi ha
+  `machine.intervention` o `machine.edit`; modifica, elimina e ripristina
+  l'autore oppure chi ha `machine.edit`.
+  API: `POST /api/machines/[id]/notes` · `PATCH …/notes/[noteId]` (`{text}` o
+  `{restore:true}`) · `DELETE …/notes/[noteId]` (sposta nel cestino).
 - **Import Excel/CSV**: anteprima (dry-run) + conferma; salta job già presenti.
 - **Persone**: elenco operatori, firme, creazione operatore (solo ADMIN).
   Gli **accessi al portale cliente** (utenti con ruolo `CLIENTE`) sono **nascosti

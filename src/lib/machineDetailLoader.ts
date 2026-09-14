@@ -148,6 +148,8 @@ export async function loadMachineDetailProps(code: string) {
       createdAt: n.createdAt.toISOString(),
       editedByName: n.editedByName,
       editedAt: n.editedAt?.toISOString() ?? null,
+      deletedAt: n.deletedAt?.toISOString() ?? null,
+      deletedByName: n.deletedByName,
       revisions: n.revisions.map((r) => ({
         id: r.id,
         text: r.text,

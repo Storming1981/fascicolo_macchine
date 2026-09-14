@@ -51,6 +51,7 @@ type Machine = {
   notesLog: {
     id: string; text: string; authorId: string | null; authorName: string; createdAt: string;
     editedByName: string | null; editedAt: string | null;
+    deletedAt: string | null; deletedByName: string | null;
     revisions: { id: string; text: string; editedByName: string; editedAt: string }[];
   }[];
   collaudo: {
@@ -2398,13 +2399,50 @@ function TabNote({
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [q, setQ] = useState("");
+  const [trash, setTrash] = useState(false);
 
-  const notes = machine.notesLog.filter(
+  const active = machine.notesLog.filter((n) => !n.deletedAt);
+  const deleted = machine.notesLog
+    .filter((n) => n.deletedAt)
+    .sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
+  const shown = trash ? deleted : active;
+  const notes = shown.filter(
     (n) =>
       !q.trim() ||
       n.text.toLowerCase().includes(q.toLowerCase()) ||
       n.authorName.toLowerCase().includes(q.toLowerCase())
   );
+
+  async function removeNote(id: string) {
+    if (!confirm("Spostare la nota nel cestino? Potrai ripristinarla dal Cestino.")) return;
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/notes/${id}`, { method: "DELETE" });
+    setBusy(false);
+    if (res.ok) {
+      onDone();
+      notify("Nota spostata nel cestino");
+    } else {
+      const d = await res.json().catch(() => ({}));
+      notify(d.error || "Errore cancellazione nota", "err");
+    }
+  }
+
+  async function restoreNote(id: string) {
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/notes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restore: true }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      onDone();
+      notify("Nota ripristinata");
+    } else {
+      const d = await res.json().catch(() => ({}));
+      notify(d.error || "Errore ripristino nota", "err");
+    }
+  }
 
   async function add() {
     if (!draft.trim()) return notify("Scrivi il testo della nota", "err");
@@ -2446,14 +2484,14 @@ function TabNote({
 
   return (
     <div className="tab-content">
-      {canAdd && (
+      {canAdd && !trash && (
         <section className="card" style={{ marginBottom: 16 }}>
           <div className="card-header">
             <h3>Nuova nota</h3>
           </div>
           <p className="muted small" style={{ marginBottom: 8 }}>
             Settaggi particolari, aggiustaggi dedicati, accorgimenti da ricordare. La nota viene
-            firmata con il tuo nome, data e ora; si potrà correggere ma non cancellare.
+            firmata con il tuo nome, data e ora; si potrà correggere, e cancellandola finisce nel Cestino, da cui si recupera.
           </p>
           <textarea
             className="input"
@@ -2471,10 +2509,27 @@ function TabNote({
       )}
 
       <div className="cmp-toolbar">
-        <div className="cmp-summary">
-          <span className="muted">Note:</span> <strong>{machine.notesLog.length}</strong>
+        <div className="filters">
+          <button
+            className={"chip-btn" + (!trash ? " active" : "")}
+            onClick={() => {
+              setTrash(false);
+              setEditId(null);
+            }}
+          >
+            Note <span className="chip-n">{active.length}</span>
+          </button>
+          <button
+            className={"chip-btn" + (trash ? " active" : "")}
+            onClick={() => {
+              setTrash(true);
+              setEditId(null);
+            }}
+          >
+            <Icon name="trash" size={12} /> Cestino <span className="chip-n">{deleted.length}</span>
+          </button>
         </div>
-        {machine.notesLog.length > 3 && (
+        {shown.length > 3 && (
           <div className="search" style={{ maxWidth: 280 }}>
             <Icon name="search" size={15} color="var(--muted)" />
             <input placeholder="Cerca nelle note…" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -2484,7 +2539,11 @@ function TabNote({
 
       {notes.length === 0 && (
         <div className="card empty-state">
-          {machine.notesLog.length === 0 ? "Nessuna nota per questa macchina." : "Nessuna nota trovata."}
+          {shown.length > 0
+            ? "Nessuna nota trovata."
+            : trash
+            ? "Il cestino è vuoto."
+            : "Nessuna nota per questa macchina."}
         </div>
       )}
 
@@ -2498,15 +2557,29 @@ function TabNote({
                 <strong>{n.authorName}</strong>
                 <div className="muted small mono">{fmtDateTime(n.createdAt)}</div>
               </div>
-              {mayEdit && !editing && (
-                <button
-                  className="btn-ghost-sm"
-                  onClick={() => {
-                    setEditId(n.id);
-                    setEditText(n.text);
-                  }}
-                >
-                  <Icon name="sign" size={13} /> Modifica
+              {mayEdit && !editing && !trash && (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    className="btn-ghost-sm"
+                    onClick={() => {
+                      setEditId(n.id);
+                      setEditText(n.text);
+                    }}
+                  >
+                    <Icon name="sign" size={13} /> Modifica
+                  </button>
+                  <button
+                    className="btn-ghost-sm danger"
+                    disabled={busy}
+                    onClick={() => removeNote(n.id)}
+                  >
+                    <Icon name="trash" size={13} /> Elimina
+                  </button>
+                </div>
+              )}
+              {mayEdit && trash && (
+                <button className="btn-ghost-sm" disabled={busy} onClick={() => restoreNote(n.id)}>
+                  <Icon name="arrow-left" size={13} /> Ripristina
                 </button>
               )}
             </div>
@@ -2528,7 +2601,21 @@ function TabNote({
                 </div>
               </>
             ) : (
-              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{n.text}</div>
+              <div
+                style={{
+                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.5,
+                  color: trash ? "var(--text-2)" : undefined,
+                }}
+              >
+                {n.text}
+              </div>
+            )}
+            {n.deletedAt && (
+              <div className="muted small" style={{ marginTop: 10 }}>
+                <Icon name="trash" size={11} /> Eliminata da <strong>{n.deletedByName}</strong> il{" "}
+                {fmtDateTime(n.deletedAt)}
+              </div>
             )}
             {n.editedAt && (
               <div className="muted small" style={{ marginTop: 10 }}>

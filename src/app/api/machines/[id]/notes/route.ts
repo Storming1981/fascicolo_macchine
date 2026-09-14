@@ -8,7 +8,7 @@ const MAX_LEN = 10_000;
 /**
  * Note della macchina (settaggi particolari, aggiustaggi dedicati, appunti).
  * POST → nuova nota firmata con utente + data/ora.
- * Le note NON si cancellano: non esiste un DELETE (vedi anche [noteId]/route.ts).
+ * La cancellazione è logica (cestino, ripristinabile): vedi [noteId]/route.ts.
  * Permesso: chi registra interventi a diario o modifica il fascicolo.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {

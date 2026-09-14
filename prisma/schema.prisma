@@ -918,8 +918,9 @@ model BrainAnswerCache {
 }
 
 /// Nota della macchina: settaggi particolari, aggiustaggi dedicati, appunti.
-/// Firmata con autore + data/ora. Modificabile ma NON cancellabile: ogni
-/// modifica salva il testo precedente in MachineNoteRevision.
+/// Firmata con autore + data/ora. Ogni modifica salva il testo precedente in
+/// MachineNoteRevision. La cancellazione è LOGICA: la nota va nel cestino
+/// (deletedAt valorizzato) e si può ripristinare; non si elimina mai dal DB.
 model MachineNote {
   id           String    @id @default(cuid())
   machineId    String
@@ -931,6 +932,9 @@ model MachineNote {
   editedById   String?
   editedByName String?
   editedAt     DateTime?
+  deletedAt     DateTime? // nel cestino se valorizzato
+  deletedById   String?
+  deletedByName String?
 
   machine   Machine               @relation(fields: [machineId], references: [id], onDelete: Cascade)
   revisions MachineNoteRevision[]
