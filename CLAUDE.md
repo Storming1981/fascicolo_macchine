@@ -463,8 +463,11 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   (`Photo.deletedAt`/`deletedById`/`deletedByName`): riga e file su disco
   restano, la foto sparisce da cartelle, slot e intervento (i loader filtrano
   `deletedAt: null`), e a diario va l'evento **"Foto eliminata"** con cartella,
-  autore originale, data e path del file. Nessun cestino in UI: il ripristino
-  si fa da DB azzerando `deletedAt`. API: `DELETE /api/machines/[id]/photos/[photoId]`.
+  autore originale, data e path del file. Cartella **Cestino** (grigia, sempre
+  visibile) con chi ha eliminato e quando + pulsante *Ripristina*: la foto torna
+  nella cartella d'origine e a diario va "Foto ripristinata dal cestino". Il
+  loader passa le eliminate a parte in `photoTrash`.
+  API: `DELETE /api/machines/[id]/photos/[photoId]` · `PATCH …` `{restore:true}`.
 - **Matricola da foto (OCR)**: pulsante fotocamera nella cella matricola →
   `POST /api/vision/serial` (Claude Haiku) su copia ridotta a 1600 px
   (`src/lib/image.ts`), l'originale va sullo slot. La proposta resta in

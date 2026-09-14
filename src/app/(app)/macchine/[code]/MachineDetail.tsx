@@ -52,7 +52,9 @@ type Machine = {
     componentItemId: string | null; componentLabel: string | null;
     interventoId: string | null; interventoCode: string | null; interventoTitle: string | null;
     diaryEventId: string | null; diaryTitle: string | null; diaryDate: string | null;
+    deletedAt: string | null; deletedByName: string | null;
   }[];
+  photoTrash: Machine["photos"];
   documents: { id: string; name: string; path: string; sizeBytes: number; category: string }[];
   signatures: { id: string; role: string; signerName: string; method: string; imageData: string | null; signedAt: string }[];
   milestones: { key: string; date: string; source: string; detail: string | null }[];
@@ -2079,7 +2081,7 @@ function SlotSerialCell({
 
 /* ── Tab Foto: cartelle ─────────────────────────────────── */
 type PhotoItem = Machine["photos"][number];
-type FolderId = "componenti" | "produzione" | "collaudo" | "interventi";
+type FolderId = "componenti" | "produzione" | "collaudo" | "interventi" | "cestino";
 
 /** Colore della cartella: c = tinta (striscia, icona), text = testo/contatore,
  *  bg = fondo tenue della linguetta. */
@@ -2090,6 +2092,7 @@ const FOLDER_COLORS: Record<FolderId, FolderColor> = {
   produzione: { c: "#2f6aed", text: "#1f4fbf", bg: "#2f6aed14" }, // blu ZATO
   collaudo: { c: "#8b5cf6", text: "#6d28d9", bg: "#8b5cf61a" }, // viola
   interventi: { c: "#f59e0b", text: "#b45309", bg: "#f59e0b1f" }, // giallo
+  cestino: { c: "#94a3b8", text: "#475569", bg: "#94a3b81f" }, // grigio
 };
 
 const FOLDERS: { id: FolderId; label: string; hint: string; manual: boolean }[] = [
@@ -2105,6 +2108,12 @@ const FOLDERS: { id: FolderId; label: string; hint: string; manual: boolean }[] 
     id: "interventi",
     label: "Interventi",
     hint: "Una cartella per intervento: le foto di rapportini, chat e diario confluiscono qui in automatico.",
+    manual: false,
+  },
+  {
+    id: "cestino",
+    label: "Cestino",
+    hint: "Foto eliminate: si ripristinano tornando nella cartella d'origine. Eliminazioni e ripristini restano nel diario macchina.",
     manual: false,
   },
 ];
@@ -2217,8 +2226,35 @@ function TabFoto({
     }
   }
 
-  const byFolder: Record<FolderId, PhotoItem[]> = { componenti: [], produzione: [], collaudo: [], interventi: [] };
+  async function restorePhoto(p: PhotoItem) {
+    setDeleting(p.id);
+    try {
+      const res = await fetch(`/api/machines/${machine.id}/photos/${p.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restore: true }),
+      });
+      if (res.ok) {
+        onDone();
+        notify("Foto ripristinata — annotato a diario");
+      } else {
+        const d = await res.json().catch(() => ({}));
+        notify(d.error || "Errore ripristino foto", "err");
+      }
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  const byFolder: Record<FolderId, PhotoItem[]> = {
+    componenti: [],
+    produzione: [],
+    collaudo: [],
+    interventi: [],
+    cestino: machine.photoTrash,
+  };
   for (const p of machine.photos) byFolder[folderOf(p)].push(p);
+  const inTrash = folder === "cestino";
 
   const current = folder ? FOLDERS.find((f) => f.id === folder)! : null;
   const subs = folder === "interventi" ? interventoFolders(byFolder.interventi) : [];
@@ -2242,6 +2278,11 @@ function TabFoto({
 
   function photoTitle(p: PhotoItem) {
     if (folder === "componenti") return p.componentLabel ?? p.caption ?? "Componente";
+    if (folder === "cestino") {
+      const origin = FOLDERS.find((f) => f.id === folderOf(p))!.label;
+      const detail = p.componentLabel ?? p.interventoCode ?? p.caption;
+      return detail ? `${origin} · ${detail}` : origin;
+    }
     return p.caption || (current?.label ?? p.category);
   }
 
@@ -2357,7 +2398,7 @@ function TabFoto({
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={p.path} alt={photoTitle(p)} />
                 </a>
-                {(canEdit || (!!p.authorId && p.authorId === userId)) && (
+                {!inTrash && (canEdit || (!!p.authorId && p.authorId === userId)) && (
                   <button
                     type="button"
                     className="photo-del"
@@ -2373,6 +2414,24 @@ function TabFoto({
                   <div className="photo-meta mono">
                     {fmtDate(p.takenAt)} · {p.authorName || "—"}
                   </div>
+                  {inTrash && (
+                    <>
+                      <div className="photo-meta">
+                        Eliminata da {p.deletedByName || "—"} il {fmtDateTime(p.deletedAt)}
+                      </div>
+                      {(canEdit || (!!p.authorId && p.authorId === userId)) && (
+                        <button
+                          type="button"
+                          className="btn-ghost-sm"
+                          style={{ marginTop: 8 }}
+                          disabled={deleting !== null}
+                          onClick={() => restorePhoto(p)}
+                        >
+                          <Icon name="arrow-left" size={13} /> Ripristina
+                        </button>
+                      )}
+                    </>
+                  )}
                 </figcaption>
               </figure>
             ))}

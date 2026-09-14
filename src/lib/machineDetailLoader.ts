@@ -73,6 +73,42 @@ export async function loadMachineDetailProps(code: string) {
 
   const milestones = await resolveMilestones({ id: machine.id, job: machine.job }, machine.milestones);
 
+  // Cestino foto: eliminate (logicamente), ripristinabili dalla scheda Foto.
+  const trashedPhotos = await prisma.photo.findMany({
+    where: { machineId: machine.id, deletedAt: { not: null } },
+    orderBy: { deletedAt: "desc" },
+    include: {
+      componentItem: { select: { label: true, component: { select: { groupId: true, label: true } } } },
+      intervento: { select: { code: true, title: true } },
+      diaryEvent: { select: { title: true, date: true } },
+    },
+  });
+  const mapPhoto = (p: (typeof machine.photos)[number]) => {
+    const comp = p.componentItem?.component;
+    const groupLabel = comp
+      ? COMPONENT_GROUPS.find((g) => g.id === comp.groupId)?.label ?? comp.label ?? "Componente"
+      : null;
+    return {
+      id: p.id,
+      path: p.path,
+      category: p.category,
+      caption: p.caption,
+      authorId: p.authorId,
+      authorName: p.authorName,
+      takenAt: p.takenAt.toISOString(),
+      componentItemId: p.componentItemId,
+      componentLabel: p.componentItem ? `${groupLabel} — ${p.componentItem.label}` : null,
+      interventoId: p.interventoId,
+      interventoCode: p.intervento?.code ?? null,
+      interventoTitle: p.intervento?.title ?? null,
+      diaryEventId: p.diaryEventId,
+      diaryTitle: p.diaryEvent?.title ?? null,
+      diaryDate: p.diaryEvent?.date.toISOString() ?? null,
+      deletedAt: p.deletedAt?.toISOString() ?? null,
+      deletedByName: p.deletedByName,
+    };
+  };
+
   const data = {
     id: machine.id,
     code: machine.code,
@@ -131,29 +167,8 @@ export async function loadMachineDetailProps(code: string) {
       signed: !!e.signature,
       photos: e.photos.map((p) => ({ id: p.id, path: p.path, caption: p.caption })),
     })),
-    photos: machine.photos.map((p) => {
-      const comp = p.componentItem?.component;
-      const groupLabel = comp
-        ? COMPONENT_GROUPS.find((g) => g.id === comp.groupId)?.label ?? comp.label ?? "Componente"
-        : null;
-      return {
-        id: p.id,
-        path: p.path,
-        category: p.category,
-        caption: p.caption,
-        authorId: p.authorId,
-        authorName: p.authorName,
-        takenAt: p.takenAt.toISOString(),
-        componentItemId: p.componentItemId,
-        componentLabel: p.componentItem ? `${groupLabel} — ${p.componentItem.label}` : null,
-        interventoId: p.interventoId,
-        interventoCode: p.intervento?.code ?? null,
-        interventoTitle: p.intervento?.title ?? null,
-        diaryEventId: p.diaryEventId,
-        diaryTitle: p.diaryEvent?.title ?? null,
-        diaryDate: p.diaryEvent?.date.toISOString() ?? null,
-      };
-    }),
+    photos: machine.photos.map(mapPhoto),
+    photoTrash: trashedPhotos.map(mapPhoto),
     documents: machine.documents.map((d) => ({
       id: d.id,
       name: d.name,
