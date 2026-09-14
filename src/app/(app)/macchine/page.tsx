@@ -24,6 +24,7 @@ export default async function MachinesPage({
     year: m.year,
     status: m.status,
     progress: m.progress,
+    tiranteGiunto: m.tiranteGiunto,
   }));
   return (
     <MachinesList

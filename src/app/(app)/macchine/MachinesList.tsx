@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon, { Flag } from "@/components/Icon";
 import { STATUS_META, STATUS_ORDER } from "@/lib/domain";
+import { hasTiranteGiunto } from "@/lib/plant";
 import type { MachineStatus } from "@prisma/client";
 
 type M = {
@@ -18,6 +19,7 @@ type M = {
   year: number;
   status: MachineStatus;
   progress: number;
+  tiranteGiunto: boolean;
 };
 
 export default function MachinesList({
@@ -109,6 +111,7 @@ export default function MachinesList({
                 <th>Job</th>
                 <th>Tipologia</th>
                 <th>Modello</th>
+                <th title="Kit tirante giunto (solo BLUE DEVIL)">Tirante giunto</th>
                 <th>Cliente</th>
                 <th>Paese</th>
                 <th>Anno</th>
@@ -128,6 +131,20 @@ export default function MachinesList({
                   <td className="mono muted">{m.job}</td>
                   <td>{m.plantType || <span className="muted">—</span>}</td>
                   <td>{m.model}</td>
+                  <td style={{ textAlign: "center" }}>
+                    {hasTiranteGiunto(m.plantType) ? (
+                      <input
+                        type="checkbox"
+                        checked={m.tiranteGiunto}
+                        readOnly
+                        tabIndex={-1}
+                        aria-label={m.tiranteGiunto ? "Tirante giunto montato" : "Tirante giunto non montato"}
+                        style={{ pointerEvents: "none", accentColor: "var(--accent)", width: 15, height: 15 }}
+                      />
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
                   <td>{m.customer}</td>
                   <td>
                     <div className="country-cell">
@@ -164,7 +181,7 @@ export default function MachinesList({
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="empty">
+                  <td colSpan={11} className="empty">
                     Nessuna macchina trovata.
                   </td>
                 </tr>

@@ -4,6 +4,7 @@ import { currentUser } from "./auth";
 import { ROLE_LABEL } from "./domain";
 import { userCaps } from "./caps";
 import { getPlantConfig } from "./settings";
+import { COMPONENT_GROUPS } from "./components";
 
 /**
  * Carica tutte le props della scheda fascicolo macchina. Condiviso tra guscio
@@ -15,7 +16,14 @@ export async function loadMachineDetailProps(code: string) {
     include: {
       components: { include: { items: { orderBy: { position: "asc" } } } },
       diaryEvents: { orderBy: { date: "asc" }, include: { photos: true, signature: true } },
-      photos: { orderBy: { createdAt: "desc" } },
+      photos: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          componentItem: { select: { label: true, component: { select: { groupId: true, label: true } } } },
+          intervento: { select: { code: true, title: true } },
+          diaryEvent: { select: { title: true, date: true } },
+        },
+      },
       documents: { orderBy: { uploadedAt: "desc" } },
       signatures: true,
       milestones: true,
@@ -84,6 +92,7 @@ export async function loadMachineDetailProps(code: string) {
     productionStart: machine.productionStart?.toISOString() ?? null,
     deliveryDate: machine.deliveryDate?.toISOString() ?? null,
     pressureSettings: machine.pressureSettings,
+    tiranteGiunto: machine.tiranteGiunto,
     plateWeight: machine.plateWeight,
     platePower: machine.platePower,
     plateVoltage: machine.plateVoltage,
@@ -115,14 +124,28 @@ export async function loadMachineDetailProps(code: string) {
       signed: !!e.signature,
       photos: e.photos.map((p) => ({ id: p.id, path: p.path, caption: p.caption })),
     })),
-    photos: machine.photos.map((p) => ({
-      id: p.id,
-      path: p.path,
-      category: p.category,
-      caption: p.caption,
-      authorName: p.authorName,
-      takenAt: p.takenAt.toISOString(),
-    })),
+    photos: machine.photos.map((p) => {
+      const comp = p.componentItem?.component;
+      const groupLabel = comp
+        ? COMPONENT_GROUPS.find((g) => g.id === comp.groupId)?.label ?? comp.label ?? "Componente"
+        : null;
+      return {
+        id: p.id,
+        path: p.path,
+        category: p.category,
+        caption: p.caption,
+        authorName: p.authorName,
+        takenAt: p.takenAt.toISOString(),
+        componentItemId: p.componentItemId,
+        componentLabel: p.componentItem ? `${groupLabel} — ${p.componentItem.label}` : null,
+        interventoId: p.interventoId,
+        interventoCode: p.intervento?.code ?? null,
+        interventoTitle: p.intervento?.title ?? null,
+        diaryEventId: p.diaryEventId,
+        diaryTitle: p.diaryEvent?.title ?? null,
+        diaryDate: p.diaryEvent?.date.toISOString() ?? null,
+      };
+    }),
     documents: machine.documents.map((d) => ({
       id: d.id,
       name: d.name,

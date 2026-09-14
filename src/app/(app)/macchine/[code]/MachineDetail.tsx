@@ -14,7 +14,7 @@ import {
   PRIORITY_META,
   COUNTRIES,
 } from "@/lib/domain";
-import { CUSTOM_MODEL } from "@/lib/plant";
+import { CUSTOM_MODEL, hasTiranteGiunto } from "@/lib/plant";
 import { MILESTONES, milestoneDef } from "@/lib/milestones";
 import { CHECKLIST_TRITURATORE } from "@/lib/checklist";
 import { fmtDate, fmtBytes, fmtDateTime } from "@/lib/format";
@@ -42,9 +42,15 @@ type Machine = {
   site: string | null; status: MachineStatus; progress: number;
   productionStart: string | null; deliveryDate: string | null; pressureSettings: string | null;
   plateWeight: string | null; platePower: string | null; plateVoltage: string | null; notes: string | null;
+  tiranteGiunto: boolean;
   components: Comp[];
   diary: Diary[];
-  photos: { id: string; path: string; category: string; caption: string | null; authorName: string | null; takenAt: string }[];
+  photos: {
+    id: string; path: string; category: string; caption: string | null; authorName: string | null; takenAt: string;
+    componentItemId: string | null; componentLabel: string | null;
+    interventoId: string | null; interventoCode: string | null; interventoTitle: string | null;
+    diaryEventId: string | null; diaryTitle: string | null; diaryDate: string | null;
+  }[];
   documents: { id: string; name: string; path: string; sizeBytes: number; category: string }[];
   signatures: { id: string; role: string; signerName: string; method: string; imageData: string | null; signedAt: string }[];
   milestones: { key: string; date: string; source: string }[];
@@ -1512,10 +1518,69 @@ function TabComponenti({
     } else notify("Errore upload foto", "err");
   }
 
-  const photoByItem = new Map<string, string>();
+  // Foto per slot: le foto arrivano ordinate dalla più recente, quindi la
+  // prima incontrata è la miniatura da mostrare.
+  const photoByItem = new Map<string, { path: string; takenAt: string; authorName: string | null; count: number }>();
   machine.photos.forEach((p) => {
-    /* fallback: mostriamo l'ultima foto di categoria componente se collegata */
+    if (!p.componentItemId) return;
+    const cur = photoByItem.get(p.componentItemId);
+    if (cur) cur.count += 1;
+    else photoByItem.set(p.componentItemId, { path: p.path, takenAt: p.takenAt, authorName: p.authorName, count: 1 });
   });
+
+  function photoCell(itemId: string, title: string) {
+    const ph = photoByItem.get(itemId);
+    const pick = () => {
+      setTarget(itemId);
+      setTimeout(() => photoRef.current?.click(), 0);
+    };
+    if (!ph)
+      return (
+        <button className="thumb-empty" title={title} onClick={pick}>
+          <Icon name="camera" size={16} />
+        </button>
+      );
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <a
+          href={ph.path}
+          target="_blank"
+          rel="noreferrer"
+          title={`Apri foto · ${fmtDate(ph.takenAt)} · ${ph.authorName ?? "—"}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="thumb-photo" src={ph.path} alt={title} />
+        </a>
+        {ph.count > 1 && <span className="muted small mono">+{ph.count - 1}</span>}
+        <button className="icon-btn sm" title="Aggiungi un'altra foto" onClick={pick}>
+          <Icon name="camera" size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  // Kit tirante giunto (solo BLUE DEVIL): spunta con aggiornamento immediato
+  const [tirante, setTirante] = useState(machine.tiranteGiunto);
+  const [kitBusy, setKitBusy] = useState(false);
+  useEffect(() => setTirante(machine.tiranteGiunto), [machine.tiranteGiunto]);
+  async function toggleTirante(v: boolean) {
+    setTirante(v);
+    setKitBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/kit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tiranteGiunto: v }),
+    });
+    setKitBusy(false);
+    if (res.ok) {
+      onDone();
+      notify(v ? "Tirante giunto: montato" : "Tirante giunto: non montato");
+    } else {
+      setTirante(!v);
+      const d = await res.json().catch(() => ({}));
+      notify(d.error || "Errore salvataggio kit", "err");
+    }
+  }
 
   return (
     <div className="tab-content">
@@ -1534,6 +1599,28 @@ function TabComponenti({
           </div>
         )}
       </div>
+
+      {hasTiranteGiunto(machine.plantType) && (
+        <section className="card" style={{ marginBottom: 12, padding: "12px 16px" }}>
+          <label
+            style={{ display: "flex", alignItems: "center", gap: 12, cursor: canEdit ? "pointer" : "default" }}
+          >
+            <input
+              type="checkbox"
+              checked={tirante}
+              disabled={!canEdit || kitBusy}
+              onChange={(e) => toggleTirante(e.target.checked)}
+              style={{ width: 18, height: 18, accentColor: "var(--accent)" }}
+            />
+            <span>
+              <strong>Tirante giunto</strong>
+              <span className="muted small" style={{ display: "block" }}>
+                Spunta se questa macchina monta il kit tirante giunto.
+              </span>
+            </span>
+          </label>
+        </section>
+      )}
 
       <input
         ref={photoRef}
@@ -1607,16 +1694,7 @@ function TabComponenti({
                               />
                             </td>
                             <td>
-                              <button
-                                className="thumb-empty"
-                                title="Carica foto componente"
-                                onClick={() => {
-                                  setTarget(it.id);
-                                  setTimeout(() => photoRef.current?.click(), 0);
-                                }}
-                              >
-                                <Icon name="camera" size={16} />
-                              </button>
+                              {photoCell(it.id, `${g.label} — ${it.label}`)}
                             </td>
                             <td className="muted">{it.note || (it.serial ? "—" : "Slot non occupato")}</td>
                             <td>
@@ -1701,16 +1779,7 @@ function TabComponenti({
                               <SlotSerialCell machineId={machine.id} item={it} canEdit={!!canEdit} onDone={onDone} notify={notify} />
                             </td>
                             <td>
-                              <button
-                                className="thumb-empty"
-                                title="Carica foto"
-                                onClick={() => {
-                                  setTarget(it.id);
-                                  setTimeout(() => photoRef.current?.click(), 0);
-                                }}
-                              >
-                                <Icon name="camera" size={16} />
-                              </button>
+                              {photoCell(it.id, `${c.label || "Componente"} — ${it.label}`)}
                             </td>
                             {canEdit && (
                               <td>
@@ -1957,8 +2026,88 @@ function SlotSerialCell({
   );
 }
 
-/* ── Tab Foto ───────────────────────────────────────────── */
-const PHOTO_CATS = ["produzione", "telaio", "idraulica", "elettrico", "finiture", "collaudo", "intervento", "componente"];
+/* ── Tab Foto: cartelle ─────────────────────────────────── */
+type PhotoItem = Machine["photos"][number];
+type FolderId = "componenti" | "produzione" | "collaudo" | "interventi";
+
+const FOLDERS: { id: FolderId; label: string; hint: string; manual: boolean }[] = [
+  {
+    id: "componenti",
+    label: "Componenti",
+    hint: "Arrivano in automatico dalle foto caricate in Componenti & Matricole.",
+    manual: false,
+  },
+  { id: "produzione", label: "Produzione", hint: "Foto di produzione caricate a mano.", manual: true },
+  { id: "collaudo", label: "Collaudo", hint: "Foto di collaudo caricate a mano.", manual: true },
+  {
+    id: "interventi",
+    label: "Interventi",
+    hint: "Una cartella per intervento: le foto di rapportini, chat e diario confluiscono qui in automatico.",
+    manual: false,
+  },
+];
+
+/** In quale cartella va una foto. Le vecchie categorie telaio/idraulica/
+ *  elettrico/finiture restano visibili sotto Produzione. */
+function folderOf(p: PhotoItem): FolderId {
+  if (p.componentItemId || p.category === "componente") return "componenti";
+  if (p.interventoId || p.category === "intervento" || p.category === "chat") return "interventi";
+  if (p.category === "collaudo") return "collaudo";
+  return "produzione";
+}
+
+type SubFolder = { key: string; label: string; sub: string; rank: number; photos: PhotoItem[] };
+
+/** Sottocartelle degli interventi: una per intervento di service (INT-…),
+ *  poi quelle registrate dal diario del fascicolo, poi le foto orfane. */
+function interventoFolders(photos: PhotoItem[]): SubFolder[] {
+  const map = new Map<string, SubFolder>();
+  for (const p of photos) {
+    let f: Omit<SubFolder, "photos">;
+    if (p.interventoId)
+      f = { key: "int:" + p.interventoId, label: p.interventoCode ?? "Intervento", sub: p.interventoTitle ?? "", rank: 0 };
+    else if (p.diaryEventId)
+      f = { key: "diary:" + p.diaryEventId, label: "Diario · " + fmtDate(p.diaryDate), sub: p.diaryTitle ?? "", rank: 1 };
+    else f = { key: "other", label: "Senza intervento", sub: "Foto non collegate a un intervento", rank: 2 };
+    if (!map.has(f.key)) map.set(f.key, { ...f, photos: [] });
+    map.get(f.key)!.photos.push(p);
+  }
+  return [...map.values()].sort(
+    (a, b) => a.rank - b.rank || b.label.localeCompare(a.label, "it", { numeric: true })
+  );
+}
+
+function FolderCard({
+  label,
+  sub,
+  photos,
+  onOpen,
+}: {
+  label: string;
+  sub?: string;
+  photos: PhotoItem[];
+  onOpen: () => void;
+}) {
+  const cover = photos[0];
+  return (
+    <button type="button" className="folder-card" onClick={onOpen}>
+      <div className="folder-cover">
+        {cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={cover.path} alt={label} />
+        ) : (
+          <Icon name="folder" size={34} />
+        )}
+      </div>
+      <div className="folder-info">
+        <Icon name="folder" size={16} color="var(--accent)" />
+        <span className="folder-name">{label}</span>
+        <span className="cmp-count-pill">{photos.length}</span>
+      </div>
+      {sub ? <div className="folder-sub">{sub}</div> : null}
+    </button>
+  );
+}
 
 function TabFoto({
   machine,
@@ -1969,113 +2118,150 @@ function TabFoto({
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
-  const [cat, setCat] = useState("all");
-  const [uploadCat, setUploadCat] = useState("produzione");
+  const [folder, setFolder] = useState<FolderId | null>(null);
+  const [sub, setSub] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
-  const filtered = cat === "all" ? machine.photos : machine.photos.filter((p) => p.category === cat);
+  const byFolder: Record<FolderId, PhotoItem[]> = { componenti: [], produzione: [], collaudo: [], interventi: [] };
+  for (const p of machine.photos) byFolder[folderOf(p)].push(p);
+
+  const current = folder ? FOLDERS.find((f) => f.id === folder)! : null;
+  const subs = folder === "interventi" ? interventoFolders(byFolder.interventi) : [];
+  const subFolder = sub ? subs.find((s) => s.key === sub) ?? null : null;
+  // nella cartella Interventi le foto si vedono solo dentro una sottocartella
+  const photos = subFolder ? subFolder.photos : folder && folder !== "interventi" ? byFolder[folder] : [];
 
   async function upload(files: FileList | null) {
-    if (!files || !files.length) return;
+    if (!files || !files.length || !current?.manual) return;
     setBusy(true);
     const fd = new FormData();
     Array.from(files).forEach((f) => fd.append("photos", f));
-    fd.append("category", uploadCat);
+    fd.append("category", current.id);
     const res = await fetch(`/api/machines/${machine.id}/photos`, { method: "POST", body: fd });
     setBusy(false);
     if (res.ok) {
       onDone();
-      notify("Foto caricate");
+      notify(`Foto caricate in ${current.label}`);
     } else notify("Errore upload", "err");
+  }
+
+  function photoTitle(p: PhotoItem) {
+    if (folder === "componenti") return p.componentLabel ?? p.caption ?? "Componente";
+    return p.caption || (current?.label ?? p.category);
   }
 
   return (
     <div className="tab-content">
       <div className="cmp-toolbar">
-        <div className="filters">
-          <button
-            className={"chip-btn" + (cat === "all" ? " active" : "")}
-            onClick={() => setCat("all")}
-          >
-            Tutte <span className="chip-n">{machine.photos.length}</span>
-          </button>
-          {PHOTO_CATS.map((p) => {
-            const n = machine.photos.filter((x) => x.category === p).length;
-            if (!n) return null;
-            return (
-              <button
-                key={p}
-                className={"chip-btn" + (cat === p ? " active" : "")}
-                onClick={() => setCat(p)}
-              >
-                {p} <span className="chip-n">{n}</span>
-              </button>
-            );
-          })}
+        <div className="folder-crumb">
+          <Icon name="folder" size={15} color="var(--muted)" />
+          {folder ? (
+            <button
+              onClick={() => {
+                setFolder(null);
+                setSub(null);
+              }}
+            >
+              Foto
+            </button>
+          ) : (
+            <strong>Foto</strong>
+          )}
+          {current && (
+            <>
+              <span className="muted">›</span>
+              {subFolder ? <button onClick={() => setSub(null)}>{current.label}</button> : <strong>{current.label}</strong>}
+            </>
+          )}
+          {subFolder && (
+            <>
+              <span className="muted">›</span>
+              <strong>{subFolder.label}</strong>
+            </>
+          )}
+          <span className="muted small" style={{ marginLeft: 6 }}>
+            {folder ? `${subFolder ? subFolder.photos.length : byFolder[folder].length} foto` : `${machine.photos.length} foto`}
+          </span>
         </div>
-        <div className="cmp-actions">
-          <select
-            className="input"
-            style={{ maxWidth: 150 }}
-            value={uploadCat}
-            onChange={(e) => setUploadCat(e.target.value)}
-          >
-            {PHOTO_CATS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-          <button className="btn-primary-sm" disabled={busy} onClick={() => camRef.current?.click()}>
-            <Icon name="camera" size={14} /> Scatta foto
-          </button>
-          <button className="btn-ghost-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
-            <Icon name="image" size={14} /> Dalla libreria
-          </button>
-          <input
-            ref={camRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-            onChange={(e) => upload(e.target.files)}
-          />
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(e) => upload(e.target.files)}
-          />
-        </div>
+        {current?.manual && (
+          <div className="cmp-actions">
+            <button className="btn-primary-sm" disabled={busy} onClick={() => camRef.current?.click()}>
+              <Icon name="camera" size={14} /> Scatta foto
+            </button>
+            <button className="btn-ghost-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <Icon name="image" size={14} /> Dalla libreria
+            </button>
+            <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => upload(e.target.files)} />
+            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
+          </div>
+        )}
       </div>
 
-      {filtered.length === 0 ? (
-        <div
-          className="upload-zone"
-          onClick={() => fileRef.current?.click()}
-        >
-          <Icon name="camera" size={26} />
-          <div>Nessuna foto in questa categoria — clicca per caricare</div>
-        </div>
-      ) : (
-        <div className="photo-grid">
-          {filtered.map((p) => (
-            <figure key={p.id} className="photo-card">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.path} alt={p.caption || "foto"} />
-              <figcaption>
-                <div className="photo-title">{p.caption || p.category}</div>
-                <div className="photo-meta mono">
-                  {fmtDate(p.takenAt)} · {p.authorName || "—"}
-                </div>
-              </figcaption>
-            </figure>
+      {current && (
+        <p className="muted small" style={{ margin: "-4px 0 12px" }}>
+          {current.hint}
+        </p>
+      )}
+
+      {!folder && (
+        <div className="folder-grid">
+          {FOLDERS.map((f) => (
+            <FolderCard
+              key={f.id}
+              label={f.label}
+              sub={f.manual ? "Caricamento manuale" : "Automatica"}
+              photos={byFolder[f.id]}
+              onOpen={() => {
+                setFolder(f.id);
+                setSub(null);
+              }}
+            />
           ))}
         </div>
+      )}
+
+      {folder === "interventi" && !subFolder && (
+        subs.length ? (
+          <div className="folder-grid">
+            {subs.map((s) => (
+              <FolderCard key={s.key} label={s.label} sub={s.sub} photos={s.photos} onOpen={() => setSub(s.key)} />
+            ))}
+          </div>
+        ) : (
+          <div className="card empty-state">Nessuna foto di intervento per questa macchina.</div>
+        )
+      )}
+
+      {folder && (folder !== "interventi" || subFolder) && (
+        photos.length === 0 ? (
+          current?.manual ? (
+            <div className="upload-zone" onClick={() => fileRef.current?.click()}>
+              <Icon name="camera" size={26} />
+              <div>Cartella vuota — clicca per caricare le foto</div>
+            </div>
+          ) : (
+            <div className="card empty-state">Cartella vuota.</div>
+          )
+        ) : (
+          <div className="photo-grid">
+            {photos.map((p) => (
+              <figure key={p.id} className="photo-card">
+                <a href={p.path} target="_blank" rel="noreferrer" title="Apri la foto">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.path} alt={photoTitle(p)} />
+                </a>
+                <figcaption>
+                  <div className="photo-title">{photoTitle(p)}</div>
+                  <div className="photo-meta mono">
+                    {fmtDate(p.takenAt)} · {p.authorName || "—"}
+                  </div>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        )
       )}
     </div>
   );

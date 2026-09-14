@@ -63,6 +63,8 @@ export default function Icon({ name, size = 18, stroke = 1.7, color = "currentCo
       return <svg {...p}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" /></svg>;
     case "qr":
       return <svg {...p}><rect x="3" y="3" width="7" height="7" rx="0.5" /><rect x="14" y="3" width="7" height="7" rx="0.5" /><rect x="3" y="14" width="7" height="7" rx="0.5" /><path d="M14 14h3v3M20 14v3M14 20h3M20 20h1" /></svg>;
+    case "folder":
+      return <svg {...p}><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z" /></svg>;
     case "image":
       return <svg {...p}><rect x="3" y="4" width="18" height="16" rx="1.5" /><circle cx="8.5" cy="9.5" r="1.5" /><path d="M21 16l-5-5-9 9" /></svg>;
     case "sign":

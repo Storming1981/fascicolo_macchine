@@ -47,6 +47,11 @@ export function hasDualJob(plant?: string | null): boolean {
   return plant === "BLUE DEVIL";
 }
 
+/** Il kit opzionale "tirante giunto" esiste solo sui BLUE DEVIL. */
+export function hasTiranteGiunto(plant?: string | null): boolean {
+  return plant === "BLUE DEVIL";
+}
+
 export const PLANT_COLORS: Record<string, string> = {
   "BLUE DEVIL": "#0f3b66",
   "BLUE SHARK": "#1d6fb8",

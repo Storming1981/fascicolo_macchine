@@ -435,6 +435,24 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   (accordion con sostituzione pezzo e foto per slot), Foto produzione (upload con
   categorie), Collaudo & Firme (firme per ruolo PIN/penna), Diario macchina
   (timeline genesi→rottamazione), QR & Etichetta (QR generato + stampa).
+- **Foto a cartelle** (linguetta *Foto produzione*): niente più filtri per
+  categoria, ma cartelle. **Componenti** (automatica: foto con
+  `componentItemId`, titolo "Gruppo — Slot"), **Produzione** e **Collaudo**
+  (caricamento manuale, la cartella fissa la categoria; le vecchie categorie
+  telaio/idraulica/elettrico/finiture restano sotto Produzione), **Interventi**
+  (automatica) con una **sottocartella per intervento** di service col codice
+  `INT-…` (foto di rapportini e chat via `Photo.interventoId`), poi quelle del
+  diario del fascicolo (`diaryEventId`). Classificazione in `folderOf()`.
+- **Miniature nello slot componente**: la colonna Foto di Componenti &
+  Matricole mostra l'ultima foto dello slot (clic = apre) con il conteggio
+  delle altre; prima la foto finiva solo in Foto produzione perché il loader
+  non passava `componentItemId`.
+- **Kit tirante giunto** (solo `BLUE DEVIL`, `hasTiranteGiunto()` in
+  `plant.ts`): spunta in testa a Componenti & Matricole, campo
+  `Machine.tiranteGiunto`, `POST /api/machines/[id]/kit` (permesso
+  `machine.intervention` o `machine.edit`, 400 sulle altre tipologie), ogni
+  cambio annotato a diario. Colonna *Tirante giunto* nell'elenco macchine
+  (casella in sola lettura, "—" per le non BLUE DEVIL).
 - **Stato/avanzamento** modificabili dal dettaglio (slider + select), evento a diario.
 - **Nuovo intervento**: fase, tipo (sostituzione/ispezione/riparazione/nota),
   matricole, foto, firma PIN o a penna su canvas → diario + firma + aggiorna seriale.

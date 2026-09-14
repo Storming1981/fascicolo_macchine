@@ -142,6 +142,7 @@ model Machine {
   productionStart DateTime?
   deliveryDate    DateTime?
   pressureSettings String?
+  tiranteGiunto   Boolean       @default(false) // kit tirante giunto montato (solo BLUE DEVIL)
   plateWeight     String?
   platePower      String?
   plateVoltage    String?
