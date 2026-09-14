@@ -320,7 +320,10 @@ img.user-avatar.small { object-fit: cover; }
 .folder-crumb button { background: none; border: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
 .thumb-photo { width: 56px; height: 42px; border-radius: 6px; border: 1px solid var(--border); object-fit: cover; display: block; }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
-.photo-card { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.photo-card { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; position: relative; }
+.photo-del { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px; background: rgba(15, 23, 42, .6); color: #fff; cursor: pointer; }
+.photo-del:hover { background: #dc2626; }
+.photo-del:disabled { opacity: .5; cursor: default; }
 .photo-card img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; background: var(--bg-3); }
 .photo-card figcaption { padding: 9px 11px 11px; }
 .photo-title { font-size: 12.5px; font-weight: 500; line-height: 1.3; }

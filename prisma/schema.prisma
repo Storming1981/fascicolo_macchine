@@ -300,6 +300,11 @@ model Photo {
   authorId        String?
   takenAt         DateTime @default(now())
   createdAt       DateTime @default(now())
+  // Cancellazione LOGICA: la foto sparisce dalle viste ma riga e file restano,
+  // e a diario resta l'evento "Foto eliminata" (chi, quando, quale).
+  deletedAt       DateTime?
+  deletedById     String?
+  deletedByName   String?
 
   machine       Machine?       @relation(fields: [machineId], references: [id], onDelete: Cascade)
   diaryEvent    DiaryEvent?    @relation(fields: [diaryEventId], references: [id], onDelete: SetNull)

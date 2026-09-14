@@ -29,7 +29,7 @@ export async function loadInterventoDetail(id: string) {
       },
       checklists: true,
       documents: { orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true } } } },
-      photos: { orderBy: { createdAt: "desc" } },
+      photos: { where: { deletedAt: null }, orderBy: { createdAt: "desc" } },
       conversations: { orderBy: { createdAt: "asc" }, take: 1, select: { id: true } },
     },
   });

@@ -47,7 +47,8 @@ type Machine = {
   components: Comp[];
   diary: Diary[];
   photos: {
-    id: string; path: string; category: string; caption: string | null; authorName: string | null; takenAt: string;
+    id: string; path: string; category: string; caption: string | null;
+    authorId: string | null; authorName: string | null; takenAt: string;
     componentItemId: string | null; componentLabel: string | null;
     interventoId: string | null; interventoCode: string | null; interventoTitle: string | null;
     diaryEventId: string | null; diaryTitle: string | null; diaryDate: string | null;
@@ -213,7 +214,15 @@ export default function MachineDetail({
           notify={notify}
         />
       )}
-      {tab === "foto" && <TabFoto machine={machine} onDone={refresh} notify={notify} />}
+      {tab === "foto" && (
+        <TabFoto
+          machine={machine}
+          userId={currentUser.id}
+          canEdit={caps.edit}
+          onDone={refresh}
+          notify={notify}
+        />
+      )}
       {tab === "collaudo" && (
         <TabCollaudo
           machine={machine}
@@ -2173,10 +2182,14 @@ function FolderCard({
 
 function TabFoto({
   machine,
+  userId,
+  canEdit,
   onDone,
   notify,
 }: {
   machine: Machine;
+  userId: string;
+  canEdit: boolean;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
@@ -2185,6 +2198,24 @@ function TabFoto({
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  async function removePhoto(p: PhotoItem) {
+    if (!confirm("Eliminare questa foto? L'eliminazione resta annotata nel diario macchina.")) return;
+    setDeleting(p.id);
+    try {
+      const res = await fetch(`/api/machines/${machine.id}/photos/${p.id}`, { method: "DELETE" });
+      if (res.ok) {
+        onDone();
+        notify("Foto eliminata — annotato a diario");
+      } else {
+        const d = await res.json().catch(() => ({}));
+        notify(d.error || "Errore eliminazione foto", "err");
+      }
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   const byFolder: Record<FolderId, PhotoItem[]> = { componenti: [], produzione: [], collaudo: [], interventi: [] };
   for (const p of machine.photos) byFolder[folderOf(p)].push(p);
@@ -2326,6 +2357,17 @@ function TabFoto({
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={p.path} alt={photoTitle(p)} />
                 </a>
+                {(canEdit || (!!p.authorId && p.authorId === userId)) && (
+                  <button
+                    type="button"
+                    className="photo-del"
+                    title="Elimina foto"
+                    disabled={deleting !== null}
+                    onClick={() => removePhoto(p)}
+                  >
+                    <Icon name="trash" size={15} />
+                  </button>
+                )}
                 <figcaption>
                   <div className="photo-title">{photoTitle(p)}</div>
                   <div className="photo-meta mono">

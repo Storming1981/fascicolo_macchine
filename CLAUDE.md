@@ -458,6 +458,17 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   (automatica) con una **sottocartella per intervento** di service col codice
   `INT-…` (foto di rapportini e chat via `Photo.interventoId`), poi quelle del
   diario del fascicolo (`diaryEventId`). Classificazione in `folderOf()`.
+- **Eliminazione foto** (icona cestino sulla card in *Foto produzione*): la
+  elimina l'autore della foto o chi ha `machine.edit`. Cancellazione **logica**
+  (`Photo.deletedAt`/`deletedById`/`deletedByName`): riga e file su disco
+  restano, la foto sparisce da cartelle, slot e intervento (i loader filtrano
+  `deletedAt: null`), e a diario va l'evento **"Foto eliminata"** con cartella,
+  autore originale, data e path del file. Nessun cestino in UI: il ripristino
+  si fa da DB azzerando `deletedAt`. API: `DELETE /api/machines/[id]/photos/[photoId]`.
+- **Matricola da foto (OCR)**: pulsante fotocamera nella cella matricola →
+  `POST /api/vision/serial` (Claude Haiku) su copia ridotta a 1600 px
+  (`src/lib/image.ts`), l'originale va sullo slot. La proposta resta in
+  `pendingSerials` finché non si salva con ✓ (sopravvive al refresh).
 - **Miniature nello slot componente**: la colonna Foto di Componenti &
   Matricole mostra l'ultima foto dello slot (clic = apre) con il conteggio
   delle altre; prima la foto finiva solo in Foto produzione perché il loader

@@ -16,8 +16,12 @@ export async function loadMachineDetailProps(code: string) {
     where: { code: decodeURIComponent(code) },
     include: {
       components: { include: { items: { orderBy: { position: "asc" } } } },
-      diaryEvents: { orderBy: { date: "asc" }, include: { photos: true, signature: true } },
+      diaryEvents: {
+        orderBy: { date: "asc" },
+        include: { photos: { where: { deletedAt: null } }, signature: true },
+      },
       photos: {
+        where: { deletedAt: null },
         orderBy: { createdAt: "desc" },
         include: {
           componentItem: { select: { label: true, component: { select: { groupId: true, label: true } } } },
@@ -137,6 +141,7 @@ export async function loadMachineDetailProps(code: string) {
         path: p.path,
         category: p.category,
         caption: p.caption,
+        authorId: p.authorId,
         authorName: p.authorName,
         takenAt: p.takenAt.toISOString(),
         componentItemId: p.componentItemId,
