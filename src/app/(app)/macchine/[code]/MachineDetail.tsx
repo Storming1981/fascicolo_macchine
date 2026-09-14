@@ -2030,6 +2030,17 @@ function SlotSerialCell({
 type PhotoItem = Machine["photos"][number];
 type FolderId = "componenti" | "produzione" | "collaudo" | "interventi";
 
+/** Colore della cartella: c = tinta (striscia, icona), text = testo/contatore,
+ *  bg = fondo tenue della linguetta. */
+type FolderColor = { c: string; text: string; bg: string };
+
+const FOLDER_COLORS: Record<FolderId, FolderColor> = {
+  componenti: { c: "#10b981", text: "#0a7d52", bg: "#10b9811a" }, // verde
+  produzione: { c: "#2f6aed", text: "#1f4fbf", bg: "#2f6aed14" }, // blu ZATO
+  collaudo: { c: "#8b5cf6", text: "#6d28d9", bg: "#8b5cf61a" }, // viola
+  interventi: { c: "#f59e0b", text: "#b45309", bg: "#f59e0b1f" }, // giallo
+};
+
 const FOLDERS: { id: FolderId; label: string; hint: string; manual: boolean }[] = [
   {
     id: "componenti",
@@ -2046,6 +2057,13 @@ const FOLDERS: { id: FolderId; label: string; hint: string; manual: boolean }[] 
     manual: false,
   },
 ];
+
+const folderStyle = (id: FolderId) =>
+  ({
+    "--folder-c": FOLDER_COLORS[id].c,
+    "--folder-text": FOLDER_COLORS[id].text,
+    "--folder-bg": FOLDER_COLORS[id].bg,
+  }) as React.CSSProperties;
 
 /** In quale cartella va una foto. Le vecchie categorie telaio/idraulica/
  *  elettrico/finiture restano visibili sotto Produzione. */
@@ -2081,16 +2099,18 @@ function FolderCard({
   label,
   sub,
   photos,
+  color,
   onOpen,
 }: {
   label: string;
   sub?: string;
   photos: PhotoItem[];
+  color: FolderId;
   onOpen: () => void;
 }) {
   const cover = photos[0];
   return (
-    <button type="button" className="folder-card" onClick={onOpen}>
+    <button type="button" className="folder-card" style={folderStyle(color)} onClick={onOpen}>
       <div className="folder-cover">
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -2100,9 +2120,9 @@ function FolderCard({
         )}
       </div>
       <div className="folder-info">
-        <Icon name="folder" size={16} color="var(--accent)" />
+        <Icon name="folder" size={16} color="var(--folder-c)" />
         <span className="folder-name">{label}</span>
-        <span className="cmp-count-pill">{photos.length}</span>
+        <span className="folder-count">{photos.length}</span>
       </div>
       {sub ? <div className="folder-sub">{sub}</div> : null}
     </button>
@@ -2155,8 +2175,8 @@ function TabFoto({
   return (
     <div className="tab-content">
       <div className="cmp-toolbar">
-        <div className="folder-crumb">
-          <Icon name="folder" size={15} color="var(--muted)" />
+        <div className="folder-crumb" style={folder ? folderStyle(folder) : undefined}>
+          <Icon name="folder" size={15} color={folder ? "var(--folder-c)" : "var(--muted)"} />
           {folder ? (
             <button
               onClick={() => {
@@ -2172,13 +2192,17 @@ function TabFoto({
           {current && (
             <>
               <span className="muted">›</span>
-              {subFolder ? <button onClick={() => setSub(null)}>{current.label}</button> : <strong>{current.label}</strong>}
+              {subFolder ? (
+                <button onClick={() => setSub(null)}>{current.label}</button>
+              ) : (
+                <strong style={{ color: "var(--folder-text)" }}>{current.label}</strong>
+              )}
             </>
           )}
           {subFolder && (
             <>
               <span className="muted">›</span>
-              <strong>{subFolder.label}</strong>
+              <strong style={{ color: "var(--folder-text)" }}>{subFolder.label}</strong>
             </>
           )}
           <span className="muted small" style={{ marginLeft: 6 }}>
@@ -2213,6 +2237,7 @@ function TabFoto({
               label={f.label}
               sub={f.manual ? "Caricamento manuale" : "Automatica"}
               photos={byFolder[f.id]}
+              color={f.id}
               onOpen={() => {
                 setFolder(f.id);
                 setSub(null);
@@ -2226,7 +2251,14 @@ function TabFoto({
         subs.length ? (
           <div className="folder-grid">
             {subs.map((s) => (
-              <FolderCard key={s.key} label={s.label} sub={s.sub} photos={s.photos} onOpen={() => setSub(s.key)} />
+              <FolderCard
+                key={s.key}
+                label={s.label}
+                sub={s.sub}
+                photos={s.photos}
+                color="interventi"
+                onOpen={() => setSub(s.key)}
+              />
             ))}
           </div>
         ) : (
