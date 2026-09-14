@@ -18,6 +18,7 @@ import { CUSTOM_MODEL, hasTiranteGiunto } from "@/lib/plant";
 import { MILESTONES, milestoneDef, SOURCE_LABEL, isAutoSource } from "@/lib/milestones";
 import { CHECKLIST_TRITURATORE } from "@/lib/checklist";
 import { fmtDate, fmtBytes, fmtDateTime } from "@/lib/format";
+import { downscaleImage } from "@/lib/image";
 import type { MachineStatus, InterventoStatus } from "@prisma/client";
 
 type ServiceData = {
@@ -1946,6 +1947,11 @@ function AddComponentModal({
 }
 
 /* Cella matricola: inline-editabile + lettura da foto (OCR) da tablet/telefono */
+// Matricole lette/digitate ma non ancora salvate, per slot. Stanno fuori dal
+// componente: dopo l'upload della foto la pagina si aggiorna e lo stato locale
+// della cella andava perso, facendo sparire la proposta dell'OCR.
+const pendingSerials = new Map<string, string>();
+
 function SlotSerialCell({
   machineId,
   item,
@@ -1959,10 +1965,15 @@ function SlotSerialCell({
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
-  const [val, setVal] = useState(item.serial ?? "");
+  const [val, setValState] = useState(() => pendingSerials.get(item.id) ?? item.serial ?? "");
   const [busy, setBusy] = useState<null | "save" | "ocr">(null);
   const camRef = useRef<HTMLInputElement>(null);
   const dirty = val.trim() !== (item.serial ?? "");
+
+  function setVal(v: string) {
+    pendingSerials.set(item.id, v);
+    setValState(v);
+  }
 
   async function save() {
     setBusy("save");
@@ -1973,6 +1984,7 @@ function SlotSerialCell({
         body: JSON.stringify({ itemId: item.id, serial: val }),
       });
       if (res.ok) {
+        pendingSerials.delete(item.id);
         onDone();
         notify("Matricola salvata");
       } else notify("Errore salvataggio matricola", "err");
@@ -1986,23 +1998,28 @@ function SlotSerialCell({
     const file = files[0];
     setBusy("ocr");
     try {
-      // 1) OCR della matricola
+      // OCR (su copia ridotta) e salvataggio della foto originale sullo slot in
+      // parallelo. Il valore letto si mostra solo DOPO l'upload, e resta in
+      // pendingSerials: il refresh che segue non deve cancellare la proposta.
       const fd = new FormData();
-      fd.append("photo", file);
-      const res = await fetch("/api/vision/serial", { method: "POST", body: fd });
-      const d = await res.json().catch(() => null);
-      // 2) salva comunque la foto sullo slot
+      fd.append("photo", await downscaleImage(file));
       const fd2 = new FormData();
       fd2.append("photos", file);
       fd2.append("category", "componente");
       fd2.append("componentItemId", item.id);
-      fetch(`/api/machines/${machineId}/photos`, { method: "POST", body: fd2 }).then(() => onDone());
+      const [res, up] = await Promise.all([
+        fetch("/api/vision/serial", { method: "POST", body: fd }),
+        fetch(`/api/machines/${machineId}/photos`, { method: "POST", body: fd2 }).catch(() => null),
+      ]);
+      const d = await res.json().catch(() => null);
       if (res.ok && d?.serial) {
         setVal(d.serial);
         notify("Matricola letta dalla foto — verifica e salva");
       } else {
         notify(d?.error || "Matricola non riconosciuta nella foto", "err");
       }
+      if (up?.ok) onDone();
+      else notify("Foto non salvata sullo slot", "err");
     } finally {
       setBusy(null);
     }

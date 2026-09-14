@@ -23,6 +23,10 @@ export async function POST(req: Request) {
   const file = form.get("photo");
   if (!(file instanceof File) || file.size === 0)
     return NextResponse.json({ error: "Nessuna foto" }, { status: 400 });
+  // Il client riduce già la foto; se arriva comunque troppo grande (browser che
+  // non decodifica il formato) meglio un messaggio chiaro che un 400 dell'API.
+  if (file.size > 3.7 * 1024 * 1024)
+    return NextResponse.json({ error: "Foto troppo grande per la lettura: riprova con uno scatto JPEG" }, { status: 413 });
   const mediaType = OK_TYPES.includes(file.type) ? file.type : "image/jpeg";
   const b64 = Buffer.from(await file.arrayBuffer()).toString("base64");
 
