@@ -16,6 +16,7 @@ export type SyncOptions = {
   production?: boolean; // inizio/fine produzione
   description?: boolean; // descrizione commessa
   hours?: boolean; // ore di lavorazione
+  shipping?: boolean; // data spedizione (DDT di scopo SUPPLY)
 };
 
 const ALL: Required<SyncOptions> = {
@@ -23,6 +24,7 @@ const ALL: Required<SyncOptions> = {
   production: true,
   description: true,
   hours: true,
+  shipping: true,
 };
 
 export type SyncResult = {
@@ -49,6 +51,8 @@ export type AppliedErpData = {
   totalHours?: number | null;
   productionStart?: string | Date | null;
   productionEnd?: string | Date | null;
+  /** Primo DDT di scopo SUPPLY sulla commessa di vendita. */
+  shippedAt?: string | Date | null;
 };
 
 function toDate(v: string | Date | null | undefined): Date | null {
@@ -123,6 +127,13 @@ export async function applyErpData(
     }
   }
 
+  // Spedita (diario), con origine GESTIONALE
+  const shipped = toDate(erp.shippedAt);
+  if (opt.shipping && shipped) {
+    await upsertMilestone(machineId, "shipped", shipped);
+    changed.push("spedita");
+  }
+
   return changed;
 }
 
@@ -168,6 +179,7 @@ export async function syncMachine(
       totalHours: erp.totalHours,
       productionStart: erp.productionStart,
       productionEnd: erp.productionEnd,
+      shippedAt: erp.shippedAt,
     },
     options,
   );

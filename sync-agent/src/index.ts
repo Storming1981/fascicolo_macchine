@@ -219,6 +219,7 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
           totalHours: erp.totalHours,
           productionStart: iso(erp.productionStart),
           productionEnd: iso(erp.productionEnd),
+          shippedAt: iso(erp.shippedAt),
           snapshot: buildSnapshot(erp),
         } as PushResult;
       } catch (e) {
@@ -239,7 +240,7 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
     for (const r of results.filter((x) => x.found).slice(0, 5)) {
       log(
         `  ${r.id}  cliente=${r.customer ?? '—'}  ore=${r.totalHours ?? 0}  ` +
-          `prod=${r.productionStart ?? '—'}→${r.productionEnd ?? '—'}`,
+          `prod=${r.productionStart ?? '—'}→${r.productionEnd ?? '—'}  spedita=${r.shippedAt ?? '—'}`,
       );
     }
     return;

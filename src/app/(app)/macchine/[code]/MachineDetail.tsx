@@ -15,7 +15,7 @@ import {
   COUNTRIES,
 } from "@/lib/domain";
 import { CUSTOM_MODEL, hasTiranteGiunto } from "@/lib/plant";
-import { MILESTONES, milestoneDef } from "@/lib/milestones";
+import { MILESTONES, milestoneDef, SOURCE_LABEL, isAutoSource } from "@/lib/milestones";
 import { CHECKLIST_TRITURATORE } from "@/lib/checklist";
 import { fmtDate, fmtBytes, fmtDateTime } from "@/lib/format";
 import type { MachineStatus, InterventoStatus } from "@prisma/client";
@@ -53,7 +53,7 @@ type Machine = {
   }[];
   documents: { id: string; name: string; path: string; sizeBytes: number; category: string }[];
   signatures: { id: string; role: string; signerName: string; method: string; imageData: string | null; signedAt: string }[];
-  milestones: { key: string; date: string; source: string }[];
+  milestones: { key: string; date: string; source: string; detail: string | null }[];
   notesLog: {
     id: string; text: string; authorId: string | null; authorName: string; createdAt: string;
     editedByName: string | null; editedAt: string | null;
@@ -387,14 +387,28 @@ function TabAnagrafica({
   const [editMs, setEditMs] = useState(false);
   const [ms, setMs] = useState<Record<string, string>>(msInit());
 
+  const msRow = (key: string) => machine.milestones.find((x) => x.key === key) ?? null;
+  const msAuto = (key: string) => isAutoSource(msRow(key)?.source);
+  const msOrigin = (key: string) => {
+    const r = msRow(key);
+    return r ? r.detail ?? SOURCE_LABEL[r.source] ?? r.source : null;
+  };
+
   async function saveMilestones() {
+    const initial = msInit();
+    // solo le date manuali cambiate: quelle automatiche prevalgono sempre
+    const items = MILESTONES.filter(
+      (d) => !msAuto(d.key) && (ms[d.key] || "") !== (initial[d.key] || "")
+    ).map((d) => ({ key: d.key, date: ms[d.key] || "" }));
+    if (!items.length) {
+      setEditMs(false);
+      return;
+    }
     setBusy(true);
     const res = await fetch(`/api/machines/${machine.id}/milestones`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: MILESTONES.map((d) => ({ key: d.key, date: ms[d.key] || "" })),
-      }),
+      body: JSON.stringify({ items }),
     });
     setBusy(false);
     if (res.ok) {
@@ -893,12 +907,14 @@ function TabAnagrafica({
               <div key={d.key}>
                 <dt>
                   {d.label}
-                  <div className="muted small" style={{ fontWeight: 400 }}>
-                    {d.hint}
-                  </div>
+                  {d.hint && (
+                    <div className="muted small" style={{ fontWeight: 400 }}>
+                      {d.hint}
+                    </div>
+                  )}
                 </dt>
                 <dd>
-                  {editMs ? (
+                  {editMs && !msAuto(d.key) ? (
                     <input
                       className="input"
                       type="date"
@@ -906,7 +922,15 @@ function TabAnagrafica({
                       onChange={(e) => setMs((s) => ({ ...s, [d.key]: e.target.value }))}
                     />
                   ) : ms[d.key] ? (
-                    <span className="mono">{fmtDate(ms[d.key])}</span>
+                    <>
+                      <span className="mono">{fmtDate(ms[d.key])}</span>
+                      {msOrigin(d.key) && (
+                        <span className="muted small" style={{ marginLeft: 8 }}>
+                          {msOrigin(d.key)}
+                          {editMs && msAuto(d.key) ? " · automatica" : ""}
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <span className="muted">— da definire</span>
                   )}
@@ -915,8 +939,9 @@ function TabAnagrafica({
             ))}
           </dl>
           <p className="muted small" style={{ marginTop: 10 }}>
-            Inserimento manuale. In seguito alimentate dal gestionale (timbrature,
-            ordini di produzione, DDT).
+            Le date automatiche (gestionale, check list di collaudo, intervento di
+            installazione) prevalgono e si correggono alla fonte; «Modifica date»
+            completa a mano quelle mancanti.
           </p>
         </section>
 
@@ -2509,9 +2534,9 @@ function TabDiario({
         phase: def.phase as string,
         type: "status",
         title: `${def.label} — cambio stato`,
-        note: `Data ${def.label.toLowerCase()} (${m.source === "GESTIONALE" ? "gestionale" : "inserita a mano"}).`,
+        note: `Data ${def.label.toLowerCase()} — ${m.detail ?? (SOURCE_LABEL[m.source] ?? m.source).toLowerCase()}.`,
         date: m.date,
-        actorName: m.source === "GESTIONALE" ? "Gestionale" : "Inserimento manuale",
+        actorName: SOURCE_LABEL[m.source] ?? m.source,
         oldSerial: null,
         newSerial: null,
         signed: false,

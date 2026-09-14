@@ -28,6 +28,7 @@ export interface PushResult {
   totalHours?: number | null;
   productionStart?: string | null;
   productionEnd?: string | null;
+  shippedAt?: string | null; // primo DDT di scopo SUPPLY
   // snapshot completo (jobs+orders+articoli) per la card ERP sulla VPS
   snapshot?: unknown;
 }

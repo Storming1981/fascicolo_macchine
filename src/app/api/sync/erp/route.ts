@@ -27,7 +27,8 @@ export const maxDuration = 60;
  *       description?: string|null,
  *       totalHours?: number|null,
  *       productionStart?: string|null,    // ISO
- *       productionEnd?: string|null       // ISO
+ *       productionEnd?: string|null,      // ISO
+ *       shippedAt?: string|null           // ISO — primo DDT di scopo SUPPLY
  *     }>
  *   }
  *
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
           totalHours: r.totalHours ?? null,
           productionStart: r.productionStart ?? null,
           productionEnd: r.productionEnd ?? null,
+          shippedAt: r.shippedAt ?? null,
         },
         options,
       );

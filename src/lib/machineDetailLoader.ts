@@ -5,6 +5,7 @@ import { ROLE_LABEL } from "./domain";
 import { userCaps } from "./caps";
 import { getPlantConfig } from "./settings";
 import { COMPONENT_GROUPS } from "./components";
+import { resolveMilestones } from "./milestoneAuto";
 
 /**
  * Carica tutte le props della scheda fascicolo macchina. Condiviso tra guscio
@@ -65,6 +66,8 @@ export async function loadMachineDetailProps(code: string) {
     `https://fascicolo.zato.it/macchine/${machine.code}`,
     { margin: 1, width: 280, color: { dark: "#0f3b66", light: "#ffffff" } }
   );
+
+  const milestones = await resolveMilestones({ id: machine.id, job: machine.job }, machine.milestones);
 
   const data = {
     id: machine.id,
@@ -180,10 +183,11 @@ export async function loadMachineDetailProps(code: string) {
         editedAt: r.editedAt.toISOString(),
       })),
     })),
-    milestones: machine.milestones.map((m) => ({
+    milestones: milestones.map((m) => ({
       key: m.key,
       date: m.date.toISOString(),
       source: m.source,
+      detail: m.detail,
     })),
     collaudo: machine.collaudo
       ? {

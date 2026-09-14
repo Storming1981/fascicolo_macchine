@@ -132,10 +132,25 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   `api/users/route.ts`.
 - `Setting` — configurazione runtime (key/value Json): `plantConfig` (tipologie
   e modelli editabili) e `permissions` (matrice permessi per ruolo)
-- `MachineMilestone` — date di cambio stato (key/date/source). Per ora inserite
-  a mano; future fonti gestionale: produzione inizio/fine = prima/ultima
-  timbratura, collaudo = ordini di produzione, spedita = DDT, installata/
-  esercizio/dismessa = manuale. Card editabile in Anagrafica + voci nel diario.
+- `MachineMilestone` — date di cambio stato (key/date/source). Card "Date di
+  stato" in Anagrafica + voci nel diario. **Il valore automatico prevale** e non
+  si modifica dalla card (si corregge alla fonte); «Modifica date» completa a
+  mano solo quelle senza fonte (source `MANUALE`). Fonti:
+  - **Inizio / Fine produzione** → gestionale, prima / ultima timbratura (`avlavp`).
+  - **Collaudo** → firma della check list di collaudo: `Collaudo.approvedAt`,
+    altrimenti `compiledAt` (firma compilatore). Calcolata al volo.
+  - **Spedita** → gestionale: **primo** DDT (`testmag.tm_tipork='B'`) con righe
+    di scopo **SUPPLY** — `movmag.mm_hhcodsc='1'` (tabella `tabhhsc`: 1 SUPPLY,
+    2 SPARE PARTS, 3 MAINTENANCE) — sulla commessa di vendita (`tm_commeca = job`).
+    Attenzione: `tm_hhcoduf` sulla testata NON è lo scopo (è la tipologia cliente,
+    `tabhhuf`). I DDT SUPPLY successivi sono completamenti. Arriva col sync
+    (`shippedAt` in `erp.ts`, `applyErpData`, `/api/sync/erp`, **sync-agent**).
+  - **Installata** → ultimo rapportino (chiuso, se ce ne sono) dell'intervento
+    di tipo `INSTALLAZIONE` con commessa = job di vendita + 2 cifre
+    (1260354 → 126035401); calcolata al volo.
+  - **In esercizio / Dismessa** → manuale.
+  Calcolo in `src/lib/milestoneAuto.ts` (`resolveMilestones`), definizioni e
+  sorgenti in `src/lib/milestones.ts`.
 
 ### Impostazioni & Permessi
 

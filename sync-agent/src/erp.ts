@@ -106,6 +106,7 @@ export interface ErpJobData {
   isClosed: boolean;
   productionStart: Date | null;
   productionEnd: Date | null;
+  shippedAt: Date | null;
   progressRows: number;
   hours: number;
 }
@@ -126,6 +127,7 @@ export async function getJobData(job: string): Promise<ErpJobData> {
     isClosed: false,
     productionStart: null,
     productionEnd: null,
+    shippedAt: null,
     progressRows: 0,
     hours: 0,
   };
@@ -187,6 +189,30 @@ export async function getJobData(job: string): Promise<ErpJobData> {
             `)
         ).recordset[0];
 
+  // Spedita: primo DDT (bolla, tm_tipork 'B') con righe di scopo SUPPLY
+  // (movmag.mm_hhcodsc = '1', tabella tabhhsc) sulla commessa. I DDT successivi
+  // sono completamenti di fornitura. La commessa generica 999999999 raccoglie
+  // impianti diversi: nessuna data.
+  const shippedAt =
+    commeca === GENERIC_COMMESSA
+      ? null
+      : realDate(
+          (
+            await pool
+              .request()
+              .input('c', sql.Int, commeca)
+              .query<{ d: Date | null }>(`
+                SELECT MIN(t.tm_datdoc) AS d
+                FROM testmag t
+                JOIN movmag m
+                  ON m.codditt = t.codditt AND m.mm_tipork = t.tm_tipork AND m.mm_anno = t.tm_anno
+                 AND m.mm_serie = t.tm_serie AND m.mm_numdoc = t.tm_numdoc
+                WHERE t.codditt = 'ZATO' AND t.tm_tipork = 'B' AND m.mm_hhcodsc = '1'
+                  AND t.tm_commeca = @c;
+              `)
+          ).recordset[0]?.d ?? null,
+        );
+
   return {
     ...base,
     found: true,
@@ -200,6 +226,7 @@ export async function getJobData(job: string): Promise<ErpJobData> {
     isClosed: c.co_chiusa === 'S',
     productionStart: realDate(a.min_s),
     productionEnd: realDate(a.max_e),
+    shippedAt,
     progressRows: a.n ?? 0,
     hours: a.ore ?? 0,
   };
@@ -427,6 +454,7 @@ export interface ErpMachineData {
   description: string | null;
   productionStart: Date | null;
   productionEnd: Date | null;
+  shippedAt: Date | null;
   totalHours: number;
   hasProduction: boolean;
 }
@@ -491,6 +519,10 @@ export async function getMachineErpData(input: MachineErpInput): Promise<ErpMach
   const productionEnd =
     ends.length > 0 ? new Date(Math.max(...ends.map((d) => d.getTime()))) : null;
 
+  // Spedita: solo dalla commessa di vendita (job principale)
+  const saleJob = input.job ? String(input.job).trim() : '';
+  const shippedAt = found.find((j) => j.job === saleJob)?.shippedAt ?? null;
+
   return {
     jobs,
     orders,
@@ -502,6 +534,7 @@ export async function getMachineErpData(input: MachineErpInput): Promise<ErpMach
     description: primary?.description ?? null,
     productionStart,
     productionEnd,
+    shippedAt,
     totalHours: Math.round(totalHours * 100) / 100,
     hasProduction,
   };
