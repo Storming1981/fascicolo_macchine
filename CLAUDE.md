@@ -451,6 +451,13 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   anno, job/jobBody/jobContainer, cliente (tendina anagrafica), paese, sito,
   date e targa tecnica. `PATCH /api/machines/[id]` valida i campi e **annota a
   diario** le variazioni ("Anagrafica fascicolo aggiornata: campo vecchio → nuovo").
+- **Note macchina** (linguetta *Note*, dopo QR & Etichetta): appunti liberi su
+  settaggi particolari e aggiustaggi dedicati, firmati con autore + data/ora.
+  **Modificabili ma non cancellabili**: non esiste un DELETE (405) e ogni
+  modifica salva il testo sostituito in `MachineNoteRevision` (chi e quando),
+  consultabile da *Versioni precedenti*. Aggiunge chi ha `machine.intervention`
+  o `machine.edit`; modifica l'autore oppure chi ha `machine.edit`.
+  API: `POST /api/machines/[id]/notes`, `PATCH /api/machines/[id]/notes/[noteId]`.
 - **Import Excel/CSV**: anteprima (dry-run) + conferma; salta job già presenti.
 - **Persone**: elenco operatori, firme, creazione operatore (solo ADMIN).
   Gli **accessi al portale cliente** (utenti con ruolo `CLIENTE`) sono **nascosti

@@ -17,7 +17,7 @@ import {
 import { CUSTOM_MODEL } from "@/lib/plant";
 import { MILESTONES, milestoneDef } from "@/lib/milestones";
 import { CHECKLIST_TRITURATORE } from "@/lib/checklist";
-import { fmtDate, fmtBytes } from "@/lib/format";
+import { fmtDate, fmtBytes, fmtDateTime } from "@/lib/format";
 import type { MachineStatus, InterventoStatus } from "@prisma/client";
 
 type ServiceData = {
@@ -48,6 +48,11 @@ type Machine = {
   documents: { id: string; name: string; path: string; sizeBytes: number; category: string }[];
   signatures: { id: string; role: string; signerName: string; method: string; imageData: string | null; signedAt: string }[];
   milestones: { key: string; date: string; source: string }[];
+  notesLog: {
+    id: string; text: string; authorId: string | null; authorName: string; createdAt: string;
+    editedByName: string | null; editedAt: string | null;
+    revisions: { id: string; text: string; editedByName: string; editedAt: string }[];
+  }[];
   collaudo: {
     status: "DRAFT" | "IN_PROGRESS" | "PENDING_APPROVAL" | "APPROVED";
     answers: Record<string, { value: string | null; note?: string }>;
@@ -70,6 +75,7 @@ const TABS = [
   { id: "diario", label: "Diario macchina", icon: "clock" },
   { id: "service", label: "Service", icon: "wrench" },
   { id: "qr", label: "QR & Etichetta", icon: "qr" },
+  { id: "note", label: "Note", icon: "doc" },
 ];
 
 export type PlantConfig = { name: string; models: string[] }[];
@@ -220,6 +226,16 @@ export default function MachineDetail({
         <TabService machine={machine} service={service} caps={caps} notify={notify} />
       )}
       {tab === "qr" && <TabQR machine={machine} qrDataUrl={qrDataUrl} />}
+      {tab === "note" && (
+        <TabNote
+          machine={machine}
+          currentUserId={currentUser.id}
+          canAdd={caps.intervention || caps.edit}
+          canEditAll={caps.edit}
+          onDone={refresh}
+          notify={notify}
+        />
+      )}
 
       {intervention && (
         <InterventionModal
@@ -2361,6 +2377,191 @@ function TabDiario({
 }
 
 /* ── Tab QR ─────────────────────────────────────────────── */
+/* ── Note macchina: appunti firmati, modificabili ma non cancellabili ── */
+function TabNote({
+  machine,
+  currentUserId,
+  canAdd,
+  canEditAll,
+  onDone,
+  notify,
+}: {
+  machine: Machine;
+  currentUserId: string;
+  canAdd: boolean;
+  canEditAll: boolean;
+  onDone: () => void;
+  notify: (m: string, k?: "ok" | "err") => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [q, setQ] = useState("");
+
+  const notes = machine.notesLog.filter(
+    (n) =>
+      !q.trim() ||
+      n.text.toLowerCase().includes(q.toLowerCase()) ||
+      n.authorName.toLowerCase().includes(q.toLowerCase())
+  );
+
+  async function add() {
+    if (!draft.trim()) return notify("Scrivi il testo della nota", "err");
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: draft }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      setDraft("");
+      onDone();
+      notify("Nota aggiunta");
+    } else {
+      const d = await res.json().catch(() => ({}));
+      notify(d.error || "Errore salvataggio nota", "err");
+    }
+  }
+
+  async function saveEdit(id: string) {
+    if (!editText.trim()) return notify("La nota non può restare vuota", "err");
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/notes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: editText }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      setEditId(null);
+      onDone();
+      notify("Nota aggiornata");
+    } else {
+      const d = await res.json().catch(() => ({}));
+      notify(d.error || "Errore modifica nota", "err");
+    }
+  }
+
+  return (
+    <div className="tab-content">
+      {canAdd && (
+        <section className="card" style={{ marginBottom: 16 }}>
+          <div className="card-header">
+            <h3>Nuova nota</h3>
+          </div>
+          <p className="muted small" style={{ marginBottom: 8 }}>
+            Settaggi particolari, aggiustaggi dedicati, accorgimenti da ricordare. La nota viene
+            firmata con il tuo nome, data e ora; si potrà correggere ma non cancellare.
+          </p>
+          <textarea
+            className="input"
+            rows={4}
+            value={draft}
+            placeholder="es. Pressione di taglio portata a 270 bar per materiale misto…"
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+            <button className="btn-primary-sm" disabled={busy || !draft.trim()} onClick={add}>
+              <Icon name="plus" size={13} /> Aggiungi nota
+            </button>
+          </div>
+        </section>
+      )}
+
+      <div className="cmp-toolbar">
+        <div className="cmp-summary">
+          <span className="muted">Note:</span> <strong>{machine.notesLog.length}</strong>
+        </div>
+        {machine.notesLog.length > 3 && (
+          <div className="search" style={{ maxWidth: 280 }}>
+            <Icon name="search" size={15} color="var(--muted)" />
+            <input placeholder="Cerca nelle note…" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+        )}
+      </div>
+
+      {notes.length === 0 && (
+        <div className="card empty-state">
+          {machine.notesLog.length === 0 ? "Nessuna nota per questa macchina." : "Nessuna nota trovata."}
+        </div>
+      )}
+
+      {notes.map((n) => {
+        const mayEdit = canEditAll || (!!n.authorId && n.authorId === currentUserId);
+        const editing = editId === n.id;
+        return (
+          <section className="card" key={n.id} style={{ marginBottom: 12 }}>
+            <div className="card-header" style={{ alignItems: "flex-start" }}>
+              <div>
+                <strong>{n.authorName}</strong>
+                <div className="muted small mono">{fmtDateTime(n.createdAt)}</div>
+              </div>
+              {mayEdit && !editing && (
+                <button
+                  className="btn-ghost-sm"
+                  onClick={() => {
+                    setEditId(n.id);
+                    setEditText(n.text);
+                  }}
+                >
+                  <Icon name="sign" size={13} /> Modifica
+                </button>
+              )}
+            </div>
+            {editing ? (
+              <>
+                <textarea
+                  className="input"
+                  rows={Math.min(12, Math.max(4, n.text.split("\n").length + 1))}
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 8 }}>
+                  <button className="btn-ghost-sm" onClick={() => setEditId(null)}>
+                    Annulla
+                  </button>
+                  <button className="btn-primary-sm" disabled={busy} onClick={() => saveEdit(n.id)}>
+                    <Icon name="check" size={13} /> Salva
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{n.text}</div>
+            )}
+            {n.editedAt && (
+              <div className="muted small" style={{ marginTop: 10 }}>
+                Modificata da <strong>{n.editedByName}</strong> il {fmtDateTime(n.editedAt)}
+                {n.revisions.length > 0 && (
+                  <details style={{ marginTop: 6 }}>
+                    <summary style={{ cursor: "pointer" }}>
+                      Versioni precedenti ({n.revisions.length})
+                    </summary>
+                    {n.revisions.map((r) => (
+                      <div
+                        key={r.id}
+                        style={{ borderLeft: "3px solid var(--border)", padding: "4px 10px", marginTop: 8 }}
+                      >
+                        <div className="mono">
+                          sostituita il {fmtDateTime(r.editedAt)} da {r.editedByName}
+                        </div>
+                        <div style={{ whiteSpace: "pre-wrap", color: "var(--text-2)", marginTop: 3 }}>
+                          {r.text}
+                        </div>
+                      </div>
+                    ))}
+                  </details>
+                )}
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 function TabQR({ machine, qrDataUrl }: { machine: Machine; qrDataUrl: string }) {
   return (
     <div className="tab-content">

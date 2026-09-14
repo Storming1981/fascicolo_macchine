@@ -20,6 +20,10 @@ export async function loadMachineDetailProps(code: string) {
       signatures: true,
       milestones: true,
       collaudo: true,
+      machineNotes: {
+        orderBy: { createdAt: "desc" },
+        include: { revisions: { orderBy: { editedAt: "desc" } } },
+      },
     },
   });
   if (!machine) return null;
@@ -136,6 +140,21 @@ export async function loadMachineDetailProps(code: string) {
         imageData: s.imageData,
         signedAt: s.signedAt.toISOString(),
       })),
+    notesLog: machine.machineNotes.map((n) => ({
+      id: n.id,
+      text: n.text,
+      authorId: n.authorId,
+      authorName: n.authorName,
+      createdAt: n.createdAt.toISOString(),
+      editedByName: n.editedByName,
+      editedAt: n.editedAt?.toISOString() ?? null,
+      revisions: n.revisions.map((r) => ({
+        id: r.id,
+        text: r.text,
+        editedByName: r.editedByName,
+        editedAt: r.editedAt.toISOString(),
+      })),
+    })),
     milestones: machine.milestones.map((m) => ({
       key: m.key,
       date: m.date.toISOString(),
