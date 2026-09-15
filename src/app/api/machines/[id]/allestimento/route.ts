@@ -3,7 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { hasAllestimentoSheets, isSheetKind, SHEET_KINDS } from "@/lib/allestimento";
-import { ensureSheetComponents, loadSheet, saveSheet, signSheet } from "@/lib/allestimentoService";
+import { ensureSheetComponents, getSheetOptions, loadSheet, saveSheet, signSheet } from "@/lib/allestimentoService";
 
 /**
  * Schede di allestimento BLUE DEVIL (M5.16 Trituratore / M5.17 Container).
@@ -44,7 +44,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       updatedByName: s.updatedByName,
     };
   }
-  return NextResponse.json({ created, sheets });
+  return NextResponse.json({ created, sheets, options: await getSheetOptions() });
 }
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {

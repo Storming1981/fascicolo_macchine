@@ -513,6 +513,13 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   Firma compilatore (penna o firma personale) → evento a diario; se la scheda
   firmata viene modificata la firma decade. PDF rigenerato dai dati correnti
   (`src/lib/allestimentoPdf.ts`, una pagina A4 come il modulo).
+  **Elenchi con voci aggiungibili**: ogni specifica non libera (`free`) è una
+  tendina che parte dai `suggest` e si arricchisce con le voci aggiunte dagli
+  operatori, salvate in `Setting.allestimentoOptions` per elenco (`list`
+  condiviso — colori, verniciatura, lavorazioni, ghiere, tensione, frequenza —
+  oppure `KIND.rowKey`). Anche un valore scritto a mano entra nell'elenco al
+  salvataggio; doppioni ignorati senza badare alle maiuscole. Aggiunge chi
+  compila, toglie chi ha `machine.edit`. API `GET|POST|DELETE /api/allestimento/options`.
   API: `GET|PUT|POST /api/machines/[id]/allestimento` ·
   `GET /api/machines/[id]/allestimento/[kind]/pdf`.
 - **Stato/avanzamento** modificabili dal dettaglio (slider + select), evento a diario.

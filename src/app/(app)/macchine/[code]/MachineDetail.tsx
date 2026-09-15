@@ -214,6 +214,7 @@ export default function MachineDetail({
           machine={machine}
           canEdit={caps.intervention}
           canSign={caps.intervention}
+          canManageOptions={caps.edit}
           hasSavedSignature={currentUser.hasSignature}
           onReplace={caps.intervention ? (c) => setIntervention(c) : undefined}
           onDone={refresh}
@@ -1494,6 +1495,7 @@ function TabComponenti({
   machine,
   canEdit,
   canSign,
+  canManageOptions,
   hasSavedSignature,
   onReplace,
   onDone,
@@ -1502,6 +1504,7 @@ function TabComponenti({
   machine: Machine;
   canEdit?: boolean;
   canSign?: boolean;
+  canManageOptions?: boolean;
   hasSavedSignature?: boolean;
   onReplace?: (c: { groupId: string; itemId: string; itemLabel: string; oldSerial: string }) => void;
   onDone: () => void;
@@ -1695,6 +1698,7 @@ function TabComponenti({
           machine={machine}
           canEdit={!!canEdit}
           canSign={!!canSign}
+          canManageOptions={!!canManageOptions}
           hasSavedSignature={!!hasSavedSignature}
           renderSerial={(it) => (
             <SlotSerialCell machineId={machine.id} item={it} canEdit={!!canEdit} onDone={onDone} notify={notify} />

@@ -2,17 +2,85 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { COMPONENT_GROUPS } from "./components";
 import {
+  allListKeys,
   allRows,
   defaultTipo,
+  isListRow,
+  listKey,
   resolveValues,
   sheetDef,
   sheetGroupIds,
   type SheetHeader,
   type SheetKind,
+  type SheetOptions,
   type SheetValues,
 } from "./allestimento";
 
 const str = (v: unknown, max = 500) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+const OPTIONS_KEY = "allestimentoOptions";
+const MAX_OPTION_LEN = 80;
+const MAX_OPTIONS_PER_LIST = 100;
+
+/** Voci aggiunte dagli operatori agli elenchi delle schede (globali, per elenco). */
+export async function getSheetOptions(): Promise<SheetOptions> {
+  const row = await prisma.setting.findUnique({ where: { key: OPTIONS_KEY } });
+  const raw = (row?.value ?? {}) as Record<string, unknown>;
+  const out: SheetOptions = {};
+  for (const [k, v] of Object.entries(raw))
+    if (Array.isArray(v)) out[k] = v.filter((x): x is string => typeof x === "string");
+  return out;
+}
+
+async function writeSheetOptions(opts: SheetOptions) {
+  await prisma.setting.upsert({
+    where: { key: OPTIONS_KEY },
+    update: { value: opts },
+    create: { key: OPTIONS_KEY, value: opts },
+  });
+}
+
+/**
+ * Aggiunge voci a uno o più elenchi. Ignora elenchi sconosciuti, voci vuote e
+ * doppioni (anche rispetto alle voci di partenza, senza badare alle maiuscole).
+ * Ritorna gli elenchi aggiornati.
+ */
+export async function addSheetOptions(additions: { list: string; value: string }[]): Promise<SheetOptions> {
+  const valid = allListKeys();
+  const defaults = new Map<string, string[]>();
+  for (const def of [sheetDef("TRITURATORE"), sheetDef("CONTAINER")])
+    for (const r of allRows(def))
+      if (isListRow(r)) {
+        const k = listKey(def.kind, r);
+        defaults.set(k, [...(defaults.get(k) ?? []), ...(r.suggest ?? [])]);
+      }
+
+  const opts = await getSheetOptions();
+  let changed = false;
+  for (const { list, value } of additions) {
+    const v = value.trim().slice(0, MAX_OPTION_LEN);
+    if (!v || !valid.has(list)) continue;
+    const cur = opts[list] ?? [];
+    const known = [...(defaults.get(list) ?? []), ...cur].map((x) => x.toUpperCase());
+    if (known.includes(v.toUpperCase()) || cur.length >= MAX_OPTIONS_PER_LIST) continue;
+    opts[list] = [...cur, v];
+    changed = true;
+  }
+  if (changed) await writeSheetOptions(opts);
+  return opts;
+}
+
+export async function removeSheetOption(list: string, value: string): Promise<SheetOptions> {
+  const opts = await getSheetOptions();
+  const cur = opts[list] ?? [];
+  const next = cur.filter((x) => x.toUpperCase() !== value.trim().toUpperCase());
+  if (next.length !== cur.length) {
+    if (next.length) opts[list] = next;
+    else delete opts[list];
+    await writeSheetOptions(opts);
+  }
+  return opts;
+}
 
 /**
  * Crea sulla macchina i gruppi componente usati dalle schede che mancano (es.
@@ -181,6 +249,15 @@ export async function saveSheet(
       })
     );
   await prisma.$transaction(ops);
+
+  // Un valore scritto a mano in un campo a elenco entra nell'elenco: la volta
+  // dopo si sceglie invece di riscriverlo.
+  await addSheetOptions(
+    allRows(def)
+      .filter(isListRow)
+      .map((row) => ({ list: listKey(kind, row), value: str(incoming[row.key]?.spec) }))
+      .filter((a) => a.value)
+  );
   return { signatureRevoked };
 }
 
