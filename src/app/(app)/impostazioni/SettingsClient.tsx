@@ -24,6 +24,7 @@ type SyncSummary = {
 
 export default function SettingsClient({
   plantConfig,
+  modelUsage,
   permissions,
   navVisibility,
   appAccess,
@@ -35,6 +36,7 @@ export default function SettingsClient({
   currentUserEmail,
 }: {
   plantConfig: PlantConfig;
+  modelUsage: { plantType: string; model: string; count: number }[];
   permissions: PermissionMatrix;
   navVisibility: NavVisibility;
   appAccess: AppAccessMatrix;
@@ -147,6 +149,45 @@ export default function SettingsClient({
       notify("Tipologie e modelli salvati");
       router.refresh();
     } else notify("Errore salvataggio", "err");
+  }
+
+  // Modelli presenti nei fascicoli ma non (più) nella configurazione SALVATA:
+  // es. "CORPO TRITURATORE" dopo aver messo GF4000 sotto BLUE DEVIL. Cambiare
+  // la configurazione non tocca i fascicoli: qui si riallineano in blocco.
+  const [targets, setTargets] = useState<Record<string, string>>({});
+  const [applying, setApplying] = useState<string | null>(null);
+  const orphanModels = modelUsage
+    .filter((u) => {
+      const cfg = plantConfig.find((p) => p.name === u.plantType);
+      return cfg && cfg.models.length > 0 && !cfg.models.includes(u.model);
+    })
+    .sort((a, b) => a.plantType.localeCompare(b.plantType) || b.count - a.count);
+
+  async function applyModel(u: { plantType: string; model: string; count: number }) {
+    const key = `${u.plantType}|${u.model}`;
+    const to = targets[key];
+    if (!to) return;
+    if (
+      !confirm(
+        `Cambiare il modello di ${u.count} fascicoli ${u.plantType} da "${u.model}" a "${to}"?\nOgni fascicolo riceve la nota nel diario.`
+      )
+    )
+      return;
+    setApplying(key);
+    try {
+      const res = await fetch("/api/settings/plant/apply-model", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plantType: u.plantType, from: u.model, to }),
+      });
+      const d = await res.json().catch(() => null);
+      if (res.ok) {
+        notify(`${d?.updated ?? 0} fascicoli aggiornati a ${to}`);
+        router.refresh();
+      } else notify(d?.error || "Errore aggiornamento fascicoli", "err");
+    } finally {
+      setApplying(null);
+    }
   }
 
   function toggle(role: string, action: PermAction) {
@@ -304,6 +345,68 @@ export default function SettingsClient({
             Le tipologie e i modelli qui definiti popolano il menu della creazione
             fascicolo. &quot;Altro / Personalizzato&quot; è sempre disponibile.
           </p>
+
+          <section className="card" style={{ marginTop: 16 }}>
+            <h3 style={{ margin: "0 0 4px" }}>Modelli da aggiornare nei fascicoli</h3>
+            <p className="muted small" style={{ margin: "0 0 12px" }}>
+              Salvare le tipologie non cambia i fascicoli esistenti. Qui trovi i modelli
+              ancora usati dai fascicoli ma non presenti nella configurazione salvata:
+              scegli il modello nuovo e applicalo. Ogni fascicolo riceve la nota nel diario.
+            </p>
+            {orphanModels.length === 0 ? (
+              <div className="muted small">Tutti i fascicoli usano modelli presenti in configurazione.</div>
+            ) : (
+              <div className="table-wrap">
+                <table className="cmp-table">
+                  <thead>
+                    <tr>
+                      <th>Tipologia</th>
+                      <th>Modello nei fascicoli</th>
+                      <th>Fascicoli</th>
+                      <th>Nuovo modello</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orphanModels.map((u) => {
+                      const key = `${u.plantType}|${u.model}`;
+                      const models = plantConfig.find((p) => p.name === u.plantType)?.models ?? [];
+                      return (
+                        <tr key={key}>
+                          <td>{u.plantType}</td>
+                          <td>{u.model}</td>
+                          <td className="mono">{u.count}</td>
+                          <td>
+                            <select
+                              className="input"
+                              value={targets[key] ?? ""}
+                              onChange={(e) => setTargets((s) => ({ ...s, [key]: e.target.value }))}
+                            >
+                              <option value="">— scegli —</option>
+                              {models.map((m) => (
+                                <option key={m} value={m}>
+                                  {m}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <button
+                              className="btn-primary-sm"
+                              disabled={!targets[key] || applying !== null}
+                              onClick={() => applyModel(u)}
+                            >
+                              {applying === key ? "Applico…" : "Applica"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </div>
       )}
 

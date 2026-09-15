@@ -159,6 +159,13 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   - **Tipologie & Modelli**: CRUD tipologie impianto e relativi modelli
     (salvati in `Setting.plantConfig`); alimentano il wizard "Nuova macchina".
     Default da `src/lib/plant.ts` se non personalizzato.
+    **Salvare la configurazione non tocca i fascicoli**: il riquadro *Modelli
+    da aggiornare nei fascicoli* elenca i modelli usati dai fascicoli ma
+    assenti dalla configurazione salvata (conteggio da `groupBy` in
+    `page.tsx`) e li riallinea in blocco con *Applica* →
+    `POST /api/settings/plant/apply-model` `{plantType, from, to}` (`to` deve
+    essere configurato; nota "Modello: from → to" a diario di ogni fascicolo).
+    Primo uso: BLUE DEVIL, 183 fascicoli CORPO TRITURATORE → GF4000.
   - **Permessi per ruolo**: matrice ruolo × azione
     (`machine.create/edit/intervention/sign/import`, `users.manage`,
     `settings.manage`). ADMIN ha sempre tutto e non è modificabile.
