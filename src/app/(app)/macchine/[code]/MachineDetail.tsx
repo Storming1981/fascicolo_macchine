@@ -1986,16 +1986,20 @@ function SlotSerialCell({
     setValState(v);
   }
 
+  async function persist(serial: string): Promise<boolean> {
+    const res = await fetch(`/api/machines/${machineId}/component-item`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId: item.id, serial }),
+    });
+    if (res.ok) pendingSerials.delete(item.id);
+    return res.ok;
+  }
+
   async function save() {
     setBusy("save");
     try {
-      const res = await fetch(`/api/machines/${machineId}/component-item`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item.id, serial: val }),
-      });
-      if (res.ok) {
-        pendingSerials.delete(item.id);
+      if (await persist(val)) {
         onDone();
         notify("Matricola salvata");
       } else notify("Errore salvataggio matricola", "err");
@@ -2023,14 +2027,32 @@ function SlotSerialCell({
         fetch(`/api/machines/${machineId}/photos`, { method: "POST", body: fd2 }).catch(() => null),
       ]);
       const d = await res.json().catch(() => null);
-      if (res.ok && d?.serial) {
-        setVal(d.serial);
-        notify("Matricola letta dalla foto — verifica e salva");
+      if (!up?.ok) notify("Foto non salvata sullo slot", "err");
+      const serial: string = res.ok ? d?.serial ?? "" : "";
+      const current = item.serial ?? "";
+      if (!serial) {
+        notify(d?.error || "Matricola non riconosciuta nella foto: inseriscila a mano", "err");
+      } else if (serial === current) {
+        notify(`Matricola ${serial} confermata dalla foto`);
+      } else if (!current && d?.confidence !== "low") {
+        // Slot vuoto e lettura sicura: si salva subito (prima restava una
+        // proposta da confermare con ✓ e nessuno la confermava). Resta
+        // correggibile, e la correzione va a diario come ogni modifica.
+        setVal(serial);
+        if (await persist(serial)) notify(`Matricola ${serial} letta e salvata — controlla che sia giusta`);
+        else notify("Matricola letta ma non salvata: premi ✓", "err");
       } else {
-        notify(d?.error || "Matricola non riconosciuta nella foto", "err");
+        // Slot già compilato con un altro valore, o lettura incerta: non si
+        // sovrascrive da solo, decide l'operatore.
+        setVal(serial);
+        notify(
+          current
+            ? `Letta ${serial}, diversa da quella salvata (${current}): premi ✓ per sostituirla`
+            : `Letta ${serial} ma con poca sicurezza: controlla e premi ✓ per salvarla`,
+          "err"
+        );
       }
-      if (up?.ok) onDone();
-      else notify("Foto non salvata sullo slot", "err");
+      onDone();
     } finally {
       setBusy(null);
     }
@@ -2041,7 +2063,8 @@ function SlotSerialCell({
   return (
     <div className="slot-serial">
       <input
-        className="mono"
+        className={"mono" + (dirty ? " unsaved" : "")}
+        title={dirty ? "Non ancora salvata: premi ✓" : undefined}
         value={val}
         onChange={(e) => setVal(e.target.value)}
         placeholder="matricola…"

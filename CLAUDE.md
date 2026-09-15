@@ -469,9 +469,18 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   loader passa le eliminate a parte in `photoTrash`.
   API: `DELETE /api/machines/[id]/photos/[photoId]` · `PATCH …` `{restore:true}`.
 - **Matricola da foto (OCR)**: pulsante fotocamera nella cella matricola →
-  `POST /api/vision/serial` (Claude Haiku) su copia ridotta a 1600 px
-  (`src/lib/image.ts`), l'originale va sullo slot. La proposta resta in
-  `pendingSerials` finché non si salva con ✓ (sopravvive al refresh).
+  `POST /api/vision/serial` → `src/lib/serialOcr.ts` (**Claude Opus 5**,
+  effort medium, output JSON: serial + etichetta + confidenza + codici letti)
+  su copia ridotta a 1600 px (`src/lib/image.ts`); l'originale va sullo slot.
+  **Salvataggio automatico** se lo slot è vuoto e la confidenza non è bassa
+  (evento a diario "Matricola assegnata"); se lo slot ha già un'altra matricola
+  o la lettura è incerta resta una proposta (campo giallo) da confermare con ✓.
+  - Perché non Haiku: le targhette dei riduttori ZATO in foto sono ruotate o
+    capovolte e hanno accanto tipo (GB.26004.FS) e rapporto (1:400). Misurato
+    su 10 foto reali di M-2026-0007: Haiku 6/10 (0/4 sui riduttori: cifre
+    perse, zeri iniziali tolti, tipo al posto della matricola), Opus 5 10/10.
+  - Il primo flusso chiedeva sempre ✓: nessuno lo premeva e il 14/09 10 foto
+    su slot sono rimaste senza matricola.
 - **Miniature nello slot componente**: la colonna Foto di Componenti &
   Matricole mostra l'ultima foto dello slot (clic = apre) con il conteggio
   delle altre; prima la foto finiva solo in Foto produzione perché il loader
