@@ -407,24 +407,20 @@ export default function AllestimentoSheets({
                 ))}
               </div>
             ) : (
-              <input
-                className="al-input"
-                value={draft.header.tipo ?? ""}
-                disabled={disabled}
-                onChange={(e) => setHeader("tipo", e.target.value)}
-                placeholder="Es. GF4000.II"
-              />
+              <span className="al-kv-value">{draft.header.tipo}</span>
             )}
           </div>
           <div className="al-kv">
             <span className="al-kv-label">Collaudato da</span>
-            <input
-              className="al-input"
-              value={draft.header.collaudatoDa ?? ""}
-              disabled={disabled}
-              onChange={(e) => setHeader("collaudatoDa", e.target.value)}
-              placeholder="Nome o e-mail"
-            />
+            {draft.header.collaudatoDa ? (
+              <span className="al-kv-value" title="Chi ha firmato la check list di collaudo">
+                {draft.header.collaudatoDa}
+              </span>
+            ) : (
+              <span className="al-kv-value al-kv-pending" title="Si compila da solo con la firma della check list di collaudo">
+                In attesa del collaudo
+              </span>
+            )}
           </div>
         </div>
 

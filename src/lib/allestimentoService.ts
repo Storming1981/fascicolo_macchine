@@ -116,6 +116,22 @@ function readHeader(raw: unknown): SheetHeader {
   return { tipo: str(h.tipo, 80), collaudatoDa: str(h.collaudatoDa, 120) };
 }
 
+/**
+ * Campi d'intestazione che non si compilano a mano: il tipo GF del trituratore
+ * è sempre GF4000 e "Collaudato da" è chi firma (compilatore) la check list di
+ * collaudo M7.3 del fascicolo, uguale su entrambe le schede.
+ */
+function fixedHeader(
+  kind: SheetKind,
+  header: SheetHeader,
+  machine: { model: string; collaudo: { compilerName: string | null } | null }
+): SheetHeader {
+  return {
+    tipo: kind === "TRITURATORE" ? defaultTipo(kind, machine.model) : header.tipo || defaultTipo(kind, machine.model),
+    collaudatoDa: machine.collaudo?.compilerName ?? "",
+  };
+}
+
 function readValues(raw: unknown): SheetValues {
   return (raw && typeof raw === "object" ? raw : {}) as SheetValues;
 }
@@ -127,12 +143,12 @@ export async function loadSheet(machineId: string, kind: SheetKind) {
     include: {
       components: { include: { items: { orderBy: { position: "asc" } } } },
       allestimenti: { where: { kind } },
+      collaudo: { select: { compilerName: true } },
     },
   });
   if (!machine) return null;
   const rec = machine.allestimenti[0] ?? null;
-  const header = readHeader(rec?.header);
-  if (!header.tipo) header.tipo = defaultTipo(kind, machine.model);
+  const header = fixedHeader(kind, readHeader(rec?.header), machine);
   return {
     machine,
     kind,
@@ -163,7 +179,7 @@ export async function saveSheet(
   const before = await loadSheet(machineId, kind);
   if (!before) throw new Error("Macchina non trovata");
 
-  const header = readHeader(input.header);
+  const header = fixedHeader(kind, readHeader(input.header), before.machine);
   const incoming = readValues(input.values);
   const def = sheetDef(kind);
 

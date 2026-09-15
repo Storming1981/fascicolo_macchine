@@ -176,9 +176,6 @@ export default function MachineDetail({
           )}
         </div>
         <div className="detail-actions">
-          <button className="btn-ghost" onClick={() => window.print()}>
-            <Icon name="download" size={15} /> Stampa fascicolo
-          </button>
           {caps.intervention && (
             <button className="btn-primary" onClick={() => setIntervention({})}>
               <Icon name="plus" size={15} /> Nuovo intervento
@@ -1510,10 +1507,10 @@ function TabComponenti({
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
-  // BLUE DEVIL: i componenti si compilano nelle schede M5.16 / M5.17; l'elenco
-  // per gruppo resta consultabile come vista alternativa.
+  // BLUE DEVIL: i componenti si compilano solo nelle schede M5.16 / M5.17. Le
+  // altre tipologie restano sull'elenco per gruppo finché non avranno le loro.
   const sheetsMode = hasAllestimentoSheets(machine.plantType);
-  const [view, setView] = useState<"schede" | "elenco">(sheetsMode ? "schede" : "elenco");
+  const view: "schede" | "elenco" = sheetsMode ? "schede" : "elenco";
   const [open, setOpen] = useState<string | null>(machine.components[0]?.groupId ?? null);
   const photoRef = useRef<HTMLInputElement>(null);
   const [target, setTarget] = useState<string | null>(null);
@@ -1644,16 +1641,6 @@ function TabComponenti({
           <span className="muted">Matricole censite:</span> <strong>{totalSerials}</strong>
         </div>
         <div className="cmp-actions">
-          {sheetsMode && (
-            <div className="seg-tabs">
-              <button className={"seg-tab" + (view === "schede" ? " active" : "")} onClick={() => setView("schede")}>
-                Schede allestimento
-              </button>
-              <button className={"seg-tab" + (view === "elenco" ? " active" : "")} onClick={() => setView("elenco")}>
-                Elenco per gruppo
-              </button>
-            </div>
-          )}
           {canEdit && (
             <button className="btn-primary-sm" onClick={() => setAddOpen(true)}>
               <Icon name="plus" size={14} /> Aggiungi componente

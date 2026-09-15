@@ -498,9 +498,12 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   `machine.intervention` o `machine.edit`, 400 sulle altre tipologie), ogni
   cambio annotato a diario. Colonna *Tirante giunto* nell'elenco macchine
   (casella in sola lettura, "—" per le non BLUE DEVIL).
-- **Schede di allestimento BLUE DEVIL** (M5.16 Trituratore / M5.17 Container),
-  vista predefinita di Componenti & Matricole per i BLUE DEVIL (l'elenco per
-  gruppo resta come vista alternativa). Definizioni in `src/lib/allestimento.ts`.
+- **Schede di allestimento BLUE DEVIL** (M5.16 Trituratore / M5.17 Container):
+  per i BLUE DEVIL sono l'**unica** vista di Componenti & Matricole (l'elenco per
+  gruppo resta solo per le altre tipologie, finché non avranno le loro schede).
+  Intestazione non editabile: Tipo GF trituratore sempre **GF4000**; *Collaudato
+  da* (su entrambe) = compilatore che firma la check list di collaudo M7.3
+  (`Collaudo.compilerName`), calcolato in `fixedHeader`. Definizioni in `src/lib/allestimento.ts`.
   **Nessun dato duplicato**: le righe con matricola puntano ai gruppi componente
   (la specifica è `Component.brand` o un campo `extra`, le matricole sono gli
   slot con OCR/foto), il resto (colori, fornitori, controlli Sì/No/N.a.) sta in

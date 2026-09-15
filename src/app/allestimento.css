@@ -50,6 +50,7 @@
 .al-kv { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .al-kv-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
 .al-kv-value { font-size: 15px; font-weight: 600; color: var(--text); min-height: 36px; display: flex; align-items: center; }
+.al-kv-pending { font-size: 13px; font-weight: 500; color: var(--muted); font-style: italic; }
 .al-hero-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); font-size: 13px; }
 .al-signed { display: inline-flex; align-items: center; gap: 10px; color: #047857; }
 .al-sig-img { height: 34px; max-width: 150px; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: 6px; }

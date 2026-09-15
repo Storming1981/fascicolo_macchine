@@ -220,9 +220,12 @@ export function hasAllestimentoSheets(plantType: string | null | undefined): boo
   return (plantType ?? "").trim().toUpperCase() === "BLUE DEVIL";
 }
 
+/** Tipo GF del trituratore: fisso, i BLUE DEVIL sono tutti GF4000. */
+export const TIPO_GF_TRITURATORE = "GF4000";
+
 export function defaultTipo(kind: SheetKind, model: string): string {
   if (kind === "CONTAINER") return /DIESEL/i.test(model) ? "CONTAINER D" : "CONTAINER E";
-  return "";
+  return TIPO_GF_TRITURATORE;
 }
 
 export function sheetCtx(kind: SheetKind, header: SheetHeader, model: string): SheetCtx {
