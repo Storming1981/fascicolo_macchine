@@ -498,6 +498,23 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   `machine.intervention` o `machine.edit`, 400 sulle altre tipologie), ogni
   cambio annotato a diario. Colonna *Tirante giunto* nell'elenco macchine
   (casella in sola lettura, "—" per le non BLUE DEVIL).
+- **Schede di allestimento BLUE DEVIL** (M5.16 Trituratore / M5.17 Container),
+  vista predefinita di Componenti & Matricole per i BLUE DEVIL (l'elenco per
+  gruppo resta come vista alternativa). Definizioni in `src/lib/allestimento.ts`.
+  **Nessun dato duplicato**: le righe con matricola puntano ai gruppi componente
+  (la specifica è `Component.brand` o un campo `extra`, le matricole sono gli
+  slot con OCR/foto), il resto (colori, fornitori, controlli Sì/No/N.a.) sta in
+  `AllestimentoSheet.values`. Mappature scelte: condizionatore = `cooling`,
+  radiatori = `dissipators`, Valvola Max = `hyd_pumps.extra.valves`, taglio di
+  pressione prende di default `pressureSettings`; quadro elettrico e HMI in una
+  sezione in più del container (non sono sul modulo). Nuovo gruppo
+  `motor_blocks` (Blocchi motore), creato al volo sui fascicoli esistenti da
+  `ensureSheetComponents`. Tipo container E/D mostra motori elettrici o diesel.
+  Firma compilatore (penna o firma personale) → evento a diario; se la scheda
+  firmata viene modificata la firma decade. PDF rigenerato dai dati correnti
+  (`src/lib/allestimentoPdf.ts`, una pagina A4 come il modulo).
+  API: `GET|PUT|POST /api/machines/[id]/allestimento` ·
+  `GET /api/machines/[id]/allestimento/[kind]/pdf`.
 - **Stato/avanzamento** modificabili dal dettaglio (slider + select), evento a diario.
 - **Nuovo intervento**: fase, tipo (sostituzione/ispezione/riparazione/nota),
   matricole, foto, firma PIN o a penna su canvas → diario + firma + aggiorna seriale.

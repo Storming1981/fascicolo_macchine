@@ -1,0 +1,29 @@
+/* Schede di allestimento BLUE DEVIL (M5.16 / M5.17) — src/components/AllestimentoSheets.tsx */
+.al-wrap { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.al-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.al-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.al-actions a { text-decoration: none; }
+.al-head { padding: 14px 16px; }
+.al-head-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.al-head-grid .field-label { display: block; margin-bottom: 4px; }
+.al-sign-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.al-signed { display: inline-flex; align-items: center; gap: 6px; color: #047857; font-size: 13px; flex-wrap: wrap; }
+.al-sig-img { height: 30px; max-width: 140px; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: 4px; }
+.al-section { padding: 0; overflow: hidden; }
+.al-section-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 11px 16px; border-bottom: 1px solid var(--border); background: var(--bg-3); }
+.al-section-title h3 { margin: 0; font-size: 12.5px; letter-spacing: 0.04em; color: var(--navy); }
+.al-table td { vertical-align: top; }
+.al-table input, .al-table select { width: 100%; min-width: 120px; box-sizing: border-box; }
+.al-linked { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 99px; font-size: 10px; background: var(--accent-soft); color: var(--accent); vertical-align: middle; }
+.al-serials { display: flex; flex-direction: column; gap: 6px; }
+.al-serial { display: grid; grid-template-columns: 78px minmax(170px, 1fr) auto; align-items: center; gap: 8px; }
+.al-serial-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.al-custom-title { margin: 8px 0; font-size: 13px; color: var(--navy); }
+@media (max-width: 900px) {
+  .al-head-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .al-head-grid { grid-template-columns: 1fr; }
+  .al-serial { grid-template-columns: 1fr auto; }
+  .al-serial-label { grid-column: 1 / -1; }
+}

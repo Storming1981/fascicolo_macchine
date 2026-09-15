@@ -15,6 +15,8 @@ import {
   COUNTRIES,
 } from "@/lib/domain";
 import { CUSTOM_MODEL, hasTiranteGiunto } from "@/lib/plant";
+import { hasAllestimentoSheets } from "@/lib/allestimento";
+import AllestimentoSheets from "@/components/AllestimentoSheets";
 import { MILESTONES, milestoneDef, SOURCE_LABEL, isAutoSource } from "@/lib/milestones";
 import { CHECKLIST_TRITURATORE } from "@/lib/checklist";
 import { fmtDate, fmtBytes, fmtDateTime } from "@/lib/format";
@@ -211,6 +213,8 @@ export default function MachineDetail({
         <TabComponenti
           machine={machine}
           canEdit={caps.intervention}
+          canSign={caps.intervention}
+          hasSavedSignature={currentUser.hasSignature}
           onReplace={caps.intervention ? (c) => setIntervention(c) : undefined}
           onDone={refresh}
           notify={notify}
@@ -1489,16 +1493,24 @@ function OrderPicker({
 function TabComponenti({
   machine,
   canEdit,
+  canSign,
+  hasSavedSignature,
   onReplace,
   onDone,
   notify,
 }: {
   machine: Machine;
   canEdit?: boolean;
+  canSign?: boolean;
+  hasSavedSignature?: boolean;
   onReplace?: (c: { groupId: string; itemId: string; itemLabel: string; oldSerial: string }) => void;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
+  // BLUE DEVIL: i componenti si compilano nelle schede M5.16 / M5.17; l'elenco
+  // per gruppo resta consultabile come vista alternativa.
+  const sheetsMode = hasAllestimentoSheets(machine.plantType);
+  const [view, setView] = useState<"schede" | "elenco">(sheetsMode ? "schede" : "elenco");
   const [open, setOpen] = useState<string | null>(machine.components[0]?.groupId ?? null);
   const photoRef = useRef<HTMLInputElement>(null);
   const [target, setTarget] = useState<string | null>(null);
@@ -1628,13 +1640,23 @@ function TabComponenti({
           <span className="dot-sep"> · </span>
           <span className="muted">Matricole censite:</span> <strong>{totalSerials}</strong>
         </div>
-        {canEdit && (
-          <div className="cmp-actions">
+        <div className="cmp-actions">
+          {sheetsMode && (
+            <div className="seg-tabs">
+              <button className={"seg-tab" + (view === "schede" ? " active" : "")} onClick={() => setView("schede")}>
+                Schede allestimento
+              </button>
+              <button className={"seg-tab" + (view === "elenco" ? " active" : "")} onClick={() => setView("elenco")}>
+                Elenco per gruppo
+              </button>
+            </div>
+          )}
+          {canEdit && (
             <button className="btn-primary-sm" onClick={() => setAddOpen(true)}>
               <Icon name="plus" size={14} /> Aggiungi componente
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {hasTiranteGiunto(machine.plantType) && (
@@ -1668,10 +1690,29 @@ function TabComponenti({
         onChange={(e) => uploadItemPhoto(e.target.files)}
       />
 
+      {sheetsMode && view === "schede" && (
+        <AllestimentoSheets
+          machine={machine}
+          canEdit={!!canEdit}
+          canSign={!!canSign}
+          hasSavedSignature={!!hasSavedSignature}
+          renderSerial={(it) => (
+            <SlotSerialCell machineId={machine.id} item={it} canEdit={!!canEdit} onDone={onDone} notify={notify} />
+          )}
+          renderPhoto={photoCell}
+          onDone={onDone}
+          notify={notify}
+        />
+      )}
+
+      {sheetsMode && view === "schede" && customComps.length > 0 && (
+        <h3 className="al-custom-title">Componenti personalizzati</h3>
+      )}
+
       <div className="cmp-list">
         {COMPONENT_GROUPS.map((g) => {
           const c = machine.components.find((x) => x.groupId === g.id);
-          if (!c) return null;
+          if (!c || view === "schede") return null;
           const filled = c.items.filter((i) => i.serial).length;
           const isOpen = open === g.id;
           return (

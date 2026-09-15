@@ -32,6 +32,15 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     excel: { brandCol: "L", serialCols: ["M", "N", "O", "P"] },
   },
   {
+    // Non presente nel file MATRICOLE: nasce con la scheda allestimento trituratore M5.16.
+    id: "motor_blocks",
+    label: "Blocchi motore",
+    en: "MOTOR BLOCKS",
+    icon: "rotor",
+    slots: ["Blocco #1", "Blocco #2", "Blocco #3", "Blocco #4"],
+    excel: { serialCols: [] },
+  },
+  {
     id: "hyd_pumps",
     label: "Pompe idrauliche",
     en: "HIDRAULIC PUMPS",

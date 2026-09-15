@@ -171,6 +171,7 @@ model Machine {
   milestones  MachineMilestone[]
   machineNotes MachineNote[]
   collaudo    Collaudo?
+  allestimenti AllestimentoSheet[]
   customerRef Customer?    @relation(fields: [customerId], references: [id])
   interventi  Intervento[]
   conversations Conversation[]
@@ -200,6 +201,30 @@ model Collaudo {
   compiler User?   @relation("CollaudoCompiler", fields: [compilerId], references: [id])
   approver User?   @relation("CollaudoApprover", fields: [approverId], references: [id])
 
+  @@index([machineId])
+}
+
+// Schede di allestimento BLUE DEVIL (M5.16 Trituratore / M5.17 Container).
+// Le specifiche e le matricole dei componenti stanno su Component/ComponentItem;
+// qui solo le voci proprie della scheda. Definizioni in src/lib/allestimento.ts.
+model AllestimentoSheet {
+  id                String    @id @default(cuid())
+  machineId         String
+  kind              String // TRITURATORE | CONTAINER
+  header            Json      @default("{}") // { tipo, collaudatoDa }
+  values            Json      @default("{}") // { rowKey: { spec, serial, note } }
+  status            String    @default("DRAFT") // DRAFT | SIGNED
+  compilerId        String?
+  compilerName      String?
+  compiledAt        DateTime?
+  compilerSignature String?   @db.Text // dataURL
+  updatedByName     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  machine Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@unique([machineId, kind])
   @@index([machineId])
 }
 
