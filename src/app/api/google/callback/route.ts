@@ -3,13 +3,14 @@ import { jwtVerify } from "jose";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { isGoogleConfigured, exchangeCodeAndSave, type GoogleTarget } from "@/lib/google";
+import { absoluteUrl } from "@/lib/absoluteUrl";
 
 const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret-change-me");
 
 const back = (req: Request, params: Record<string, string>, ret = "impostazioni") => {
-  const u = new URL(`/${ret === "profilo" ? "profilo" : "impostazioni"}`, req.url);
-  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
-  return NextResponse.redirect(u);
+  const qs = new URLSearchParams(params).toString();
+  const page = ret === "profilo" ? "profilo" : "impostazioni";
+  return NextResponse.redirect(absoluteUrl(req, `/${page}?${qs}`));
 };
 
 /**
@@ -19,7 +20,7 @@ const back = (req: Request, params: Record<string, string>, ret = "impostazioni"
  */
 export async function GET(req: Request) {
   const user = await currentUser();
-  if (!user) return NextResponse.redirect(new URL("/login", req.url));
+  if (!user) return NextResponse.redirect(absoluteUrl(req, "/login"));
   if (!isGoogleConfigured()) return back(req, { google: "err", msg: "Google non configurato" });
 
   const sp = new URL(req.url).searchParams;

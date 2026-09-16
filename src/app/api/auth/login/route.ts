@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server";
+import { absoluteUrl as absolute } from "@/lib/absoluteUrl";
 import { prisma } from "@/lib/db";
 import { verifyPassword, signSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 
 /** URL assoluto sul dominio pubblico (dietro reverse proxy). */
-function absolute(req: Request, path: string): string {
-  const proto = req.headers.get("x-forwarded-proto") || "https";
-  const host = req.headers.get("host") || "localhost";
-  return `${proto}://${host}${path}`;
-}
-
 /**
  * Login. Accetta sia una POST di FORM nativa (redirect dal server: robusto su
  * iOS Safari, dove il Set-Cookie va applicato durante una navigazione reale) sia

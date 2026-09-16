@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { isGoogleConfigured, buildConsentUrl, type GoogleTarget } from "@/lib/google";
+import { absoluteUrl } from "@/lib/absoluteUrl";
 
 const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret-change-me");
 
@@ -15,7 +16,7 @@ const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret-c
  */
 export async function GET(req: Request) {
   const user = await currentUser();
-  if (!user) return NextResponse.redirect(new URL("/login", req.url));
+  if (!user) return NextResponse.redirect(absoluteUrl(req, "/login"));
 
   const sp = new URL(req.url).searchParams;
   const target: GoogleTarget = sp.get("target") === "company" ? "company" : "me";
