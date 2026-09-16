@@ -4,12 +4,15 @@ import { COMPONENT_GROUPS } from "./components";
 import {
   allListKeys,
   allRows,
+  SHEET_KINDS,
   defaultTipo,
   isListRow,
   listKey,
   resolveValues,
   sheetDef,
   sheetGroupIds,
+  sheetKindsFor,
+  serialListKey,
   type SheetHeader,
   type SheetKind,
   type SheetOptions,
@@ -48,12 +51,13 @@ async function writeSheetOptions(opts: SheetOptions) {
 export async function addSheetOptions(additions: { list: string; value: string }[]): Promise<SheetOptions> {
   const valid = allListKeys();
   const defaults = new Map<string, string[]>();
-  for (const def of [sheetDef("TRITURATORE"), sheetDef("CONTAINER")])
-    for (const r of allRows(def))
-      if (isListRow(r)) {
-        const k = listKey(def.kind, r);
-        defaults.set(k, [...(defaults.get(k) ?? []), ...(r.suggest ?? [])]);
-      }
+  const addDefaults = (k: string, vals: string[]) =>
+    defaults.set(k, [...(defaults.get(k) ?? []), ...vals]);
+  for (const kind of SHEET_KINDS)
+    for (const r of allRows(sheetDef(kind))) {
+      if (isListRow(r)) addDefaults(listKey(kind, r), r.suggest ?? []);
+      if (r.serialList) addDefaults(serialListKey(kind, r), r.serialList);
+    }
 
   const opts = await getSheetOptions();
   let changed = false;
@@ -87,10 +91,15 @@ export async function removeSheetOption(list: string, value: string): Promise<Sh
  * "Blocchi motore" sui fascicoli importati prima che esistesse). Idempotente.
  */
 export async function ensureSheetComponents(machineId: string): Promise<number> {
+  const machine = await prisma.machine.findUnique({ where: { id: machineId }, select: { plantType: true } });
+  if (!machine) return 0;
+  // Solo i gruppi delle schede di QUESTA tipologia: su una cesoia non hanno
+  // senso i riduttori del trituratore.
+  const groups = sheetGroupIds(sheetKindsFor(machine.plantType));
   const existing = await prisma.component.findMany({ where: { machineId }, select: { groupId: true } });
   const have = new Set(existing.map((c) => c.groupId));
   let created = 0;
-  for (const gid of sheetGroupIds()) {
+  for (const gid of groups) {
     if (have.has(gid)) continue;
     const g = COMPONENT_GROUPS.find((x) => x.id === gid);
     if (!g) continue;
@@ -113,7 +122,7 @@ export async function ensureSheetComponents(machineId: string): Promise<number> 
 
 function readHeader(raw: unknown): SheetHeader {
   const h = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  return { tipo: str(h.tipo, 80), collaudatoDa: str(h.collaudatoDa, 120) };
+  return { tipo: str(h.tipo, 80), collaudatoDa: str(h.collaudatoDa, 120), matricola: str(h.matricola, 80) };
 }
 
 /**
@@ -126,10 +135,15 @@ function fixedHeader(
   header: SheetHeader,
   machine: { model: string; collaudo: { compilerName: string | null } | null }
 ): SheetHeader {
-  return {
+  const fields = sheetDef(kind).headerFields ?? [];
+  const out: SheetHeader = {
     tipo: kind === "TRITURATORE" ? defaultTipo(kind, machine.model) : header.tipo || defaultTipo(kind, machine.model),
-    collaudatoDa: machine.collaudo?.compilerName ?? "",
   };
+  // "Collaudato da" arriva dalla check list di collaudo; la matricola la scrive
+  // chi compila (i moduli mulino e cesoia la chiedono in testata).
+  if (fields.includes("collaudatoDa")) out.collaudatoDa = machine.collaudo?.compilerName ?? "";
+  if (fields.includes("matricola")) out.matricola = header.matricola ?? "";
+  return out;
 }
 
 function readValues(raw: unknown): SheetValues {
@@ -190,7 +204,7 @@ export async function saveSheet(
     const v = incoming[row.key] ?? {};
     const spec = str(v.spec);
     const note = str(v.note, 1000);
-    const serial = row.serialField ? str(v.serial, 120) : "";
+    const serial = row.serialField || row.serialList ? str(v.serial, 120) : "";
 
     if (row.bind) {
       const u = compUpdates.get(row.bind.group) ?? {};
@@ -268,12 +282,14 @@ export async function saveSheet(
 
   // Un valore scritto a mano in un campo a elenco entra nell'elenco: la volta
   // dopo si sceglie invece di riscriverlo.
-  await addSheetOptions(
-    allRows(def)
+  await addSheetOptions([
+    ...allRows(def)
       .filter(isListRow)
-      .map((row) => ({ list: listKey(kind, row), value: str(incoming[row.key]?.spec) }))
-      .filter((a) => a.value)
-  );
+      .map((row) => ({ list: listKey(kind, row), value: str(incoming[row.key]?.spec) })),
+    ...allRows(def)
+      .filter((row) => row.serialList)
+      .map((row) => ({ list: serialListKey(kind, row), value: str(incoming[row.key]?.serial) })),
+  ].filter((a) => a.value));
   return { signatureRevoked };
 }
 

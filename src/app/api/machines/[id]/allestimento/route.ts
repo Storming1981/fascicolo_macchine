@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
-import { hasAllestimentoSheets, isSheetKind, SHEET_KINDS } from "@/lib/allestimento";
+import { hasAllestimentoSheets, isSheetKind, sheetKindsFor, type SheetKind } from "@/lib/allestimento";
 import { ensureSheetComponents, getSheetOptions, loadSheet, saveSheet, signSheet } from "@/lib/allestimentoService";
 import { isGoogleConfigured, resolveSenderEmail } from "@/lib/google";
 
@@ -19,8 +19,13 @@ async function guard(id: string) {
   const machine = await prisma.machine.findUnique({ where: { id }, select: { id: true, plantType: true } });
   if (!machine) return { error: NextResponse.json({ error: "Macchina non trovata" }, { status: 404 }) };
   if (!hasAllestimentoSheets(machine.plantType))
-    return { error: NextResponse.json({ error: "Schede di allestimento disponibili solo per i BLUE DEVIL" }, { status: 400 }) };
-  return { user };
+    return {
+      error: NextResponse.json(
+        { error: "Nessuna scheda di allestimento prevista per questa tipologia impianto" },
+        { status: 400 }
+      ),
+    };
+  return { user, kinds: sheetKindsFor(machine.plantType) };
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -30,7 +35,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const created = await ensureSheetComponents(id);
   const sheets: Record<string, unknown> = {};
-  for (const kind of SHEET_KINDS) {
+  for (const kind of g.kinds) {
     const s = await loadSheet(id, kind);
     if (!s) continue;
     sheets[kind] = {
@@ -47,6 +52,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }
   return NextResponse.json({
     created,
+    kinds: g.kinds,
     sheets,
     options: await getSheetOptions(),
     // mittente per il modulo "Invia via e-mail" (casella personale o aziendale)
@@ -63,7 +69,8 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
 
   const b = await req.json().catch(() => null);
-  if (!b || !isSheetKind(b.kind)) return NextResponse.json({ error: "Dati non validi" }, { status: 400 });
+  if (!b || !isSheetKind(b.kind) || !g.kinds.includes(b.kind as SheetKind))
+    return NextResponse.json({ error: "Scheda non prevista per questa macchina" }, { status: 400 });
 
   const r = await saveSheet(id, b.kind, { header: b.header, values: b.values }, user);
   return NextResponse.json({ ok: true, ...r });
@@ -78,7 +85,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "Permesso negato per firmare la scheda" }, { status: 403 });
 
   const b = await req.json().catch(() => null);
-  if (!b || !isSheetKind(b.kind) || b.action !== "sign")
+  if (!b || !isSheetKind(b.kind) || b.action !== "sign" || !g.kinds.includes(b.kind as SheetKind))
     return NextResponse.json({ error: "Dati non validi" }, { status: 400 });
 
   const drawn = typeof b.signature === "string" && b.signature.startsWith("data:image") ? b.signature : null;

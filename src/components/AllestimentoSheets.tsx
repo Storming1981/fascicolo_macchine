@@ -3,12 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Icon from "@/components/Icon";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import {
-  SHEET_KINDS,
+  MATRICOLA_LABEL,
   YES_NO,
   YES_NO_NA,
   isListRow,
   listKey,
   listOptions,
+  serialListKey,
+  serialListOptions,
   sheetCommessa,
   sheetCtx,
   sheetDef,
@@ -39,6 +41,8 @@ type SheetDTO = {
 const KIND_META: Record<SheetKind, { label: string; icon: string }> = {
   TRITURATORE: { label: "Trituratore", icon: "gear" },
   CONTAINER: { label: "Container", icon: "box" },
+  MULINO: { label: "Mulino", icon: "rotor" },
+  CESOIA: { label: "Cesoia", icon: "blade" },
 };
 
 const filled = (v: string | undefined) => !!(v ?? "").trim();
@@ -79,6 +83,8 @@ export default function AllestimentoSheets({
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
   const [kind, setKind] = useState<SheetKind>("TRITURATORE");
+  // schede previste per la tipologia impianto del fascicolo (dal server)
+  const [kinds, setKinds] = useState<SheetKind[]>([]);
   const [sheets, setSheets] = useState<Record<string, SheetDTO> | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { header: SheetHeader; values: SheetValues }>>({});
   const [options, setOptions] = useState<SheetOptions>({});
@@ -98,6 +104,9 @@ export default function AllestimentoSheets({
       return;
     }
     setSheets(d.sheets);
+    const ks: SheetKind[] = d.kinds ?? [];
+    setKinds(ks);
+    setKind((k) => (ks.includes(k) ? k : ks[0] ?? k));
     setOptions(d.options ?? {});
     if (d.mail) setMail(d.mail);
     setDrafts(
@@ -186,7 +195,7 @@ export default function AllestimentoSheets({
   }
 
   if (loadErr) return <div className="form-error">{loadErr}</div>;
-  if (!sheets || !draft)
+  if (!sheets || !draft || !kinds.length)
     return <div className="al-loading muted">Caricamento schede di allestimento…</div>;
 
   const compOf = (groupId: string) => machine.components.find((c) => c.groupId === groupId);
@@ -271,6 +280,27 @@ export default function AllestimentoSheets({
         placeholder="Nota…"
       />
     );
+    // colonna Matricola a elenco (marche del modulo cartaceo)
+    if (row.serialList) {
+      const list = serialListKey(kind, row);
+      return (
+        <div className="al-side-stack">
+          <Combobox
+            value={draft.values[row.key]?.serial ?? ""}
+            options={serialListOptions(kind, row, options)}
+            custom={options[list] ?? []}
+            disabled={disabled}
+            canRemove={canManageOptions}
+            onChange={(v) => setValue(row.key, "serial", v)}
+            onAdd={async (v) => {
+              if (await addOption(list, v)) setValue(row.key, "serial", v);
+            }}
+            onRemove={(v) => removeOption(list, v)}
+          />
+          {note}
+        </div>
+      );
+    }
     if (row.serialField)
       return (
         <div className="al-side-stack">
@@ -279,7 +309,7 @@ export default function AllestimentoSheets({
             value={draft.values[row.key]?.serial ?? ""}
             disabled={disabled}
             onChange={(e) => setValue(row.key, "serial", e.target.value)}
-            placeholder="Matricola"
+            placeholder="Matricola / codice"
           />
           {note}
         </div>
@@ -314,7 +344,7 @@ export default function AllestimentoSheets({
       <div className="al-sticky">
         <div className="al-sticky-row">
           <div className="al-kinds" role="tablist">
-            {SHEET_KINDS.map((k) => {
+            {kinds.map((k) => {
               const p = kindProgress(k);
               return (
                 <button
@@ -419,18 +449,32 @@ export default function AllestimentoSheets({
               <span className="al-kv-value">{draft.header.tipo}</span>
             )}
           </div>
-          <div className="al-kv">
-            <span className="al-kv-label">Collaudato da</span>
-            {draft.header.collaudatoDa ? (
-              <span className="al-kv-value" title="Chi ha firmato la check list di collaudo">
-                {draft.header.collaudatoDa}
-              </span>
-            ) : (
-              <span className="al-kv-value al-kv-pending" title="Si compila da solo con la firma della check list di collaudo">
-                In attesa del collaudo
-              </span>
-            )}
-          </div>
+          {(def.headerFields ?? []).includes("collaudatoDa") && (
+            <div className="al-kv">
+              <span className="al-kv-label">Collaudato da</span>
+              {draft.header.collaudatoDa ? (
+                <span className="al-kv-value" title="Chi ha firmato la check list di collaudo">
+                  {draft.header.collaudatoDa}
+                </span>
+              ) : (
+                <span className="al-kv-value al-kv-pending" title="Si compila da solo con la firma della check list di collaudo">
+                  In attesa del collaudo
+                </span>
+              )}
+            </div>
+          )}
+          {(def.headerFields ?? []).includes("matricola") && (
+            <label className="al-kv">
+              <span className="al-kv-label">{MATRICOLA_LABEL[kind] ?? "Matricola"}</span>
+              <input
+                className="al-input mono"
+                value={draft.header.matricola ?? ""}
+                disabled={disabled}
+                onChange={(e) => setHeader("matricola", e.target.value)}
+                placeholder="Matricola"
+              />
+            </label>
+          )}
         </div>
 
         <div className="al-hero-foot">
@@ -549,11 +593,9 @@ export default function AllestimentoSheets({
           defaultSubject={`Schede di allestimento ${machine.code} — commessa ${machine.job}`}
           mail={mail}
           active={kind}
-          signed={{
-            TRITURATORE: sheets.TRITURATORE?.status === "SIGNED",
-            CONTAINER: sheets.CONTAINER?.status === "SIGNED",
-          }}
-          unsaved={SHEET_KINDS.some((k) => dirty[k])}
+          kinds={kinds}
+          signed={Object.fromEntries(kinds.map((k) => [k, sheets[k]?.status === "SIGNED"])) as Record<SheetKind, boolean>}
+          unsaved={kinds.some((k) => dirty[k])}
           onClose={() => setSendOpen(false)}
           onSent={(msg) => {
             setSendOpen(false);
@@ -747,6 +789,7 @@ function SendSheetsModal({
   defaultSubject,
   mail,
   active,
+  kinds,
   signed,
   unsaved,
   onClose,
@@ -757,6 +800,7 @@ function SendSheetsModal({
   defaultSubject: string;
   mail: { configured: boolean; from: string | null };
   active: SheetKind;
+  kinds: SheetKind[];
   signed: Record<SheetKind, boolean>;
   unsaved: boolean;
   onClose: () => void;
@@ -769,15 +813,14 @@ function SendSheetsModal({
   const [body, setBody] = useState(
     "Buongiorno,\n\nin allegato le schede di allestimento dell'impianto.\n\nCordiali saluti"
   );
-  const [kinds, setKinds] = useState<Record<SheetKind, boolean>>({
-    TRITURATORE: true,
-    CONTAINER: true,
-  });
+  const [picked, setPicked] = useState<Record<string, boolean>>(
+    Object.fromEntries(kinds.map((k) => [k, true]))
+  );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const canSend = mail.configured && !!mail.from;
-  const chosen = SHEET_KINDS.filter((k) => kinds[k]);
+  const chosen = kinds.filter((k) => picked[k]);
 
   async function send() {
     setErr(null);
@@ -859,12 +902,12 @@ function SendSheetsModal({
           <div className="field">
             <span className="field-label">PDF allegati</span>
             <div className="al-send-files">
-              {SHEET_KINDS.map((k) => (
-                <label key={k} className={"al-send-file" + (kinds[k] ? " on" : "")}>
+              {kinds.map((k) => (
+                <label key={k} className={"al-send-file" + (picked[k] ? " on" : "")}>
                   <input
                     type="checkbox"
-                    checked={kinds[k]}
-                    onChange={(e) => setKinds((s) => ({ ...s, [k]: e.target.checked }))}
+                    checked={!!picked[k]}
+                    onChange={(e) => setPicked((s) => ({ ...s, [k]: e.target.checked }))}
                   />
                   <span className="al-send-file-icon">
                     <Icon name="doc" size={16} />

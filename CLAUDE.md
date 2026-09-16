@@ -498,9 +498,26 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   `machine.intervention` o `machine.edit`, 400 sulle altre tipologie), ogni
   cambio annotato a diario. Colonna *Tirante giunto* nell'elenco macchine
   (casella in sola lettura, "—" per le non BLUE DEVIL).
-- **Schede di allestimento BLUE DEVIL** (M5.16 Trituratore / M5.17 Container):
-  per i BLUE DEVIL sono l'**unica** vista di Componenti & Matricole (l'elenco per
-  gruppo resta solo per le altre tipologie, finché non avranno le loro schede).
+- **Schede di allestimento per tipologia impianto** — dove ci sono, sono
+  l'**unica** vista di Componenti & Matricole (l'elenco per gruppo resta per le
+  tipologie senza scheda). Mappatura in `sheetKindsFor()`:
+  **BLUE DEVIL** → M5.16 Trituratore + M5.17 Container · **BLUE SHARK** → M5.6
+  Mulino · **CESOIE** e **SPACCABINARI** → M5.18 Scheda costruzione cesoie.
+  Ogni `SheetDef` dichiara `plantTypes` e `headerFields` (`collaudatoDa` per le
+  schede BLUE DEVIL, `matricola` per mulino e cesoia). Le righe con
+  `serialList` hanno un **elenco anche nella colonna Matricola** (le marche del
+  modulo cartaceo: IMI/RIVAL/AVEROLDI, PSP/GELLI, ...), con le stesse voci
+  aggiungibili delle specifiche (chiave `KIND.row#marca`). Mulino e cesoia non
+  hanno righe condizionali: entrambe le alimentazioni (elettrica e diesel) stanno
+  sul modulo e si compila quella che serve.
+- **Check list di collaudo per tipologia** (`checklistFor()` in
+  `src/lib/checklist.ts`): **CESOIE / SPACCABINARI → M5.7 CHECK LIST CESOIA**
+  (28 voci, raggruppate in sezioni: lame, link, cesoia, funzionali, generali,
+  verniciatura); tutte le altre tipologie restano sulla **M7.3** (63 voci). La
+  colonna "NC" del modulo cartaceo non esiste a video: il riferimento della non
+  conformità va nella nota della voce. Il flusso (compila → firma → approva) e
+  l'API `/api/machines/[id]/collaudo` sono gli stessi.
+- **Schede BLUE DEVIL** (M5.16 Trituratore / M5.17 Container):
   Intestazione non editabile: Tipo GF trituratore sempre **GF4000**; *Collaudato
   da* (su entrambe) = compilatore che firma la check list di collaudo M7.3
   (`Collaudo.compilerName`), calcolato in `fixedHeader`. Definizioni in `src/lib/allestimento.ts`.

@@ -1,5 +1,5 @@
 import "server-only";
-import { hasAllestimentoSheets, sheetCommessa, type SheetKind } from "./allestimento";
+import { hasAllestimentoSheets, sheetCommessa, sheetDef, type SheetKind } from "./allestimento";
 import { loadSheet } from "./allestimentoService";
 import { generateAllestimentoPdf } from "./allestimentoPdf";
 
@@ -29,7 +29,8 @@ export async function renderSheetPdf(
     compiledAt: s.compiledAt,
     compilerSignature: s.compilerSignature,
   });
-  const filename = `${kind === "CONTAINER" ? "M5.17_Scheda_container" : "M5.16_Scheda_trituratore"}_${commessa}.pdf`.replace(
+  const def = sheetDef(kind);
+  const filename = `${def.code}_${def.title.toLowerCase().replace(/^scheda /, "scheda_")}_${commessa}.pdf`.replace(
     /[^\w.\-]+/g,
     "_"
   );

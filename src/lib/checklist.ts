@@ -1,4 +1,7 @@
-export type ChecklistItem = { n: number; text: string };
+export type ChecklistItem = { n: number; text: string; section?: string };
+
+/** Check list di collaudo in uso per una tipologia impianto. */
+export type ChecklistDefinition = { code: string; title: string; items: ChecklistItem[] };
 
 export const CHECKLIST_TRITURATORE: ChecklistItem[] = [
   { n: 1, text: `CONTROLLO ALIMENTAZIONE BATTERIE: tensione Batterie 24VDC e tensione Batterie tampone 24VDC` },
@@ -65,3 +68,61 @@ export const CHECKLIST_TRITURATORE: ChecklistItem[] = [
   { n: 62, text: `ARCHIVIARE PLC` },
   { n: 63, text: `VERIFICA COLLEGAMENTO LAN COMAP` },
 ];
+
+/**
+ * M5.7 CHECK LIST CESOIA — collaudo di cesoie e spaccabinari (al posto della
+ * M7.3, che vale per i trituratori). Il modulo cartaceo ha anche una colonna
+ * "NC (inserire rif. NC)": il riferimento della non conformita va nella nota
+ * della voce.
+ */
+export const CHECKLIST_CESOIE: ChecklistItem[] = [
+  { n: 1, section: "CONTROLLI LAME", text: `Verifica gioco taglio lame telaio/lame becco` },
+  { n: 2, section: "CONTROLLI LAME", text: `Verifica gioco taglio puntali/lama razor` },
+  { n: 3, section: "CONTROLLI LAME", text: `Verifica accoppiamento lame, assenza gradini, gap, angoli errati, disallineamenti` },
+  { n: 4, section: "CONTROLLI LAME", text: `Verifica serraggio viti a coppia lame (si veda tabella per valori esatti)` },
+  { n: 5, section: "CONTROLLI LINK", text: `Controllo visivo tenuta tubi flessibili (errato crimpaggio, danneggiamento)` },
+  { n: 6, section: "CONTROLLI LINK", text: `Verifica generale del serraggio di tutte le viti a coppia, fissaggio ralla/telaio link (si veda tabella per valori esatti)` },
+  { n: 7, section: "CONTROLLI LINK", text: `Inserimento grasso per ralla e verifica` },
+  { n: 8, section: "CONTROLLI LINK", text: `Verifica serraggio a coppia di tutti i connettori tubi olio (si veda tabella per valori esatti) - MARCARE CON SMALTO INDELEBILE GIALLO TUTTI I CONNETTORI SERRATI CORRETTAMENTE (coprire con nastro adesivo la zona marcata con smalto prima di procedere con la verniciatura)` },
+  { n: 9, section: "CONTROLLI CESOIA", text: `Controlli dimensionali componenti torneria (rif. disegno)` },
+  { n: 10, section: "CONTROLLI CESOIA", text: `Controllo gioco perno centrale` },
+  { n: 11, section: "CONTROLLI CESOIA", text: `Controllo giochi cilindro (forcella/becco e camicia/telaio)` },
+  { n: 12, section: "CONTROLLI CESOIA", text: `Verifica ingrassaggio becco e perno centrale` },
+  { n: 13, section: "CONTROLLI CESOIA", text: `Controllo tenuta tubi flessibili (errato crimpaggio, danneggiamento)` },
+  { n: 14, section: "CONTROLLI CESOIA", text: `Controllo fissaggio raccordi tubi flessibili/flange SAE (giunto/cilindro)` },
+  { n: 15, section: "CONTROLLI CESOIA", text: `Verifica serraggio a coppia di tutti i connettori tubi olio (si veda tabella per valori esatti) - MARCARE CON SMALTO INDELEBILE GIALLO TUTTI I CONNETTORI SERRATI CORRETTAMENTE DOVE PRESENTE RACCORDO GIREVOLE (coprire con nastro adesivo la zona marcata con smalto prima di procedere con la verniciatura)` },
+  { n: 16, section: "CONTROLLI FUNZIONALI", text: `Verifica impianto linea apertura/chiusura becco (si veda tabella per il corretto valore di pressione, compreso tra 350 e 380 bar)` },
+  { n: 17, section: "CONTROLLI FUNZIONALI", text: `Verifica impianto rotazione (si veda tabella per il corretto valore di pressione, compreso tra 100 e 150 bar)` },
+  { n: 18, section: "CONTROLLI FUNZIONALI", text: `Controllo visivo per escludere perdite di olio` },
+  { n: 19, section: "CONTROLLI FUNZIONALI", text: `Controllo rumori anomali` },
+  { n: 20, section: "CONTROLLI GENERALI", text: `Verifica presenza e integrita targhe CE (cesoia e sella)` },
+  { n: 21, section: "CONTROLLI GENERALI", text: `Verifica presenza e integrita pittogrammi di sicurezza` },
+  { n: 22, section: "CONTROLLI GENERALI", text: `Controllo saldature antiusura, presenza e posizioni` },
+  { n: 23, section: "CONTROLLI GENERALI", text: `Controllo presenza cartello indicazioni pressioni e portate` },
+  { n: 24, section: "CONTROLLI GENERALI", text: `Controllo imballo` },
+  { n: 25, section: "CONTROLLI VERNICIATURA", text: `Controllo estetico: verificare la mancanza di bolle su tutta la superficie` },
+  { n: 26, section: "CONTROLLI VERNICIATURA", text: `Verifica presenza della marcatura con smalto giallo` },
+  { n: 27, section: "CONTROLLI VERNICIATURA", text: `Verifica con quadrettatura e prova strappo nelle posizioni indicate A CAMPIONE` },
+  { n: 28, section: "CONTROLLI VERNICIATURA", text: `Verifica spessore verniciatura con spessimetro nelle posizioni indicate (spessore vernice asciutta 120 micron) A CAMPIONE` },
+];
+
+const CHECKLIST_M73: ChecklistDefinition = {
+  code: "M7.3",
+  title: "CHECK LIST COLLAUDO TRITURATORE",
+  items: CHECKLIST_TRITURATORE,
+};
+
+const CHECKLIST_M57: ChecklistDefinition = {
+  code: "M5.7",
+  title: "CHECK LIST CESOIA",
+  items: CHECKLIST_CESOIE,
+};
+
+/**
+ * Check list di collaudo da usare per una tipologia impianto: cesoie e
+ * spaccabinari usano la M5.7, tutto il resto la M7.3.
+ */
+export function checklistFor(plantType: string | null | undefined): ChecklistDefinition {
+  const p = (plantType ?? "").trim().toUpperCase();
+  return p === "CESOIE" || p === "SPACCABINARI" ? CHECKLIST_M57 : CHECKLIST_M73;
+}

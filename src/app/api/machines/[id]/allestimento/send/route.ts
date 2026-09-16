@@ -66,7 +66,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: e instanceof Error ? e.message : "Invio fallito" }, { status: 502 });
   }
 
-  const labels = kinds.map((k) => `${sheetDef(k).code} ${k === "CONTAINER" ? "Container" : "Trituratore"}`);
+  const labels = kinds.map((k) => `${sheetDef(k).code} ${sheetDef(k).title.replace(/^SCHEDA (DI )?/i, "")}`);
   await prisma.diaryEvent.create({
     data: {
       machineId: id,

@@ -11,8 +11,8 @@
 //
 // Modulo condiviso client/server: niente import server-only.
 
-export type SheetKind = "TRITURATORE" | "CONTAINER";
-export const SHEET_KINDS: SheetKind[] = ["TRITURATORE", "CONTAINER"];
+export type SheetKind = "TRITURATORE" | "CONTAINER" | "MULINO" | "CESOIA";
+export const SHEET_KINDS: SheetKind[] = ["TRITURATORE", "CONTAINER", "MULINO", "CESOIA"];
 
 export type SheetInput = "text" | "yesno" | "yesnona";
 export type SheetCtx = { diesel: boolean };
@@ -32,6 +32,8 @@ export type SheetRow = {
   serials?: string;
   /** Matricola singola salvata nella scheda (es. targhetta CE). */
   serialField?: boolean;
+  /** La colonna Matricola è un elenco (marca/fornitore), non un testo libero. */
+  serialList?: string[];
   /** Specifica su tutta la larghezza (specifica + matricola), come nel modulo cartaceo. */
   wide?: boolean;
   when?: (ctx: SheetCtx) => boolean;
@@ -44,14 +46,18 @@ export type SheetDef = {
   code: string;
   title: string;
   rev: string;
+  /** Tipologie impianto che usano questa scheda. */
+  plantTypes: string[];
   typeLabel: string;
   typeOptions?: string[];
+  /** Campi d'intestazione oltre a commessa, paese e tipo. */
+  headerFields?: ("collaudatoDa" | "matricola")[];
   sections: SheetSection[];
 };
 
 export type SheetValue = { spec?: string; serial?: string; note?: string };
 export type SheetValues = Record<string, SheetValue>;
-export type SheetHeader = { tipo?: string; collaudatoDa?: string };
+export type SheetHeader = { tipo?: string; collaudatoDa?: string; matricola?: string };
 /** Voci aggiunte dagli operatori, per elenco. */
 export type SheetOptions = Record<string, string[]>;
 
@@ -59,6 +65,9 @@ export const YES_NO = ["Sì", "No"];
 export const YES_NO_NA = ["Sì", "No", "N.a."];
 const COLORS = ["BLUE OPACO 5017", "BIANCO OPACO 9003"];
 const PAINT = ["ZATO", "ZAMA"];
+const PAINT_MULINO = ["ZATO", "ARIO", "ZAMA", "TEMPONI"];
+const PREVISTO = ["Previsto", "Non previsto"];
+const STD_CUSTOM = ["STANDARD", "CUSTOM"];
 const GHIERE = ["CILINDRICA DIAMETRO EST. PICCOLO"];
 
 const isElectric = (c: SheetCtx) => !c.diesel;
@@ -69,7 +78,9 @@ export const SHEET_TRITURATORE: SheetDef = {
   code: "M5.16",
   title: "SCHEDA ALLESTIMENTO TRITURATORE",
   rev: "rev.00 Aprile 2023",
+  plantTypes: ["BLUE DEVIL"],
   typeLabel: "TIPO GF",
+  headerFields: ["collaudatoDa"],
   sections: [
     {
       key: "cavalletto",
@@ -146,8 +157,10 @@ export const SHEET_CONTAINER: SheetDef = {
   code: "M5.17",
   title: "SCHEDA ALLESTIMENTO CONTAINER",
   rev: "Rev. 00 maggio 22",
+  plantTypes: ["BLUE DEVIL"],
   typeLabel: "TIPO GF",
   typeOptions: ["CONTAINER E", "CONTAINER D"],
+  headerFields: ["collaudatoDa"],
   sections: [
     {
       key: "container",
@@ -207,17 +220,179 @@ export const SHEET_CONTAINER: SheetDef = {
   ],
 };
 
+export const SHEET_MULINO: SheetDef = {
+  kind: "MULINO",
+  code: "M5.6",
+  title: "SCHEDA ALLESTIMENTO MULINO",
+  rev: "rev.00 Giu 2023",
+  plantTypes: ["BLUE SHARK"],
+  typeLabel: "TIPO MULINO",
+  typeOptions: ["12-10", "16-13", "19-22"],
+  headerFields: ["matricola"],
+  sections: [
+    {
+      key: "elettrico",
+      title: "ALIMENTAZIONE MULINO ELETTRICO",
+      icon: "bolt",
+      rows: [
+        { key: "potenza_motore", label: "Potenza motore (kW)", free: true },
+        { key: "tensione_motore", label: "Tensione motore (V)", suggest: ["400", "690"], list: "tensione" },
+        { key: "frequenza_motore", label: "Frequenza (Hz)", suggest: ["50", "60"], list: "frequenza" },
+        { key: "marca_motori", label: "Marca motori", bind: { group: "electric_motor", field: "brand" }, serials: "electric_motor" },
+      ],
+    },
+    {
+      key: "diesel",
+      title: "ALIMENTAZIONE MULINO DIESEL",
+      icon: "engine",
+      rows: [
+        { key: "potenza_diesel", label: "Potenza motori (HP)", free: true },
+        { key: "classe_emissioni", label: "Classe emissioni motore", suggest: ["STAGE 0", "STAGE IIIA", "STAGE V", "TIER IVF"] },
+        { key: "marca_motore_diesel", label: "Marca motore", bind: { group: "diesel", field: "brand" }, serials: "diesel" },
+        { key: "marca_radiatore", label: "Marca radiatore", bind: { group: "dissipators", field: "brand" }, serials: "dissipators" },
+      ],
+    },
+    {
+      key: "impianto",
+      title: "ALLESTIMENTO IMPIANTO",
+      icon: "box",
+      rows: [
+        { key: "costruttore_container", label: "Costruttori Container", bind: { group: "container", field: "brand" }, serials: "container", suggest: ["SOGECO", "ECOFER"] },
+        { key: "coibentazione", label: "Coibentazione Container", input: "yesno" },
+        { key: "condizionatore", label: "Costruttore Condizionatore", bind: { group: "cooling", field: "brand" }, serials: "cooling", suggest: ["MITSUBISHI", "NON PRESENTE"] },
+        { key: "quadro_elettrico", label: "Quadro elettrico", bind: { group: "cabinet", field: "brand" }, serials: "cabinet" },
+        { key: "cassa_giunto", label: "Cassa giunto", suggest: PREVISTO, list: "previsto", serialList: ["IMI", "RIVAL", "AVEROLDI"] },
+        { key: "giunto_idraulico", label: "Giunto idraulico completo", suggest: PREVISTO, list: "previsto", serialList: ["SEW", "ALTRO"] },
+        { key: "impalcato", label: "Impalcato", suggest: ["ECOFER", "TRUSSARDI", "STAM"] },
+        { key: "corpo_mulino", label: "Corpo mulino", suggest: ["IMI", "RIVAL", "AVEROLDI"] },
+        { key: "rotore_scudato", label: "Rotore scudato", input: "yesno" },
+        { key: "martelli", label: "Martelli", suggest: ["OSSITAGLIO", "FUSIONE"], serialList: ["PSP", "CODITRA", "GELLI"] },
+        { key: "griglie", label: "Griglie", suggest: ["90x90", "100x120", "100x140", "160x160", "200x200"], serialList: ["PSP", "GELLI"] },
+        { key: "piano_vibrante", label: "Piano vibrante" },
+        { key: "centrale_idraulica", label: "Centrale Idraulica", bind: { group: "hyd_unit", field: "brand" }, serials: "hyd_unit", suggest: ["MAGNUM"] },
+        { key: "tamburo_magnetico", label: "Tamburo magnetico", suggest: PREVISTO, list: "previsto", serialList: ["TORRI", "SGM", "GAUSS", "DARTEK"] },
+        { key: "linea_aspirazione", label: "Impianto linea aspirazione", suggest: PREVISTO, list: "previsto", serialList: ["TVT", "ALTRO"] },
+        { key: "insonorizzazione", label: "Insonorizzazione", suggest: PREVISTO, list: "previsto", serialList: ["MIRO", "ALTRO"] },
+        { key: "impianto_separazione", label: "Impianto separazione", suggest: PREVISTO, list: "previsto", serialList: ["ITALSORT", "DECCA", "TELANDRO"] },
+        { key: "verniciatura_corpo", label: "Verniciatura corpo", suggest: PAINT_MULINO, list: "verniciatura" },
+        { key: "verniciatura_impalcato", label: "Verniciatura impalcato", suggest: PAINT_MULINO, list: "verniciatura" },
+        { key: "imballaggio", label: "Imballaggio", suggest: ["PARZIALE", "TOTALE", "NON PREVISTO"], serialList: ["EUROIMBALLI", "ALTRO"] },
+        { key: "colore", label: "Colore", suggest: COLORS, list: "colori" },
+      ],
+    },
+  ],
+};
+
+export const SHEET_CESOIA: SheetDef = {
+  kind: "CESOIA",
+  code: "M5.18",
+  title: "SCHEDA COSTRUZIONE CESOIE",
+  rev: "rev.00 Aprile 2023",
+  plantTypes: ["CESOIE", "SPACCABINARI"],
+  typeLabel: "MODELLO MACCHINA",
+  headerFields: ["matricola"],
+  sections: [
+    {
+      key: "cilindro",
+      title: "CILINDRO",
+      icon: "oil",
+      rows: [
+        { key: "marca_cilindro", label: "Marca cilindro", serialField: true },
+        { key: "spessori_post_lame", label: "Spessori posteriori - lato lame (mm)", free: true },
+        { key: "spessori_post_guida", label: "Spessori posteriori - lato lama guida (mm)", free: true },
+        { key: "spessori_ant_lame", label: "Spessori anteriori - lato lame (mm)", free: true },
+        { key: "spessori_ant_guida", label: "Spessori anteriori - lato lama guida (mm)", free: true },
+        { key: "tubi_link", label: "Tubi flessibili link", suggest: STD_CUSTOM, list: "standard_custom" },
+        { key: "tubi_cilindro", label: "Tubi flessibili cilindro", suggest: STD_CUSTOM, list: "standard_custom" },
+        { key: "valvola_rigenerativa", label: "Valvola rigenerativa (modello)", serialField: true },
+      ],
+    },
+    {
+      key: "lame",
+      title: "LAME",
+      icon: "blade",
+      rows: [
+        { key: "produttore_lame", label: "Produttore", suggest: ["CO.DI.TRA", "PSP", "GELLI"] },
+        { key: "durezza_puntali", label: "Durezza puntali", free: true },
+      ],
+    },
+    {
+      key: "ralla",
+      title: "RALLA",
+      icon: "gear",
+      rows: [{ key: "ralla_marca", label: "Marca (matricola = codice)", serialField: true }],
+    },
+    {
+      key: "motoriduttore",
+      title: "MOTORIDUTTORE",
+      icon: "rotor",
+      rows: [
+        { key: "mr_marca", label: "Marca (matricola = codice motore)", serialField: true },
+        { key: "mr_codice_riduttore", label: "Codice riduttore", free: true },
+        { key: "mr_codice_valvola", label: "Codice valvola", free: true },
+      ],
+    },
+    {
+      key: "vernice",
+      title: "VERNICE (RAL)",
+      icon: "drop",
+      rows: [{ key: "vernice_ral", label: "Vernice (RAL)", suggest: ["STANDARD (RAL 9005)"], wide: true }],
+    },
+    {
+      key: "giunto",
+      title: "GIUNTO GIREVOLE",
+      icon: "boost",
+      rows: [
+        { key: "giunto_marca", label: "Marca (matricola = codice)", serialField: true },
+        {
+          key: "raccorderia",
+          label: "Tipo raccorderia entrata giunto girevole",
+          suggest: ["BLOCCHETTI STANDARD", "GIUNTINI GIREVOLI", "SENZA BLOCCHETTI PER ATTACCO RAPIDO"],
+          wide: true,
+        },
+      ],
+    },
+    {
+      key: "note",
+      title: "NOTE PER PARTICOLARI VARI",
+      icon: "doc",
+      rows: [{ key: "note_particolari", label: "Note", free: true, wide: true }],
+    },
+  ],
+};
+
+const SHEET_DEFS: Record<SheetKind, SheetDef> = {
+  TRITURATORE: SHEET_TRITURATORE,
+  CONTAINER: SHEET_CONTAINER,
+  MULINO: SHEET_MULINO,
+  CESOIA: SHEET_CESOIA,
+};
+
 export function sheetDef(kind: SheetKind): SheetDef {
-  return kind === "CONTAINER" ? SHEET_CONTAINER : SHEET_TRITURATORE;
+  return SHEET_DEFS[kind];
+}
+
+const norm = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
+
+/** Etichetta del campo matricola in intestazione, per le schede che lo hanno. */
+export const MATRICOLA_LABEL: Partial<Record<SheetKind, string>> = {
+  MULINO: "Matricola impianto",
+  CESOIA: "Matricola macchina",
+};
+
+/** Schede previste per una tipologia impianto (vuoto = nessuna, per ora). */
+export function sheetKindsFor(plantType: string | null | undefined): SheetKind[] {
+  const p = norm(plantType);
+  return p ? SHEET_KINDS.filter((k) => SHEET_DEFS[k].plantTypes.includes(p)) : [];
 }
 
 export function isSheetKind(v: unknown): v is SheetKind {
-  return v === "TRITURATORE" || v === "CONTAINER";
+  return typeof v === "string" && (SHEET_KINDS as string[]).includes(v);
 }
 
-/** Le schede di allestimento esistono solo per i BLUE DEVIL. */
+/** La tipologia impianto ha schede di allestimento? */
 export function hasAllestimentoSheets(plantType: string | null | undefined): boolean {
-  return (plantType ?? "").trim().toUpperCase() === "BLUE DEVIL";
+  return sheetKindsFor(plantType).length > 0;
 }
 
 /** Tipo GF del trituratore: fisso, i BLUE DEVIL sono tutti GF4000. */
@@ -225,7 +400,12 @@ export const TIPO_GF_TRITURATORE = "GF4000";
 
 export function defaultTipo(kind: SheetKind, model: string): string {
   if (kind === "CONTAINER") return /DIESEL/i.test(model) ? "CONTAINER D" : "CONTAINER E";
-  return TIPO_GF_TRITURATORE;
+  if (kind === "TRITURATORE") return TIPO_GF_TRITURATORE;
+  // Mulino e cesoia: si parte dal modello del fascicolo, se e' fra le scelte.
+  const def = sheetDef(kind);
+  const m = model.trim();
+  if (!def.typeOptions) return m;
+  return def.typeOptions.find((o) => o.toUpperCase() === m.toUpperCase()) ?? "";
 }
 
 export function sheetCtx(kind: SheetKind, header: SheetHeader, model: string): SheetCtx {
@@ -252,19 +432,36 @@ export function listKey(kind: SheetKind, row: SheetRow): string {
   return row.list ?? `${kind}.${row.key}`;
 }
 
+/** Chiave dell'elenco della colonna Matricola (le marche del modulo cartaceo). */
+export function serialListKey(kind: SheetKind, row: SheetRow): string {
+  return `${kind}.${row.key}#marca`;
+}
+
 /** Tutte le chiavi di elenco valide (per validare le voci aggiunte). */
 export function allListKeys(): Set<string> {
   const keys = new Set<string>();
-  for (const def of [SHEET_TRITURATORE, SHEET_CONTAINER])
-    for (const r of allRows(def)) if (isListRow(r)) keys.add(listKey(def.kind, r));
+  for (const kind of SHEET_KINDS)
+    for (const r of allRows(SHEET_DEFS[kind])) {
+      if (isListRow(r)) keys.add(listKey(kind, r));
+      if (r.serialList) keys.add(serialListKey(kind, r));
+    }
   return keys;
 }
 
 /** Voci di un elenco: quelle di partenza più le aggiunte, senza doppioni. */
 export function listOptions(kind: SheetKind, row: SheetRow, custom: SheetOptions): string[] {
+  return mergeOptions(row.suggest ?? [], custom[listKey(kind, row)] ?? []);
+}
+
+/** Voci dell'elenco nella colonna Matricola. */
+export function serialListOptions(kind: SheetKind, row: SheetRow, custom: SheetOptions): string[] {
+  return mergeOptions(row.serialList ?? [], custom[serialListKey(kind, row)] ?? []);
+}
+
+function mergeOptions(base: string[], added: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const o of [...(row.suggest ?? []), ...(custom[listKey(kind, row)] ?? [])]) {
+  for (const o of [...base, ...added]) {
     const k = o.trim().toUpperCase();
     if (!k || seen.has(k)) continue;
     seen.add(k);
@@ -273,11 +470,11 @@ export function listOptions(kind: SheetKind, row: SheetRow, custom: SheetOptions
   return out;
 }
 
-/** Gruppi componente usati dalle schede (per crearli sulle macchine che non li hanno). */
-export function sheetGroupIds(): string[] {
+/** Gruppi componente usati dalle schede indicate (per crearli sulle macchine). */
+export function sheetGroupIds(kinds: SheetKind[] = SHEET_KINDS): string[] {
   const ids = new Set<string>();
-  for (const def of [SHEET_TRITURATORE, SHEET_CONTAINER])
-    for (const r of allRows(def)) {
+  for (const kind of kinds)
+    for (const r of allRows(SHEET_DEFS[kind])) {
       if (r.bind) ids.add(r.bind.group);
       if (r.serials) ids.add(r.serials);
     }
@@ -289,7 +486,9 @@ export function sheetCommessa(
   kind: SheetKind,
   m: { job: string; jobBody: string | null; jobContainer: string | null }
 ): string {
-  return (kind === "CONTAINER" ? m.jobContainer : m.jobBody) || m.job;
+  if (kind === "CONTAINER") return m.jobContainer || m.job;
+  if (kind === "TRITURATORE") return m.jobBody || m.job;
+  return m.job; // mulino e cesoia: una sola commessa
 }
 
 type CompLike = { groupId: string; brand: string | null; extra: unknown };

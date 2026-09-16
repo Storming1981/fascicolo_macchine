@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import {
+  MATRICOLA_LABEL,
   sheetCtx,
   sheetDef,
   visibleRows,
@@ -154,9 +155,13 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
   const headerTable = () => {
     const rh = 15;
     const w = [TW * 0.17, TW * 0.2, TW * 0.17, TW * 0.46];
+    const fields = def.headerFields ?? [];
+    const second: [string, string] = fields.includes("matricola")
+      ? [`${(MATRICOLA_LABEL[def.kind] ?? "Matricola").toUpperCase()}:`, input.header.matricola ?? ""]
+      : ["COLLAUDATO DA:", input.header.collaudatoDa ?? ""];
     const rows: [string, string, string, string][] = [
       ["COMMESSA:", input.commessa, `${def.typeLabel}:`, input.header.tipo ?? ""],
-      ["PAESE DESTINAZIONE:", input.country, "COLLAUDATO DA:", input.header.collaudatoDa ?? ""],
+      ["PAESE DESTINAZIONE:", input.country, second[0], second[1]],
     ];
     for (const r of rows) {
       let x = M;
@@ -214,7 +219,7 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
       const v = input.values[row.key] ?? {};
       const serials = row.serials
         ? input.components.find((c) => c.groupId === row.serials)?.serials ?? []
-        : row.serialField
+        : row.serialField || row.serialList
         ? [v.serial ?? ""]
         : [];
       const subRows = Math.max(1, serials.length);

@@ -2,17 +2,17 @@ import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
-import { CHECKLIST_TRITURATORE } from "@/lib/checklist";
+import { checklistFor, type ChecklistItem } from "@/lib/checklist";
 import type { Prisma, CollaudoStatus } from "@prisma/client";
 
 type Answer = { value: "SI" | "NO" | "NA" | null; note?: string };
 type AnswersMap = Record<string, Answer>;
 
-function sanitizeAnswers(raw: unknown): AnswersMap {
+function sanitizeAnswers(raw: unknown, items: ChecklistItem[]): AnswersMap {
   const out: AnswersMap = {};
   if (!raw || typeof raw !== "object") return out;
   const r = raw as Record<string, { value?: unknown; note?: unknown }>;
-  for (const item of CHECKLIST_TRITURATORE) {
+  for (const item of items) {
     const k = String(item.n);
     const a = r[k];
     if (!a) continue;
@@ -23,8 +23,8 @@ function sanitizeAnswers(raw: unknown): AnswersMap {
   return out;
 }
 
-function allAnswered(answers: AnswersMap): boolean {
-  return CHECKLIST_TRITURATORE.every((it) => {
+function allAnswered(answers: AnswersMap, items: ChecklistItem[]): boolean {
+  return items.every((it) => {
     const a = answers[String(it.n)];
     return !!(a && (a.value === "SI" || a.value === "NO" || a.value === "NA"));
   });
@@ -55,6 +55,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   const body = await req.json();
   const action = String(body.action || "save");
+  // cesoie e spaccabinari: M5.7 al posto della M7.3 dei trituratori
+  const items = checklistFor(machine.plantType).items;
 
   const existing = await prisma.collaudo.findUnique({ where: { machineId: id } });
 
@@ -62,11 +64,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!(await userCan(user.role, "machine.intervention"))) {
       return NextResponse.json({ error: "Permesso negato per compilare il collaudo" }, { status: 403 });
     }
-    const answers = sanitizeAnswers(body.answers);
+    const answers = sanitizeAnswers(body.answers, items);
     const empty = Object.keys(answers).length === 0;
 
     if (action === "submit") {
-      if (!allAnswered(answers))
+      if (!allAnswered(answers, items))
         return NextResponse.json({ error: "Tutte le voci devono avere SI / NO / N.A." }, { status: 400 });
 
       const signature =

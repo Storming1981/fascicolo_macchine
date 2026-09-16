@@ -18,7 +18,7 @@ import { CUSTOM_MODEL, hasTiranteGiunto } from "@/lib/plant";
 import { hasAllestimentoSheets } from "@/lib/allestimento";
 import AllestimentoSheets from "@/components/AllestimentoSheets";
 import { MILESTONES, milestoneDef, SOURCE_LABEL, isAutoSource } from "@/lib/milestones";
-import { CHECKLIST_TRITURATORE } from "@/lib/checklist";
+import { checklistFor, type ChecklistItem } from "@/lib/checklist";
 import { fmtDate, fmtBytes, fmtDateTime } from "@/lib/format";
 import { downscaleImage } from "@/lib/image";
 import type { MachineStatus, InterventoStatus } from "@prisma/client";
@@ -2510,13 +2510,16 @@ const COLLAUDO_STATUS_META: Record<
   APPROVED: { label: "Approvato", color: "#0f9d68", bg: "#d1fae5" },
 };
 
-function checklistProgress(answers: Record<string, { value: string | null; note?: string }>) {
+function checklistProgress(
+  answers: Record<string, { value: string | null; note?: string }>,
+  items: ChecklistItem[]
+) {
   let done = 0;
-  for (const it of CHECKLIST_TRITURATORE) {
+  for (const it of items) {
     const a = answers[String(it.n)];
     if (a && (a.value === "SI" || a.value === "NO" || a.value === "NA")) done++;
   }
-  return { done, total: CHECKLIST_TRITURATORE.length };
+  return { done, total: items.length };
 }
 
 function TabCollaudo({
@@ -2538,7 +2541,9 @@ function TabCollaudo({
   const c = machine.collaudo;
   const status = c?.status || "DRAFT";
   const meta = COLLAUDO_STATUS_META[status];
-  const { done, total } = checklistProgress(c?.answers || {});
+  // La check list dipende dalla tipologia: M5.7 per cesoie e spaccabinari.
+  const cl = checklistFor(machine.plantType);
+  const { done, total } = checklistProgress(c?.answers || {}, cl.items);
   const pct = Math.round((done / total) * 100);
   const isCompiler = c?.compilerId && c.compilerId === currentUserId;
   return (
@@ -2571,7 +2576,7 @@ function TabCollaudo({
           >
             <div style={{ flex: 1, minWidth: 200 }}>
               <div className="muted small" style={{ marginBottom: 6 }}>
-                Check list di collaudo trituratore (M7.3)
+                {cl.title.charAt(0) + cl.title.slice(1).toLowerCase()} ({cl.code})
               </div>
               <div className="detail-progress-bar" style={{ width: "100%", height: 6 }}>
                 <span style={{ width: pct + "%", background: meta.color }} />
@@ -3627,11 +3632,13 @@ function CollaudoModal({
 }) {
   const c = machine.collaudo;
   const readonly = mode === "view" || mode === "approve";
+  const cl = checklistFor(machine.plantType);
+  const items = cl.items;
 
   // Hydrate answers from collaudo (or empty)
   const [answers, setAnswers] = useState<AnsMap>(() => {
     const out: AnsMap = {};
-    for (const it of CHECKLIST_TRITURATORE) {
+    for (const it of items) {
       const a = c?.answers?.[String(it.n)];
       out[String(it.n)] = {
         value: ((a?.value === "SI" || a?.value === "NO" || a?.value === "NA") ? a.value : null) as AnsVal,
@@ -3647,11 +3654,8 @@ function CollaudoModal({
   const [saveSignature, setSaveSignature] = useState(!currentUser.hasSignature);
   const sigRef = useRef<SignaturePadHandle>(null);
 
-  const done = CHECKLIST_TRITURATORE.reduce(
-    (n, it) => n + (answers[String(it.n)].value ? 1 : 0),
-    0
-  );
-  const total = CHECKLIST_TRITURATORE.length;
+  const done = items.reduce((n, it) => n + (answers[String(it.n)].value ? 1 : 0), 0);
+  const total = items.length;
   const allDone = done === total;
 
   function setVal(n: number, v: AnsVal) {
@@ -3774,11 +3778,13 @@ function CollaudoModal({
               zIndex: 1,
             }}
           >
-            CHECK LIST COLLAUDO TRITURATORE — M7.3 (63 voci)
+            {cl.title} — {cl.code} ({total} voci)
           </div>
 
-          {CHECKLIST_TRITURATORE.map((it) => {
+          {items.map((it, idx) => {
             const a = answers[String(it.n)];
+            // testata di sezione (la M5.7 raggruppa i controlli)
+            const newSection = it.section && it.section !== items[idx - 1]?.section;
             return (
               <div
                 key={it.n}
@@ -3787,6 +3793,19 @@ function CollaudoModal({
                   borderBottom: "1px dashed var(--border)",
                 }}
               >
+                {newSection && (
+                  <div
+                    className="small"
+                    style={{
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      color: "var(--navy)",
+                      margin: "4px 0 10px",
+                    }}
+                  >
+                    {it.section}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                   <div
                     className="mono muted"
