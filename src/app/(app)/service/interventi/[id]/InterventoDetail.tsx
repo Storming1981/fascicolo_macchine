@@ -41,7 +41,7 @@ type Revision = {
   } | null;
 };
 type OperatorHours = { name: string; matricola?: string | null; hours: number };
-type Timbratura = { name: string; start: string; end: string };
+type Timbratura = { name: string; start: string; end: string; type?: string | null };
 // riga in tabella: uid stabile + `orig` = valore originale del timbratore (per evidenziare le modifiche)
 type SessionRow = Timbratura & { uid: string; orig?: Timbratura };
 type StoredTimbratura = Timbratura & { orig?: Timbratura };
@@ -1008,7 +1008,7 @@ function RapportinoDay({
   const uidRef = useRef(0);
   const nextUid = () => `s${uidRef.current++}`;
   const initialSessions: SessionRow[] = rapportino?.timbrature?.length
-    ? rapportino.timbrature.map((t) => ({ uid: nextUid(), name: t.name, start: t.start, end: t.end, orig: t.orig }))
+    ? rapportino.timbrature.map((t) => ({ uid: nextUid(), name: t.name, start: t.start, end: t.end, type: t.type, orig: t.orig }))
     : rapportino?.hoursByOperator?.length // vecchi rapportini: una riga per operatore senza orari
       ? rapportino.hoursByOperator.map((o) => ({ uid: nextUid(), name: o.name, start: "", end: "" }))
       : [];
@@ -1113,7 +1113,7 @@ function RapportinoDay({
       "timbrature",
       JSON.stringify(
         sessions
-          .map((s) => ({ name: s.name.trim(), start: s.start.trim(), end: s.end.trim(), orig: s.orig }))
+          .map((s) => ({ name: s.name.trim(), start: s.start.trim(), end: s.end.trim(), type: s.type, orig: s.orig }))
           .filter((s) => s.name || s.start || s.end)
       ) // (l'uid resta lato client; `orig` = timbratura originale del timbratore)
     );
@@ -1305,6 +1305,7 @@ function RapportinoDay({
                     <th>Operatore</th>
                     <th style={{ width: 84 }}>Entrata</th>
                     <th style={{ width: 84 }}>Uscita</th>
+                    <th style={{ width: 92 }}>Tipologia</th>
                     <th style={{ width: 60 }}>Ore</th>
                   </tr>
                 </thead>
@@ -1314,6 +1315,13 @@ function RapportinoDay({
                       <td>{s.name || "—"}</td>
                       <td className="mono">{s.start || "—"}</td>
                       <td className="mono">{s.end || "—"}</td>
+                      <td>
+                        {s.type ? (
+                          <span className={"timb-type" + (/viagg/i.test(s.type) ? " viaggio" : "")}>{s.type}</span>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
                       <td className="mono">{fmtHM(rowHours(s))}</td>
                     </tr>
                   ))}

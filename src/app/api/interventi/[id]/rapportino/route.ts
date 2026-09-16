@@ -7,7 +7,14 @@ import { renderRapportinoPdf } from "@/lib/rapportinoRender";
 
 type RicambioLine = { code: string; desc: string; qty: string; note: string };
 type OperatorLine = { name: string; matricola: string | null; hours: number };
-type TimbraturaLine = { name: string; start: string; end: string; orig?: { name: string; start: string; end: string } };
+type TimbraturaLine = {
+  name: string;
+  start: string;
+  end: string;
+  /** Tipologia dal timbratore: "Lavoro" | "Viaggio" (sola lettura). */
+  type?: string | null;
+  orig?: { name: string; start: string; end: string };
+};
 
 function parseRicambi(raw: string): RicambioLine[] {
   try {
@@ -72,6 +79,7 @@ function parseTimbrature(raw: string): TimbraturaLine[] {
           start: HHMM.test(String(r.start ?? "")) ? String(r.start) : "",
           end: HHMM.test(String(r.end ?? "")) ? String(r.end) : "",
         };
+        if (r.type != null && String(r.type).trim()) row.type = String(r.type).trim().slice(0, 40);
         // preserva la timbratura originale del timbratore (per evidenziare le modifiche)
         const o = r.orig;
         if (o && (o.name != null || o.start != null || o.end != null))

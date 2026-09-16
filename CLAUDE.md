@@ -624,6 +624,14 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
 - **Fix layout desktop**: la shell usa `display:flex` (`.app` flex, `.sidebar`
   `flex:0 0 248px`, `.main` `flex:1 1 0; min-width:0`) invece di CSS grid `1fr`,
   che collassava in alcuni browser embedded. Robusto su desktop/tablet/mobile.
+- **Tipologia timbratura nel rapportino** (Lavoro / Viaggio): il timbratore la
+  espone nella colonna **12** della tabella `/stampings` (`StampingRow.tipologia`,
+  13 = "tipologia di lavoro", non usata). Viaggia con le sessioni
+  (`CommessaHours.sessions[].type`) → `sync-ore` la salva in
+  `Rapportino.timbrature[].type` → colonna *Tipologia* nella scheda intervento
+  (targhetta ambra per il viaggio) e nel PDF, con riga **"di cui viaggio"** sotto
+  al totale di giornata. I rapportini gia' esistenti prendono la tipologia al
+  primo *Sincronizza ore*.
 - **Link assoluti dietro al proxy** (`src/lib/absoluteUrl.ts`): in build standalone
   `new URL(path, req.url)` restituisce l'indirizzo di ascolto del container, non il
   dominio: il ritorno dal consenso Google finiva su `https://0.0.0.0:3000/profilo`

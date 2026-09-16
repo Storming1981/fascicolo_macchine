@@ -26,7 +26,7 @@ const isoDay = (d: Date) => {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 };
 
-type Timbratura = { name: string; start: string; end: string };
+type Timbratura = { name: string; start: string; end: string; type: string | null };
 const toMin = (hhmm: string): number | null => {
   const m = String(hhmm).match(/^(\d{1,2}):(\d{2})$/);
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
@@ -44,19 +44,20 @@ const sessionHours = (start: string, end: string): number => {
 function operatorsForPdf(
   timbrature: unknown,
   hoursByOperator: unknown
-): { name: string; sessions: { start: string; end: string; hours: number }[]; total: number }[] {
+): { name: string; sessions: { start: string; end: string; hours: number; type: string | null }[]; total: number }[] {
   const rows: Timbratura[] = Array.isArray(timbrature)
     ? (timbrature as Record<string, unknown>[]).map((t) => ({
         name: String(t?.name ?? "").trim() || "—",
         start: String(t?.start ?? ""),
         end: String(t?.end ?? ""),
+        type: t?.type != null ? String(t.type) : null,
       }))
     : [];
   if (rows.length) {
-    const map = new Map<string, { start: string; end: string; hours: number }[]>();
+    const map = new Map<string, { start: string; end: string; hours: number; type: string | null }[]>();
     for (const t of rows) {
       const arr = map.get(t.name) ?? [];
-      arr.push({ start: t.start, end: t.end, hours: sessionHours(t.start, t.end) });
+      arr.push({ start: t.start, end: t.end, hours: sessionHours(t.start, t.end), type: t.type });
       map.set(t.name, arr);
     }
     return [...map.entries()].map(([name, sessions]) => ({

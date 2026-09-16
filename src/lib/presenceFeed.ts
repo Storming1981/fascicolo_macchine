@@ -135,6 +135,8 @@ export type StampingRow = {
   anagrafica: string | null;
   startedAt: Date | null;
   finishedAt: Date | null;
+  /** Tipologia della timbratura: "Lavoro", "Viaggio", ... (colonna 12). */
+  tipologia: string | null;
   open: boolean;
 };
 
@@ -161,6 +163,7 @@ export function parseStampingsHtml(html: string): StampingRow[] {
       anagrafica: cells[5] || null,
       startedAt: parseItDate(cells[9] || null),
       finishedAt,
+      tipologia: cells[12] || null,
       open: !finishedAt && !!(cells[2] || cells[4]),
     });
   }
@@ -336,7 +339,7 @@ export type CommessaHours = {
   total: number;
   byDay: Record<string, number>; // { "YYYY-MM-DD": ore }
   byDayOperator: Record<string, Record<string, number>>; // { "YYYY-MM-DD": { operatore: ore } }
-  sessions: { day: string; tech: string | null; start: string | null; end: string | null; hours: number }[];
+  sessions: { day: string; tech: string | null; start: string | null; end: string | null; hours: number; type: string | null }[];
 };
 
 /**
@@ -406,6 +409,7 @@ export async function fetchCommessaHours(
         start: r.startedAt.toISOString(),
         end: r.finishedAt?.toISOString() ?? null,
         hours: Math.round(hours * 100) / 100,
+        type: r.tipologia,
       });
     }
     if (fresh === 0) break; // il server ha ignorato "page" (stesse righe) → fine

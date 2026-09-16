@@ -22,6 +22,10 @@ const GREY = rgb(0.42, 0.45, 0.5);
 const INK = rgb(0.1, 0.12, 0.15);
 const LINE = rgb(0.85, 0.87, 0.9);
 const ZEBRA = rgb(0.96, 0.97, 0.98);
+const TRAVEL = rgb(0.72, 0.33, 0.03); // ambra: ore di viaggio
+
+/** Timbratura di viaggio (tipologia dal timbratore). */
+const isTravel = (t?: string | null) => /viagg/i.test(t ?? "");
 
 /** Normalizza il testo per la codifica WinAnsi di pdf-lib. */
 function san(s: string): string {
@@ -49,7 +53,7 @@ export type RapportinoPdfInput = {
   commessa?: string | null; // commessa cantiere · timbratore
   plantHours?: number | null; // ore operative impianto (contaore macchina)
   date: Date;
-  operators: { name: string; sessions: { start: string; end: string; hours: number }[]; total: number }[];
+  operators: { name: string; sessions: { start: string; end: string; hours: number; type?: string | null }[]; total: number }[];
   totalHours: number;
   workDescription: string | null;
   issues?: string | null; // problematiche rilevate in cantiere
@@ -198,8 +202,9 @@ export async function generateRapportinoPdf(input: RapportinoPdfInput): Promise<
   sectionTitle("Ore per operatore");
   {
     const x0 = M;
-    const xIn = x0 + 200; // Entrata
-    const xOut = x0 + 300; // Uscita
+    const xIn = x0 + 160; // Entrata
+    const xOut = x0 + 235; // Uscita
+    const xType = x0 + 310; // Tipologia (dal timbratore: Lavoro / Viaggio)
     const xHours = W - M - 60; // Ore
     const rowH = 15;
     // testata
@@ -209,12 +214,13 @@ export async function generateRapportinoPdf(input: RapportinoPdfInput): Promise<
     wh("Operatore", x0);
     wh("Entrata", xIn);
     wh("Uscita", xOut);
+    wh("Tipologia", xType);
     wh("Ore", xHours);
     y -= rowH;
 
     let zebra = 0;
     for (const op of input.operators) {
-      const sessions = op.sessions.length ? op.sessions : [{ start: "", end: "", hours: op.total }];
+      const sessions = op.sessions.length ? op.sessions : [{ start: "", end: "", hours: op.total, type: null }];
       sessions.forEach((s, i) => {
         ensure(rowH);
         if (zebra % 2 === 1)
@@ -227,6 +233,15 @@ export async function generateRapportinoPdf(input: RapportinoPdfInput): Promise<
         }
         page.drawText(s.start || "—", { x: xIn + 6, y: y - 10, size: 9, font, color: INK });
         page.drawText(s.end || "—", { x: xOut + 6, y: y - 10, size: 9, font, color: INK });
+        // Il viaggio si evidenzia: al cliente cambia come vanno lette le ore.
+        if (s.type)
+          page.drawText(san(s.type), {
+            x: xType + 6,
+            y: y - 10,
+            size: 9,
+            font: isTravel(s.type) ? bold : font,
+            color: isTravel(s.type) ? TRAVEL : GREY,
+          });
         page.drawText(fmtHM(s.hours), { x: xHours + 6, y: y - 10, size: 9, font, color: INK });
         y -= rowH;
       });
@@ -243,7 +258,19 @@ export async function generateRapportinoPdf(input: RapportinoPdfInput): Promise<
     page.drawLine({ start: { x: x0, y: y + 3 }, end: { x: W - M, y: y + 3 }, thickness: 0.6, color: LINE });
     page.drawText("Totale giornata", { x: x0 + 6, y: y - 10, size: 9.5, font: bold, color: NAVY });
     page.drawText(fmtHM(input.totalHours), { x: xHours + 6, y: y - 10, size: 9.5, font: bold, color: NAVY });
-    y -= rowH + 2;
+    y -= rowH;
+    // quota di viaggio della giornata, se il timbratore l'ha registrata
+    const travel = input.operators
+      .flatMap((o) => o.sessions)
+      .filter((s) => isTravel(s.type))
+      .reduce((n, s) => n + s.hours, 0);
+    if (travel > 0) {
+      ensure(rowH);
+      page.drawText("di cui viaggio", { x: x0 + 6, y: y - 9, size: 8, font, color: TRAVEL });
+      page.drawText(fmtHM(travel), { x: xHours + 6, y: y - 9, size: 8, font: bold, color: TRAVEL });
+      y -= rowH - 2;
+    }
+    y -= 2;
   }
 
   // ── Attività eseguita ──

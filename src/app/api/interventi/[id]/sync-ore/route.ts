@@ -66,7 +66,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
         const name = s.tech ?? "—";
         const start = hhmm(s.start);
         const end = hhmm(s.end);
-        return { name, start, end, orig: { name, start, end } };
+        return { name, start, end, type: s.type, orig: { name, start, end } };
       })
       .sort((a, b) => a.name.localeCompare(b.name) || a.start.localeCompare(b.start));
 
