@@ -27,7 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <AppShell
-      user={{ name: user.name, roleLabel: ROLE_LABEL[user.role], email: user.email }}
+      user={{ name: user.name, roleLabel: ROLE_LABEL[user.role], email: user.email, photo: user.photo }}
       machineCount={machineCount}
       nav={nav}
       canCampo={access.campoApps.length > 0}

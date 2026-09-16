@@ -17,7 +17,10 @@ export async function GET(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.redirect(new URL("/login", req.url));
 
-  const target: GoogleTarget = new URL(req.url).searchParams.get("target") === "company" ? "company" : "me";
+  const sp = new URL(req.url).searchParams;
+  const target: GoogleTarget = sp.get("target") === "company" ? "company" : "me";
+  // pagina a cui tornare dopo il consenso: il profilo o le impostazioni
+  const ret = sp.get("return") === "profilo" ? "profilo" : "impostazioni";
   if (target === "company" && !(await userCan(user.role, "settings.manage")))
     return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
 
@@ -31,6 +34,7 @@ export async function GET(req: Request) {
     uid: user.id,
     name: user.name,
     target,
+    ret,
     nonce: crypto.randomBytes(8).toString("hex"),
   })
     .setProtectedHeader({ alg: "HS256" })

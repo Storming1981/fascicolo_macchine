@@ -525,6 +525,20 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   compila, toglie chi ha `machine.edit`. API `GET|POST|DELETE /api/allestimento/options`.
   API: `GET|PUT|POST /api/machines/[id]/allestimento` ·
   `GET /api/machines/[id]/allestimento/[kind]/pdf`.
+- **Invio schede via e-mail** (pulsante *Invia via e-mail* nelle schede di
+  allestimento): A / Cc / oggetto / messaggio + scelta dei PDF (M5.16, M5.17)
+  generati al momento (`renderSheetPdf` in `src/lib/allestimentoRender.ts`,
+  condiviso con la stampa). Parte dalla casella Gmail personale dell'utente, o da
+  quella aziendale se non l'ha collegata; l'invio va a diario con mittente e
+  destinatari. `POST /api/machines/[id]/allestimento/send` (permesso
+  `machine.intervention` o `machine.edit`).
+- **Profilo utente** (`/profilo`, clic su avatar o nome in topbar/sidebar):
+  foto (ridotta a 256 px), telefono, **casella Gmail personale** (Accedi con
+  Google → `/api/google/auth?target=me&return=profilo`, la callback torna al
+  profilo; prova e scollega), cambio **password** e **PIN di firma** (entrambi
+  richiedono la password attuale), **firma personale**. Nome, e-mail e ruolo
+  restano all'amministratore. `GET|PATCH /api/users/me`. Prima il collegamento
+  Gmail personale era raggiungibile solo da Impostazioni (`settings.manage`).
 - **Stato/avanzamento** modificabili dal dettaglio (slider + select), evento a diario.
 - **Nuovo intervento**: fase, tipo (sostituzione/ispezione/riparazione/nota),
   matricole, foto, firma PIN o a penna su canvas → diario + firma + aggiorna seriale.

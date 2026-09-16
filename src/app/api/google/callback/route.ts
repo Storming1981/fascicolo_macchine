@@ -6,15 +6,16 @@ import { isGoogleConfigured, exchangeCodeAndSave, type GoogleTarget } from "@/li
 
 const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret-change-me");
 
-const back = (req: Request, params: Record<string, string>) => {
-  const u = new URL("/impostazioni", req.url);
+const back = (req: Request, params: Record<string, string>, ret = "impostazioni") => {
+  const u = new URL(`/${ret === "profilo" ? "profilo" : "impostazioni"}`, req.url);
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   return NextResponse.redirect(u);
 };
 
 /**
  * Callback OAuth Google: verifica lo `state`, scambia il code con i token e li
- * salva sul bersaglio (personale dell'utente o aziendale). Torna su /impostazioni.
+ * salva sul bersaglio (personale dell'utente o aziendale). Torna su /impostazioni
+ * o su /profilo, a seconda di dove era partito il collegamento.
  */
 export async function GET(req: Request) {
   const user = await currentUser();
@@ -31,21 +32,23 @@ export async function GET(req: Request) {
 
   // lo state deve essere il nostro, ancora valido e dello stesso utente
   let target: GoogleTarget = "me";
+  let ret = "impostazioni";
   try {
     const { payload } = await jwtVerify(state, SECRET);
     if (payload.uid !== user.id) throw new Error("state non corrispondente");
     target = payload.target === "company" ? "company" : "me";
+    ret = payload.ret === "profilo" ? "profilo" : "impostazioni";
   } catch {
     return back(req, { google: "err", msg: "Sessione di collegamento scaduta, riprova" });
   }
 
   if (target === "company" && !(await userCan(user.role, "settings.manage")))
-    return back(req, { google: "err", msg: "Permesso negato" });
+    return back(req, { google: "err", msg: "Permesso negato" }, ret);
 
   try {
     const email = await exchangeCodeAndSave(code, target, user.id, user.name);
-    return back(req, { google: "ok", email, target });
+    return back(req, { google: "ok", email, target }, ret);
   } catch (e) {
-    return back(req, { google: "err", msg: e instanceof Error ? e.message : "Collegamento fallito" });
+    return back(req, { google: "err", msg: e instanceof Error ? e.message : "Collegamento fallito" }, ret);
   }
 }

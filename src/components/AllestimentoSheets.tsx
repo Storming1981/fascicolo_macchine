@@ -61,6 +61,7 @@ export default function AllestimentoSheets({
 }: {
   machine: {
     id: string;
+    code: string;
     model: string;
     job: string;
     jobBody: string | null;
@@ -85,6 +86,8 @@ export default function AllestimentoSheets({
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [signOpen, setSignOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [mail, setMail] = useState<{ configured: boolean; from: string | null }>({ configured: false, from: null });
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -96,6 +99,7 @@ export default function AllestimentoSheets({
     }
     setSheets(d.sheets);
     setOptions(d.options ?? {});
+    if (d.mail) setMail(d.mail);
     setDrafts(
       Object.fromEntries(
         Object.entries(d.sheets as Record<string, SheetDTO>).map(([k, s]) => [k, { header: s.header, values: s.values }])
@@ -350,6 +354,11 @@ export default function AllestimentoSheets({
               <Icon name="download" size={13} /> Stampa PDF
             </a>
             {canEdit && (
+              <button className="btn-ghost-sm" onClick={() => setSendOpen(true)}>
+                <Icon name="upload" size={13} /> Invia via e-mail
+              </button>
+            )}
+            {canEdit && (
               <button
                 className={"btn-primary-sm al-save" + (dirty[kind] ? " pending" : "")}
                 disabled={busy || !dirty[kind]}
@@ -534,6 +543,27 @@ export default function AllestimentoSheets({
         );
       })}
 
+      {sendOpen && (
+        <SendSheetsModal
+          machineId={machine.id}
+          defaultSubject={`Schede di allestimento ${machine.code} — commessa ${machine.job}`}
+          mail={mail}
+          active={kind}
+          signed={{
+            TRITURATORE: sheets.TRITURATORE?.status === "SIGNED",
+            CONTAINER: sheets.CONTAINER?.status === "SIGNED",
+          }}
+          unsaved={SHEET_KINDS.some((k) => dirty[k])}
+          onClose={() => setSendOpen(false)}
+          onSent={(msg) => {
+            setSendOpen(false);
+            notify(msg);
+            onDone();
+          }}
+          onError={(msg) => notify(msg, "err")}
+        />
+      )}
+
       {signOpen && (
         <SignSheetModal
           title={`${def.code} · ${KIND_META[kind].label}`}
@@ -704,6 +734,171 @@ function Combobox({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Invio dei PDF per e-mail senza scaricarli: i file vengono generati al momento
+ * dai dati salvati e partono dalla casella Gmail dell'utente.
+ */
+function SendSheetsModal({
+  machineId,
+  defaultSubject,
+  mail,
+  active,
+  signed,
+  unsaved,
+  onClose,
+  onSent,
+  onError,
+}: {
+  machineId: string;
+  defaultSubject: string;
+  mail: { configured: boolean; from: string | null };
+  active: SheetKind;
+  signed: Record<SheetKind, boolean>;
+  unsaved: boolean;
+  onClose: () => void;
+  onSent: (msg: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const [to, setTo] = useState("");
+  const [cc, setCc] = useState("");
+  const [subject, setSubject] = useState(defaultSubject);
+  const [body, setBody] = useState(
+    "Buongiorno,\n\nin allegato le schede di allestimento dell'impianto.\n\nCordiali saluti"
+  );
+  const [kinds, setKinds] = useState<Record<SheetKind, boolean>>({
+    TRITURATORE: true,
+    CONTAINER: true,
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const canSend = mail.configured && !!mail.from;
+  const chosen = SHEET_KINDS.filter((k) => kinds[k]);
+
+  async function send() {
+    setErr(null);
+    if (!to.includes("@")) return setErr("Indica almeno un destinatario.");
+    if (!chosen.length) return setErr("Scegli almeno una scheda da allegare.");
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machineId}/allestimento/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to, cc, subject, body, kinds: chosen }),
+    });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setErr(d.error || "Invio non riuscito");
+      onError(d.error || "Invio non riuscito");
+      return;
+    }
+    onSent(`E-mail inviata a ${(d.to as string[]).join(", ")} da ${d.from}`);
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Invia schede via e-mail</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Chiudi">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        <div className="modal-body al-send">
+          {!mail.configured ? (
+            <div className="form-error">Invio e-mail non configurato sul server: contatta l&apos;amministratore.</div>
+          ) : !mail.from ? (
+            <div className="info-banner warn">
+              <Icon name="upload" size={16} />
+              <span>
+                Per inviare collega prima la tua casella Gmail dal{" "}
+                <a className="link-strong" href="/profilo">
+                  tuo profilo
+                </a>
+                : la posta partirà dal tuo indirizzo.
+              </span>
+            </div>
+          ) : (
+            <div className="al-send-from">
+              <span className="al-kv-label">Da</span>
+              <strong>{mail.from}</strong>
+              <a className="muted small" href="/profilo">
+                cambia
+              </a>
+            </div>
+          )}
+
+          <label className="field">
+            <span className="field-label">A *</span>
+            <input
+              type="text"
+              inputMode="email"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              placeholder="cliente@azienda.com, altro@azienda.com"
+              autoFocus
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Cc</span>
+            <input type="text" inputMode="email" value={cc} onChange={(e) => setCc(e.target.value)} />
+          </label>
+          <label className="field">
+            <span className="field-label">Oggetto</span>
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} />
+          </label>
+          <label className="field">
+            <span className="field-label">Messaggio</span>
+            <textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} />
+          </label>
+
+          <div className="field">
+            <span className="field-label">PDF allegati</span>
+            <div className="al-send-files">
+              {SHEET_KINDS.map((k) => (
+                <label key={k} className={"al-send-file" + (kinds[k] ? " on" : "")}>
+                  <input
+                    type="checkbox"
+                    checked={kinds[k]}
+                    onChange={(e) => setKinds((s) => ({ ...s, [k]: e.target.checked }))}
+                  />
+                  <span className="al-send-file-icon">
+                    <Icon name="doc" size={16} />
+                  </span>
+                  <span className="al-send-file-text">
+                    <strong>
+                      {sheetDef(k).code} · {KIND_META[k].label}
+                    </strong>
+                    <span className="muted small">
+                      {signed[k] ? "firmata" : "non firmata"}
+                      {k === active ? " · scheda aperta" : ""}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+          {unsaved && (
+            <div className="info-banner warn">
+              <Icon name="sign" size={16} />
+              <span>Ci sono modifiche non salvate: i PDF riportano i dati salvati.</span>
+            </div>
+          )}
+          {err && <div className="form-error">{err}</div>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn-ghost" onClick={onClose} disabled={busy}>
+            Annulla
+          </button>
+          <button className="btn-primary" onClick={send} disabled={busy || !canSend}>
+            {busy ? "Invio in corso…" : `Invia${chosen.length ? ` (${chosen.length} PDF)` : ""}`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

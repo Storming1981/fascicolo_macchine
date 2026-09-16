@@ -18,6 +18,13 @@ type NavKey =
   | "notifiche"
   | "knowledge";
 
+function Avatar({ name, photo }: { name: string; photo?: string | null }) {
+  if (photo)
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className="user-avatar user-avatar-img" src={photo} alt={name} />;
+  return <div className="user-avatar">{initials(name)}</div>;
+}
+
 export default function AppShell({
   user,
   machineCount,
@@ -26,7 +33,7 @@ export default function AppShell({
   caps,
   children,
 }: {
-  user: { name: string; roleLabel: string; email: string };
+  user: { name: string; roleLabel: string; email: string; photo?: string | null };
   machineCount: number;
   nav: Record<NavKey, boolean>;
   canCampo: boolean;
@@ -214,13 +221,13 @@ export default function AppShell({
           })}
         </nav>
         <div className="sidebar-foot">
-          <div className="user">
-            <div className="user-avatar">{initials(user.name)}</div>
+          <Link href="/profilo" className="user user-link" title="Il mio profilo" onClick={() => setOpen(false)}>
+            <Avatar name={user.name} photo={user.photo} />
             <div style={{ minWidth: 0 }}>
               <div className="user-name">{user.name}</div>
               <div className="user-role">{user.email}</div>
             </div>
-          </div>
+          </Link>
           {canCampo && (
             <button className="logout-btn" onClick={goCampo} title="Passa alla versione mobile/tablet">
               <Icon name="remote" size={15} /> Versione Campo
@@ -249,11 +256,13 @@ export default function AppShell({
             </form>
           </div>
           <div className="topbar-actions">
-            <div className="topbar-greeting">
-              <div className="hi">Bentornato!</div>
-              <div className="who">{user.name}</div>
-            </div>
-            <div className="user-avatar">{initials(user.name)}</div>
+            <Link href="/profilo" className="topbar-profile" title="Il mio profilo" aria-label="Il mio profilo">
+              <div className="topbar-greeting">
+                <div className="hi">Bentornato!</div>
+                <div className="who">{user.name}</div>
+              </div>
+              <Avatar name={user.name} photo={user.photo} />
+            </Link>
             {caps.service ? (
               <Link className="icon-btn" href="/service/notifiche" aria-label="Notifiche">
                 <Icon name="bell" size={18} />
