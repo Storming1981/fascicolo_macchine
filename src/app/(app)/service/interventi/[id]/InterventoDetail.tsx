@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
+import { fmtHM } from "@/lib/format";
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import PosCard from "@/components/PosCard";
@@ -700,7 +701,7 @@ export default function InterventoDetail({
             <div className="field">
               <span className="field-label">Ore totali (rapportini)</span>
               <div className="readout" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <span>{totHours > 0 ? `${totHours} h` : "—"}</span>
+                <span>{totHours > 0 ? fmtHM(totHours) : "—"}</span>
                 {data.commessa && oreTotal != null && (
                   <span className="muted small">
                     · Timbratore: <strong>{oreTotal} h</strong>
@@ -1251,7 +1252,7 @@ function RapportinoDay({
               In modifica
             </span>
           )}
-          {rapportino?.hoursWorked != null && <span className="muted small mono">{rapportino.hoursWorked} h</span>}
+          {rapportino?.hoursWorked != null && <span className="muted small mono">{fmtHM(rapportino.hoursWorked)}</span>}
           {revisions.length > 0 && <span className="muted small">· {revisions.length} modifiche</span>}
           <span style={{ flex: 1 }} />
         </button>
@@ -1313,7 +1314,7 @@ function RapportinoDay({
                       <td>{s.name || "—"}</td>
                       <td className="mono">{s.start || "—"}</td>
                       <td className="mono">{s.end || "—"}</td>
-                      <td className="mono">{rowHours(s).toFixed(2)}</td>
+                      <td className="mono">{fmtHM(rowHours(s))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1333,7 +1334,7 @@ function RapportinoDay({
                   {roLegacyOps.map((o, i) => (
                     <tr key={i}>
                       <td>{o.name}</td>
-                      <td className="mono">{o.hours}</td>
+                      <td className="mono">{fmtHM(o.hours)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1342,12 +1343,12 @@ function RapportinoDay({
             ) : (
               <div className="readout muted">
                 {rapportino?.hoursWorked != null
-                  ? `${rapportino.hoursWorked} h`
+                  ? fmtHM(rapportino.hoursWorked)
                   : "Nessuna timbratura per questa giornata"}
               </div>
             )}
             <div className="muted small" style={{ marginTop: 6 }}>
-              Totale giornata: <strong>{rapportino?.hoursWorked ?? totOperators} h</strong>
+              Totale giornata: <strong>{fmtHM(rapportino?.hoursWorked ?? totOperators)}</strong>
               {!readOnly && " · dati letti dal timbratore (non modificabili)"}
             </div>
           </div>
@@ -1598,7 +1599,7 @@ function RapportinoDay({
                       </div>
                       {rev.note && <div className="small">{rev.note}</div>}
                       <div className="muted small">
-                        Valori precedenti: {rev.snapshot?.hoursWorked ?? "—"} h ·{" "}
+                        Valori precedenti: {fmtHM(rev.snapshot?.hoursWorked)} ·{" "}
                         {rev.snapshot?.workDescription ? `"${rev.snapshot.workDescription.slice(0, 60)}"` : "—"}
                       </div>
                     </li>

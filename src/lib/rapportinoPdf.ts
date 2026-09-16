@@ -2,6 +2,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { PDFDocument, StandardFonts, rgb, type PDFImage } from "pdf-lib";
+import { fmtHM } from "./format";
 
 /** Carica (best-effort) le immagini della carta intestata ZATO. */
 async function loadLetterhead(): Promise<{ header?: Buffer; footer?: Buffer }> {
@@ -33,7 +34,8 @@ function san(s: string): string {
     .replace(/[^ -ÿ]/g, "?");
 }
 
-const fmtHours = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+// Il contaore dell'impianto resta in decimali: e' un contatore, non una durata.
+const fmtPlantHours = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
 
 export type RapportinoPdfInput = {
   interventoCode: string;
@@ -189,7 +191,7 @@ export async function generateRapportinoPdf(input: RapportinoPdfInput): Promise<
   });
   y -= 18;
   // Ore operative dell'impianto (contaore macchina) rilevate nell'intervento
-  if (input.plantHours != null) labelRow("Ore impianto:", `${fmtHours(input.plantHours)} h`);
+  if (input.plantHours != null) labelRow("Ore impianto:", `${fmtPlantHours(input.plantHours)} h`);
   hr();
 
   // ── Timbrature per operatore (entrata/uscita) ──
@@ -225,14 +227,14 @@ export async function generateRapportinoPdf(input: RapportinoPdfInput): Promise<
         }
         page.drawText(s.start || "—", { x: xIn + 6, y: y - 10, size: 9, font, color: INK });
         page.drawText(s.end || "—", { x: xOut + 6, y: y - 10, size: 9, font, color: INK });
-        page.drawText(fmtHours(s.hours), { x: xHours + 6, y: y - 10, size: 9, font, color: INK });
+        page.drawText(fmtHM(s.hours), { x: xHours + 6, y: y - 10, size: 9, font, color: INK });
         y -= rowH;
       });
       // subtotale operatore se ha più sessioni
       if (op.sessions.length > 1) {
         ensure(rowH);
         page.drawText("subtotale", { x: xOut + 6, y: y - 9, size: 7.5, font, color: GREY });
-        page.drawText(`${fmtHours(op.total)} h`, { x: xHours + 6, y: y - 9, size: 8, font: bold, color: GREY });
+        page.drawText(fmtHM(op.total), { x: xHours + 6, y: y - 9, size: 8, font: bold, color: GREY });
         y -= rowH - 2;
       }
     }
@@ -240,7 +242,7 @@ export async function generateRapportinoPdf(input: RapportinoPdfInput): Promise<
     ensure(rowH);
     page.drawLine({ start: { x: x0, y: y + 3 }, end: { x: W - M, y: y + 3 }, thickness: 0.6, color: LINE });
     page.drawText("Totale giornata", { x: x0 + 6, y: y - 10, size: 9.5, font: bold, color: NAVY });
-    page.drawText(`${fmtHours(input.totalHours)} h`, { x: xHours + 6, y: y - 10, size: 9.5, font: bold, color: NAVY });
+    page.drawText(fmtHM(input.totalHours), { x: xHours + 6, y: y - 10, size: 9.5, font: bold, color: NAVY });
     y -= rowH + 2;
   }
 

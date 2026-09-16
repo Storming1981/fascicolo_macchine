@@ -624,6 +624,16 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
 - **Fix layout desktop**: la shell usa `display:flex` (`.app` flex, `.sidebar`
   `flex:0 0 248px`, `.main` `flex:1 1 0; min-width:0`) invece di CSS grid `1fr`,
   che collassava in alcuni browser embedded. Robusto su desktop/tablet/mobile.
+- **Link assoluti dietro al proxy** (`src/lib/absoluteUrl.ts`): in build standalone
+  `new URL(path, req.url)` restituisce l'indirizzo di ascolto del container, non il
+  dominio: il ritorno dal consenso Google finiva su `https://0.0.0.0:3000/profilo`
+  (ERR_ADDRESS_INVALID) a collegamento gia' riuscito. Si costruiscono dagli header
+  `x-forwarded-proto` / `x-forwarded-host` (fallback `host`). Usato da callback e
+  auth Google, login e logout.
+- **Ore in ore e minuti** (`fmtHM` in `src/lib/format.ts`): le sessioni nascono da
+  timbrature HH:MM, quindi la somma decimale non si legge ("8.72" sono 8h 43m).
+  Usata nel PDF rapportino e nella scheda intervento. **Non** per `plantHours`
+  (contaore dell'impianto: e' un contatore, non una durata).
 - **Import massivo eseguito**: importate tutte le righe del file MATRICOLE →
   **187 macchine totali** in DB (6 esempio + 181 import, 7 duplicati saltati),
   **2356 matricole** censite, anni 2006-2026. Modello impostato a "Da definire"

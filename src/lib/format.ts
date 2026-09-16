@@ -24,3 +24,15 @@ export function fmtDateTime(d: Date | string | null | undefined): string {
     minute: "2-digit",
   });
 }
+
+/**
+ * Durata in ore e minuti. Le sessioni nascono da timbrature (HH:MM) e la somma
+ * in decimali non si legge: "8.72" sono 8h 43m, non 8 ore e 72 minuti.
+ * Non usarla per i CONTAORE dell'impianto, che sono un contatore, non una durata.
+ */
+export function fmtHM(hours: number | null | undefined): string {
+  if (hours == null || !Number.isFinite(hours)) return "—";
+  const sign = hours < 0 ? "-" : "";
+  const mins = Math.round(Math.abs(hours) * 60);
+  return `${sign}${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}m`;
+}
