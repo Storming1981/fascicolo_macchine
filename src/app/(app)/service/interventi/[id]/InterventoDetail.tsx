@@ -264,9 +264,15 @@ export default function InterventoDetail({
   const [oreTotal, setOreTotal] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
 
-  // sessioni {day, tech, start(ISO), end(ISO)} → { "YYYY-MM-DD": [{name, start:"HH:MM", end:"HH:MM"}] }
+  // sessioni {day, tech, start(ISO), end(ISO), type} → { "YYYY-MM-DD": [{name, start:"HH:MM", end:"HH:MM", type}] }
   const buildSessionsByDay = (
-    sessions: { day: string; tech: string | null; start: string | null; end: string | null }[]
+    sessions: {
+      day: string;
+      tech: string | null;
+      start: string | null;
+      end: string | null;
+      type?: string | null;
+    }[]
   ): Record<string, Timbratura[]> => {
     const toHM = (iso: string | null) => {
       if (!iso) return "";
@@ -277,7 +283,7 @@ export default function InterventoDetail({
     };
     const out: Record<string, Timbratura[]> = {};
     for (const s of sessions ?? []) {
-      (out[s.day] ??= []).push({ name: s.tech ?? "—", start: toHM(s.start), end: toHM(s.end) });
+      (out[s.day] ??= []).push({ name: s.tech ?? "—", start: toHM(s.start), end: toHM(s.end), type: s.type ?? null });
     }
     for (const day of Object.keys(out))
       out[day].sort((a, b) => a.name.localeCompare(b.name) || a.start.localeCompare(b.start));
@@ -1062,6 +1068,7 @@ function RapportinoDay({
       name: s.name,
       start: s.start,
       end: s.end,
+      type: s.type ?? null,
       orig: { name: s.name, start: s.start, end: s.end },
     }));
 
@@ -1072,6 +1079,16 @@ function RapportinoDay({
     if (sessGiorno && sessGiorno.length) setSessions(rowsFromTimbratore(sessGiorno));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, readOnly, JSON.stringify(sessGiorno ?? null)]);
+
+  // Rapportino salvato (anche chiuso): dopo una sincronizzazione le timbrature
+  // arrivano aggiornate nei dati, ma lo stato locale era stato inizializzato al
+  // primo render e restava indietro (tipologia vuota finché non si ricaricava).
+  useEffect(() => {
+    const stored = rapportino?.timbrature;
+    if (!stored?.length) return;
+    setSessions(stored.map((t) => ({ uid: nextUid(), name: t.name, start: t.start, end: t.end, type: t.type, orig: t.orig })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rapportino?.id, JSON.stringify(rapportino?.timbrature ?? null)]);
 
   // Rileva se ci sono operatori ANCORA TIMBRATI (senza uscita) per la commessa
   // in questa giornata: le ore del timbratore sono parziali, quindi il PDF non
