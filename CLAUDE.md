@@ -641,6 +641,19 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
 - **Fix layout desktop**: la shell usa `display:flex` (`.app` flex, `.sidebar`
   `flex:0 0 248px`, `.main` `flex:1 1 0; min-width:0`) invece di CSS grid `1fr`,
   che collassava in alcuni browser embedded. Robusto su desktop/tablet/mobile.
+- **Riepilogo intervento in un PDF solo** (`src/lib/riepilogoPdf.ts` +
+  `riepilogoRender.ts`): tutte le giornate una dopo l'altra (ore per operatore
+  con tipologia, attività e problematiche), totale per operatore e **una sola
+  firma in fondo**, per le installazioni lunghe dove il cliente firma a fine
+  lavori invece che ogni giorno. I rapportini giornalieri restano come sono.
+  Firme (tecnico + cliente) raccolte dalla scheda intervento e salvate su
+  `Intervento.summary*`; il PDF si rigenera sempre dai dati correnti.
+  API: `GET /api/interventi/[id]/riepilogo/pdf` ·
+  `POST|DELETE /api/interventi/[id]/riepilogo` (firma / revoca, `intervento.edit`).
+  Colori, carta intestata e `san()` sono condivisi col rapportino in
+  `src/lib/pdfCommon.ts`. **Il piede della carta intestata è alto 143 pt**: il
+  blocco firma spesso finisce su una pagina sua, che infatti ripete il
+  riferimento dell'intervento.
 - **Tipologia timbratura nel rapportino** (Lavoro / Viaggio): il timbratore la
   espone nella colonna **12** della tabella `/stampings` (`StampingRow.tipologia`,
   13 = "tipologia di lavoro", non usata). Viaggia con le sessioni

@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import { fmtHM } from "@/lib/format";
+import { fmtHM, fmtDateTime } from "@/lib/format";
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import PosCard from "@/components/PosCard";
@@ -97,6 +97,10 @@ type Data = {
   posValidatedByName: string | null;
   posSignature: string | null;
   posNote: string | null;
+  summarySignedAt: string | null;
+  summarySignedByName: string | null;
+  summaryTechName: string | null;
+  summaryClientName: string | null;
   participants: { id: string; name: string }[];
   scheduledStart: string | null;
   scheduledEnd: string | null;
@@ -221,6 +225,7 @@ export default function InterventoDetail({
   const [title, setTitle] = useState(data.title);
   const [adding, setAdding] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState<ChecklistType | null>(null);
+  const [riepilogoOpen, setRiepilogoOpen] = useState(false);
 
   const totHours = Math.round(data.rapportini.reduce((n, r) => n + (r.hoursWorked ?? 0), 0) * 100) / 100;
 
@@ -734,12 +739,41 @@ export default function InterventoDetail({
         <section className="card">
           <div className="card-header">
             <h3>Rapportini giornalieri</h3>
-            {canSign && !adding && (
-              <button className="btn-ghost-sm" onClick={() => setAdding(true)}>
-                <Icon name="plus" size={13} /> Aggiungi giornata
-              </button>
-            )}
+            <div className="row-actions">
+              {/* Riepilogo: tutte le giornate in un PDF solo, con una firma finale */}
+              {data.rapportini.length > 0 && (
+                <>
+                  <a
+                    className="btn-ghost-sm"
+                    href={`/api/interventi/${data.id}/riepilogo/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Tutte le giornate in un unico PDF"
+                  >
+                    <Icon name="download" size={13} /> Riepilogo PDF
+                  </a>
+                  {canSign && (
+                    <button className="btn-ghost-sm" onClick={() => setRiepilogoOpen(true)}>
+                      <Icon name="sign" size={13} />
+                      {data.summarySignedAt ? "Rifirma riepilogo" : "Firma riepilogo"}
+                    </button>
+                  )}
+                </>
+              )}
+              {canSign && !adding && (
+                <button className="btn-ghost-sm" onClick={() => setAdding(true)}>
+                  <Icon name="plus" size={13} /> Aggiungi giornata
+                </button>
+              )}
+            </div>
           </div>
+          {data.summarySignedAt && (
+            <div className="muted small" style={{ marginBottom: 10 }}>
+              Riepilogo firmato da <strong>{data.summaryTechName ?? "—"}</strong>
+              {data.summaryClientName ? ` e ${data.summaryClientName}` : ""} il{" "}
+              {fmtDateTime(data.summarySignedAt)} · vale per tutte le {data.rapportini.length} giornate.
+            </div>
+          )}
 
           {data.rapportini.length === 0 && !adding && (
             <div className="muted small">Nessun rapportino. Aggiungi la prima giornata di lavoro.</div>
@@ -868,6 +902,22 @@ export default function InterventoDetail({
         canEdit={canEdit && !campo}
         onDone={() => router.refresh()}
       />
+
+      {riepilogoOpen && (
+        <RiepilogoModal
+          interventoId={data.id}
+          days={data.rapportini.length}
+          defaultTech={data.summaryTechName ?? currentUserName}
+          defaultClient={data.summaryClientName ?? data.reportedBy ?? ""}
+          alreadySigned={!!data.summarySignedAt}
+          onClose={() => setRiepilogoOpen(false)}
+          onDone={(msg) => {
+            setRiepilogoOpen(false);
+            alert(msg);
+            router.refresh();
+          }}
+        />
+      )}
 
       {checklistOpen && (
         <ChecklistModal
@@ -2364,6 +2414,101 @@ function ArticleInput({
         placeholder="cod. / descr."
       />
       {dropdown}
+    </div>
+  );
+}
+
+
+/* ── Riepilogo intervento: tutte le giornate in un PDF, firma unica ────── */
+function RiepilogoModal({
+  interventoId,
+  days,
+  defaultTech,
+  defaultClient,
+  alreadySigned,
+  onClose,
+  onDone,
+}: {
+  interventoId: string;
+  days: number;
+  defaultTech: string;
+  defaultClient: string;
+  alreadySigned: boolean;
+  onClose: () => void;
+  onDone: (msg: string) => void;
+}) {
+  const [tech, setTech] = useState(defaultTech);
+  const [client, setClient] = useState(defaultClient);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const techSig = useRef<SignaturePadHandle>(null);
+  const clientSig = useRef<SignaturePadHandle>(null);
+
+  async function sign() {
+    setErr(null);
+    const t = techSig.current?.isEmpty() ? null : techSig.current?.toDataURL() ?? null;
+    const c = clientSig.current?.isEmpty() ? null : clientSig.current?.toDataURL() ?? null;
+    if (!t && !c) return setErr("Firma almeno uno dei due riquadri.");
+    setBusy(true);
+    const res = await fetch(`/api/interventi/${interventoId}/riepilogo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ techName: tech, techSignature: t, clientName: client, clientSignature: c }),
+    });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return setErr(d.error || "Firma non riuscita");
+    window.open(`/api/interventi/${interventoId}/riepilogo/pdf`, "_blank");
+    onDone(`Riepilogo firmato: ${days} giornate in un unico PDF.`);
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Firma riepilogo intervento</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Chiudi">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        <div className="modal-body">
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Una firma sola per tutte le <strong>{days}</strong> giornate: nel PDF i rapportini si leggono uno di
+            seguito all&apos;altro e la firma sta in fondo. I rapportini giornalieri restano come sono.
+          </p>
+          {alreadySigned && (
+            <div className="info-banner warn">
+              <Icon name="sign" size={16} />
+              <span>Il riepilogo è già firmato: firmando di nuovo si sostituiscono le firme precedenti.</span>
+            </div>
+          )}
+          <label className="field">
+            <span className="field-label">Tecnico</span>
+            <input value={tech} onChange={(e) => setTech(e.target.value)} />
+          </label>
+          <div className="field">
+            <span className="field-label">Firma tecnico</span>
+            <SignaturePad ref={techSig} height={130} />
+          </div>
+          <label className="field">
+            <span className="field-label">Cliente</span>
+            <input value={client} onChange={(e) => setClient(e.target.value)} placeholder="Nome di chi firma" />
+          </label>
+          <div className="field">
+            <span className="field-label">Firma cliente</span>
+            <SignaturePad ref={clientSig} height={130} />
+          </div>
+          {err && <div className="form-error">{err}</div>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn-ghost" onClick={onClose} disabled={busy}>
+            Annulla
+          </button>
+          <button className="btn-primary" onClick={sign} disabled={busy}>
+            {busy ? "Firma…" : "Firma e apri il PDF"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

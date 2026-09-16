@@ -41,7 +41,7 @@ const sessionHours = (start: string, end: string): number => {
  * Raggruppa le timbrature per operatore (con sessioni entrata/uscita + subtotale).
  * Se non ci sono timbrature (vecchi rapportini) ripiega su hoursByOperator.
  */
-function operatorsForPdf(
+export function operatorsForPdf(
   timbrature: unknown,
   hoursByOperator: unknown
 ): { name: string; sessions: { start: string; end: string; hours: number; type: string | null }[]; total: number }[] {

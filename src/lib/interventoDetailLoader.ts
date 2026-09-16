@@ -97,6 +97,11 @@ export async function loadInterventoDetail(id: string) {
     posValidatedByName: intervento.posValidatedByName,
     posSignature: intervento.posSignature,
     posNote: intervento.posNote,
+    // riepilogo di tutte le giornate: firma unica di fine intervento
+    summarySignedAt: intervento.summarySignedAt?.toISOString() ?? null,
+    summarySignedByName: intervento.summarySignedByName,
+    summaryTechName: intervento.summaryTechName,
+    summaryClientName: intervento.summaryClientName,
     participants: intervento.participants.map((p) => ({ id: p.id, name: p.name })),
     scheduledStart: intervento.scheduledStart?.toISOString() ?? null,
     scheduledEnd: intervento.scheduledEnd?.toISOString() ?? null,

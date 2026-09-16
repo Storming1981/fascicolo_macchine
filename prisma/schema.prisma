@@ -107,6 +107,7 @@ model User {
   posValidati    Intervento[] @relation("InterventoPosValidator")
   presences      TechPresence[]
   googleToken    GoogleToken?
+  notifications  Notification[] @relation("UserNotifications")
 }
 
 /// Token OAuth Google PERSONALE di un utente, per inviare le email dalla propria
@@ -477,6 +478,15 @@ model Intervento {
   posValidatedByName String?
   posSignature       String?   // path firma del responsabile (/uploads/...)
   posNote            String?
+  // Riepilogo di tutte le giornate in un PDF unico (installazioni lunghe): il
+  // cliente firma una volta sola a fine lavori, invece di un foglio al giorno.
+  // I rapportini giornalieri restano con la loro firma.
+  summarySignedAt        DateTime?
+  summarySignedByName    String?
+  summaryTechName        String?
+  summaryTechSignature   String?   @db.Text // dataURL
+  summaryClientName      String?
+  summaryClientSignature String?   @db.Text // dataURL
   // Cestino (soft-delete): interventi creati per errore o per test. Restano nel
   // DB ma spariscono da tutte le liste; ripristinabili dal Cestino.
   deletedAt     DateTime?
@@ -495,6 +505,7 @@ model Intervento {
   documents     InterventoDocument[]
   photos        Photo[]
   conversations Conversation[]
+  notifications Notification[]
 
   @@index([customerId])
   @@index([machineId])
@@ -985,4 +996,40 @@ model MachineNoteRevision {
   note MachineNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
 
   @@index([noteId])
+}
+
+/// Notifica personale a un utente. È la sorgente unica delle due sponde del
+/// recapito: il pallino rosso col numero sull'app (badge = quante hanno
+/// `readAt` nullo) e la mail inviata alla casella dell'utente.
+///
+/// La mail non è un campo a parte di un altro sistema: si tiene qui l'esito
+/// (`emailSentAt` / `emailError`) perché l'invio avviene in background dopo la
+/// risposta HTTP e senza traccia non si saprebbe mai se è partita davvero.
+model Notification {
+  id           String    @id @default(cuid())
+  userId       String    // destinatario
+  kind         String    // INTERVENTO_ASSEGNATO | INTERVENTO_SQUADRA | INTERVENTO_RIPROGRAMMATO | ...
+  title        String
+  body         String    @db.Text // testo già formattato (multiriga) per pannello e mail
+  tone         String    @default("info") // info | ok | warn | alert
+  icon         String    @default("bell")
+  href         String?   // destinazione desktop; in Campo si ricava da interventoId
+  interventoId String?
+  machineId    String?
+  actorId      String?   // chi ha provocato la notifica (chi assegna)
+  actorName    String?
+  readAt       DateTime?
+  // Recapito e-mail (best-effort, in background)
+  emailTo     String?
+  emailSentAt DateTime?
+  emailFrom   String?
+  emailError  String?   @db.Text
+  createdAt   DateTime  @default(now())
+
+  user       User        @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  intervento Intervento? @relation(fields: [interventoId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([interventoId])
 }
