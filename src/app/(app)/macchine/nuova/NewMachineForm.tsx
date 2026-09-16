@@ -4,18 +4,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from "@/components/Icon";
 import CustomerPicker, { type CustomerHit } from "@/components/CustomerPicker";
-import { COMPONENT_GROUPS } from "@/lib/components";
 import { COUNTRIES } from "@/lib/domain";
 import { hasDualJob, CUSTOM_MODEL } from "@/lib/plant";
 
-type CompState = Record<
-  string,
-  { brand: string; items: string[]; extra: Record<string, string> }
->;
-
 type PlantConfig = { name: string; models: string[] }[];
 
-const STEPS = ["Identificazione", "Cliente", "Targa tecnica", "Componenti"];
+// Il fascicolo nasce con i dati minimi: targa tecnica, componenti e matricole
+// si compilano dopo, dalla scheda della macchina.
+const STEPS = ["Identificazione", "Cliente"];
 
 export default function NewMachineForm({
   plantConfig,
@@ -37,7 +33,6 @@ export default function NewMachineForm({
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [open, setOpen] = useState<string | null>(COMPONENT_GROUPS[0].id);
 
   const [f, setF] = useState({
     job: "",
@@ -53,10 +48,6 @@ export default function NewMachineForm({
     site: "",
     productionStart: new Date().toISOString().slice(0, 10),
     deliveryDate: "",
-    plateWeight: "",
-    platePower: "",
-    plateVoltage: "400V / 50Hz",
-    pressureSettings: "",
   });
   const set = (k: string, v: string | number) => setF((s) => ({ ...s, [k]: v }));
 
@@ -110,33 +101,6 @@ export default function NewMachineForm({
     setF((s) => ({ ...s, plantType: pt, model: modelsForPlant(pt)[0], customModel: "" }));
   const modelOptions = modelsForPlant(f.plantType);
 
-  const [comp, setComp] = useState<CompState>(
-    Object.fromEntries(
-      COMPONENT_GROUPS.map((g) => [
-        g.id,
-        {
-          brand: "",
-          items: g.slots.map(() => ""),
-          extra: Object.fromEntries((g.extra || []).map((e) => [e.key, ""])),
-        },
-      ])
-    )
-  );
-
-  function setCB(id: string, brand: string) {
-    setComp((s) => ({ ...s, [id]: { ...s[id], brand } }));
-  }
-  function setCI(id: string, i: number, v: string) {
-    setComp((s) => {
-      const items = [...s[id].items];
-      items[i] = v;
-      return { ...s, [id]: { ...s[id], items } };
-    });
-  }
-  function setCE(id: string, key: string, v: string) {
-    setComp((s) => ({ ...s, [id]: { ...s[id], extra: { ...s[id].extra, [key]: v } } }));
-  }
-
   async function submit() {
     setErr("");
     if (!f.job.trim()) {
@@ -157,21 +121,6 @@ export default function NewMachineForm({
     }
     setBusy(true);
     const country = COUNTRIES.find((c) => c.code === f.countryCode);
-    const components = COMPONENT_GROUPS.map((g) => {
-      const c = comp[g.id];
-      return {
-        groupId: g.id,
-        brand: c.brand || null,
-        items: g.slots.map((label, position) => ({
-          position,
-          label,
-          serial: c.items[position] || null,
-        })),
-        extra: Object.keys(c.extra).length
-          ? Object.fromEntries(Object.entries(c.extra).filter(([, v]) => v))
-          : null,
-      };
-    });
     const res = await fetch("/api/machines", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -179,7 +128,6 @@ export default function NewMachineForm({
         ...f,
         model: resolvedModel,
         country: country?.label || "Italia",
-        components,
       }),
     });
     setBusy(false);
@@ -198,7 +146,10 @@ export default function NewMachineForm({
       <div className="view-header">
         <div>
           <h1>Nuova macchina</h1>
-          <p>Crea il fascicolo tecnico. Tutti i campi saranno modificabili in seguito.</p>
+          <p>
+            Bastano identificazione e cliente. Targa tecnica, componenti e matricole si
+            compilano dopo, dalla scheda della macchina.
+          </p>
         </div>
         <Link className="btn-ghost" href="/macchine">
           <Icon name="x" size={15} /> Annulla
@@ -446,134 +397,6 @@ export default function NewMachineForm({
                 onChange={(e) => set("deliveryDate", e.target.value)}
               />
             </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="form-grid">
-            <div className="form-row">
-              <label>Peso totale</label>
-              <input
-                className="input"
-                value={f.plateWeight}
-                onChange={(e) => set("plateWeight", e.target.value)}
-                placeholder="38 500 kg"
-              />
-            </div>
-            <div className="form-row">
-              <label>Potenza nominale</label>
-              <input
-                className="input"
-                value={f.platePower}
-                onChange={(e) => set("platePower", e.target.value)}
-                placeholder="450 kW"
-              />
-            </div>
-            <div className="form-row">
-              <label>Tensione / Frequenza</label>
-              <select
-                className="input"
-                value={f.plateVoltage}
-                onChange={(e) => set("plateVoltage", e.target.value)}
-              >
-                <option>400V / 50Hz</option>
-                <option>480V / 60Hz</option>
-                <option>690V / 50Hz</option>
-                <option>380V / 50Hz</option>
-              </select>
-            </div>
-            <div className="form-row">
-              <label>Settaggi pressione</label>
-              <input
-                className="input mono"
-                value={f.pressureSettings}
-                onChange={(e) => set("pressureSettings", e.target.value)}
-                placeholder="255 bar + 3/4 giro (320 bar)"
-              />
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div>
-            <p className="muted small" style={{ marginBottom: 14 }}>
-              Inserisci brand e matricole disponibili. Gli slot vuoti si completano in
-              produzione.
-            </p>
-            {COMPONENT_GROUPS.map((g) => {
-              const c = comp[g.id];
-              const isOpen = open === g.id;
-              const filled = c.items.filter((x) => x.trim()).length;
-              return (
-                <div key={g.id} className="cmp-edit-row">
-                  <button
-                    className="cmp-row-head"
-                    type="button"
-                    onClick={() => setOpen(isOpen ? null : g.id)}
-                  >
-                    <span className="cmp-icon">
-                      <Icon name={g.icon} size={20} />
-                    </span>
-                    <div className="cmp-name">
-                      <div className="cmp-label">{g.label}</div>
-                      <div className="cmp-en mono">{g.en}</div>
-                    </div>
-                    <div className="cmp-brand">{c.brand || "—"}</div>
-                    <div className="cmp-count">
-                      <span
-                        className={
-                          "cmp-count-pill " +
-                          (filled === g.slots.length && filled > 0
-                            ? "full"
-                            : filled > 0
-                            ? "partial"
-                            : "")
-                        }
-                      >
-                        {filled} / {g.slots.length}
-                      </span>
-                    </div>
-                    <Icon name={isOpen ? "chev-down" : "chev-right"} size={16} />
-                  </button>
-                  {isOpen && (
-                    <div className="cmp-edit-body">
-                      <div className="form-row" style={{ maxWidth: 320, marginBottom: 12 }}>
-                        <label>Fornitore / Brand</label>
-                        <input
-                          className="input"
-                          value={c.brand}
-                          onChange={(e) => setCB(g.id, e.target.value)}
-                          placeholder="es. DINAMIC OIL"
-                        />
-                      </div>
-                      <div className="nm-slots">
-                        {g.slots.map((slot, i) => (
-                          <div className="form-row" key={i}>
-                            <label>{slot}</label>
-                            <input
-                              className="input mono"
-                              value={c.items[i]}
-                              onChange={(e) => setCI(g.id, i, e.target.value)}
-                              placeholder="Matricola / S.N."
-                            />
-                          </div>
-                        ))}
-                        {(g.extra || []).map((ex) => (
-                          <div className="form-row" key={ex.key}>
-                            <label>{ex.label}</label>
-                            <input
-                              className="input mono"
-                              value={c.extra[ex.key] || ""}
-                              onChange={(e) => setCE(g.id, ex.key, e.target.value)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
           </div>
         )}
 
