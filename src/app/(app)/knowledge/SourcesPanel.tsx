@@ -336,6 +336,7 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [percent, setPercent] = useState<number | null>(null);
+  const [autoType, setAutoType] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isVideo = type === "VIDEO";
 
@@ -476,6 +477,18 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
                 const f = e.target.files?.[0] ?? null;
                 setFile(f);
                 if (f && !title.trim()) setTitle(f.name.replace(/\.[^.]+$/, ""));
+                // Il tipo si adegua al file scelto. Lasciato su "Manuale
+                // macchina" (il default), un .mp4 finiva nell'estrattore di
+                // testo e l'indicizzazione moriva su byte binari: meglio
+                // correggere la tendina che spiegare l'errore dopo.
+                const eVideo =
+                  !!f && (/^video\//.test(f.type) || /\.(mp4|mov|avi|mkv|webm|m4v|3gp)$/i.test(f.name));
+                if (eVideo && type !== "VIDEO") {
+                  setType("VIDEO");
+                  setAutoType("È un video: ho impostato il tipo su «Video procedura».");
+                } else {
+                  setAutoType(null);
+                }
               }}
             />
             <Icon name="upload" size={22} color="var(--accent)" />
@@ -539,6 +552,7 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
             <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="martelli, usura, rotore" />
           </label>
 
+          {autoType && <div className="kb-notice">{autoType}</div>}
           {progress && (
             <div className="kb-notice">
               {progress}

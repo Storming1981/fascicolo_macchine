@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { saveStream } from "@/lib/uploads";
 import { indexSource } from "@/lib/brain/indexer";
 import { maxBytesFor } from "@/lib/brain/config";
+import { isSupportedDocument } from "@/lib/brain/extract";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,27 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     }
   })();
   const mimeType = req.headers.get("content-type") || "application/octet-stream";
+
+  // Controllo del formato: sul vecchio percorso multipart c'era, su questo si
+  // era perso. Un .mp4 caricato come "Manuale macchina" finiva nell'estrattore
+  // di testo, che lo leggeva come UTF-8: byte binari, e Postgres rifiutava
+  // l'indice con "0x00 cannot be converted to text".
+  const sembraVideo = mimeType.startsWith("video/") || /\.(mp4|mov|avi|mkv|webm|m4v|3gp)$/i.test(fileName);
+  if (source.type !== "VIDEO" && (sembraVideo || !isSupportedDocument(mimeType, fileName))) {
+    await prisma.knowledgeSource.delete({ where: { id } }).catch(() => {});
+    return NextResponse.json(
+      {
+        error: sembraVideo
+          ? 'Questo è un video: scegli "Video procedura" come tipo di contenuto, non "Manuale macchina".'
+          : "Formato non supportato: usa PDF, Word (.docx), testo o immagini.",
+      },
+      { status: 415 }
+    );
+  }
+  if (source.type === "VIDEO" && !sembraVideo && !mimeType.startsWith("video/") && fileName !== "allegato") {
+    // Non si blocca: un video può arrivare con un mime generico. Si annota.
+    console.warn(`[knowledge] file non riconosciuto come video: ${fileName} (${mimeType})`);
+  }
 
   const saved = await saveStream(req.body, "knowledge", fileName, maxBytesFor(source.type));
   if ("error" in saved) {

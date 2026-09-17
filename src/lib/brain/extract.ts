@@ -18,6 +18,11 @@ export type Extraction = {
 /** Normalizza il testo estratto: sillabazione a fine riga, spazi, righe vuote. */
 export function cleanText(raw: string): string {
   return raw
+    // Postgres non accetta il byte NUL nel testo: un file binario letto per
+    // sbaglio come UTF-8 faceva fallire l'indicizzazione con "0x00 cannot be
+    // converted to text". Via anche gli altri caratteri di controllo, che non
+    // sono mai contenuto utile.
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
     .replace(/\r\n?/g, "\n")
     .replace(/([a-zàèéìòù])-\n([a-zàèéìòù])/g, "$1$2") // "manuten-" + "zione" → "manutenzione"
     .replace(/[ \t]+/g, " ")
@@ -388,6 +393,13 @@ export async function extractFile(
 
   if (ext === ".doc")
     throw new Error("Formato .doc non supportato: salva il file come .docx o PDF e ricaricalo");
+
+  // Ultima spiaggia: si legge come testo. Solo per tipi davvero testuali —
+  // altrimenti si indicizzerebbero byte binari spacciandoli per contenuto.
+  if (!mime.startsWith("text/") && ![".txt", ".md", ".csv"].includes(ext))
+    throw new Error(
+      `Formato non leggibile (${mime || ext || "sconosciuto"}): usa PDF, Word (.docx), testo o immagini`
+    );
 
   const text = cleanText(await fs.readFile(file, "utf8"));
   return { pages: [{ page: 1, text }], pageCount: 1, ocrUsed: false };
