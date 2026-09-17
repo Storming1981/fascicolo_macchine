@@ -335,8 +335,35 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
+  const [percent, setPercent] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isVideo = type === "VIDEO";
+
+  /** Manda il file a blocchi mostrando l'avanzamento. `fetch` non espone il
+   *  progresso di upload, quindi per i file grossi serve per forza XHR. */
+  function uploadFile(id: string, f: File): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", `/api/knowledge/sources/${id}/file`);
+      xhr.setRequestHeader("x-filename", encodeURIComponent(f.name));
+      xhr.setRequestHeader("Content-Type", f.type || "application/octet-stream");
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setPercent(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) return resolve();
+        let msg = `Errore ${xhr.status}`;
+        try {
+          msg = JSON.parse(xhr.responseText)?.error ?? msg;
+        } catch {
+          if (xhr.status === 413) msg = "File troppo grande per il server";
+        }
+        reject(new Error(msg));
+      };
+      xhr.onerror = () => reject(new Error("Connessione interrotta durante il caricamento"));
+      xhr.send(f);
+    });
+  }
 
   async function submit() {
     setError(null);
@@ -349,33 +376,47 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       return;
     }
     setBusy(true);
-    setProgress("Carico il file…");
+    setPercent(null);
     try {
-      const fd = new FormData();
-      fd.set("type", type);
-      if (title.trim()) fd.set("title", title.trim());
-      if (plantType) fd.set("plantType", plantType);
-      if (model.trim()) fd.set("model", model.trim());
-      if (tags.trim()) fd.set("tags", tags.trim());
-      fd.set("visibility", visibility);
-      if (description.trim()) fd.set("description", description.trim());
-      if (videoUrl.trim()) fd.set("videoUrl", videoUrl.trim());
-      if (file) fd.set("file", file);
-
-      const r = await fetch("/api/knowledge/sources", { method: "POST", body: fd });
+      // Prima i metadati (leggeri), poi il file in streaming. Serve per i video:
+      // mandare mezzo giga dentro un multipart lo farebbe bufferizzare tutto in
+      // memoria sul server, e non si vedrebbe nessun avanzamento.
+      setProgress(file ? "Preparo il caricamento…" : "Salvo…");
+      const meta = {
+        type,
+        title: title.trim() || (file ? file.name.replace(/\.[^.]+$/, "") : ""),
+        plantType: plantType || undefined,
+        model: model.trim() || undefined,
+        tags: tags.trim() || undefined,
+        visibility,
+        description: description.trim() || undefined,
+        videoUrl: videoUrl.trim() || undefined,
+        awaitingFile: Boolean(file),
+      };
+      const r = await fetch("/api/knowledge/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(meta),
+      });
       const d = await r.json().catch(() => null);
       if (!r.ok) {
         setError(d?.error ?? `Errore ${r.status}`);
         return;
       }
+
+      if (file) {
+        setProgress(`Carico ${file.name} (${fmtSize(file.size)})…`);
+        await uploadFile(d.id, file);
+      }
       // Il file è salvato; l'estrazione prosegue sul server e può durare minuti
       // su un manuale scansionato. Si chiude qui: l'esito compare nella lista.
       onDone();
-    } catch {
-      setError("Errore di rete durante il caricamento");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore di rete durante il caricamento");
     } finally {
       setBusy(false);
       setProgress(null);
+      setPercent(null);
     }
   }
 
@@ -448,8 +489,8 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
                 <strong>{isVideo ? "Carica il video (facoltativo)" : "Scegli un file"}</strong>
                 <div className="kb-src-meta">
                   {isVideo
-                    ? "Massimo 60 MB. Per i filmati più pesanti usa il link qui sotto."
-                    : "PDF, Word (.docx), testo o immagini. I disegni e le foto vengono descritti dall'AI e resi cercabili."}
+                    ? "Fino a 2 GB. Il filmato non viene analizzato dall'AI: quello che rende il video trovabile sono il titolo e i capitoli qui sotto."
+                    : "PDF, Word (.docx), testo o immagini, fino a 60 MB. I disegni e le foto vengono descritti dall'AI e resi cercabili."}
                 </div>
               </div>
             )}
@@ -498,7 +539,19 @@ function UploadModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
             <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="martelli, usura, rotore" />
           </label>
 
-          {progress && <div className="kb-notice">{progress}</div>}
+          {progress && (
+            <div className="kb-notice">
+              {progress}
+              {percent !== null && (
+                <div className="kb-progress">
+                  <div className="kb-progress-track">
+                    <div className="kb-progress-bar" style={{ width: `${percent}%` }} />
+                  </div>
+                  <span>{percent}%</span>
+                </div>
+              )}
+            </div>
+          )}
           {error && <div className="kb-error">{error}</div>}
         </div>
 

@@ -29,7 +29,7 @@ export const NAV_ITEMS: { key: NavKey; label: string; group: string }[] = [
   { key: "pianificazione", label: "Service · Pianificazione", group: "Service" },
   { key: "mappa", label: "Service · Mappa cantieri", group: "Service" },
   { key: "clienti", label: "Service · Clienti & Cantieri", group: "Service" },
-  { key: "notifiche", label: "Service · Notifiche", group: "Service" },
+  { key: "notifiche", label: "Service · Avvisi", group: "Service" },
   { key: "knowledge", label: "Knowledge ZATO", group: "Knowledge" },
   { key: "persone", label: "Persone & Firme", group: "Registro" },
 ];

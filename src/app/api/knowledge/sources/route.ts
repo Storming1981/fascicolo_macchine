@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { saveFile } from "@/lib/uploads";
 import { indexSource } from "@/lib/brain/indexer";
 import { isSupportedDocument } from "@/lib/brain/extract";
+import { maxBytesFor } from "@/lib/brain/config";
 import type { KnowledgeSourceType, KnowledgeVisibility, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +21,6 @@ const TYPES: KnowledgeSourceType[] = [
   "ARTICLE",
   "OTHER",
 ];
-
-const MAX_BYTES = 60 * 1024 * 1024;
 
 /** Elenco delle fonti indicizzate, con i filtri della pagina Knowledge. */
 export async function GET(req: Request) {
@@ -94,23 +93,31 @@ export async function POST(req: Request) {
   if (!(await userCan(user.role, "knowledge.manage")))
     return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
 
-  const form = await req.formData().catch(() => null);
-  if (!form) return NextResponse.json({ error: "Richiesta non valida" }, { status: 400 });
+  // Due modi di creare una fonte:
+  //  - multipart, per i documenti: il file viaggia insieme ai metadati;
+  //  - JSON con `awaitingFile`, per i file grossi (video): qui si salvano solo
+  //    i metadati e il file arriva dopo, in streaming, su PUT …/[id]/file.
+  //    `req.formData()` tiene tutto in memoria e su mezzo giga non regge.
+  const isJson = (req.headers.get("content-type") ?? "").includes("application/json");
+  const json = isJson ? ((await req.json().catch(() => null)) as Record<string, unknown> | null) : null;
+  const form = isJson ? null : await req.formData().catch(() => null);
+  if (!json && !form) return NextResponse.json({ error: "Richiesta non valida" }, { status: 400 });
 
   const str = (k: string) => {
-    const v = form.get(k);
+    const v = json ? json[k] : form!.get(k);
     return typeof v === "string" && v.trim() ? v.trim() : null;
   };
+  const awaitingFile = json ? json.awaitingFile === true : false;
 
   const rawType = str("type") ?? "MANUAL";
   const type = (TYPES.includes(rawType as KnowledgeSourceType) ? rawType : "OTHER") as KnowledgeSourceType;
-  const file = form.get("file");
+  const file = form?.get("file") ?? null;
   const videoUrl = str("videoUrl");
   const description = str("description");
   let title = str("title");
 
   const hasFile = file instanceof File && file.size > 0;
-  if (!hasFile && !videoUrl && !description)
+  if (!hasFile && !awaitingFile && !videoUrl && !description)
     return NextResponse.json(
       { error: "Serve un file, un link video oppure del testo da indicizzare" },
       { status: 400 }
@@ -122,8 +129,11 @@ export async function POST(req: Request) {
   let sizeBytes: number | null = null;
 
   if (hasFile) {
-    if (file.size > MAX_BYTES)
-      return NextResponse.json({ error: "File troppo grande (massimo 60 MB)" }, { status: 413 });
+    if (file.size > maxBytesFor(type))
+      return NextResponse.json(
+        { error: `File troppo grande (massimo ${Math.round(maxBytesFor(type) / 1024 / 1024)} MB)` },
+        { status: 413 }
+      );
     if (type !== "VIDEO" && !isSupportedDocument(file.type, file.name))
       return NextResponse.json(
         { error: "Formato non supportato: usa PDF, Word (.docx), testo o immagini" },
@@ -138,6 +148,7 @@ export async function POST(req: Request) {
   }
 
   if (!title) return NextResponse.json({ error: "Titolo obbligatorio" }, { status: 400 });
+
 
   const source = await prisma.knowledgeSource.create({
     data: {
@@ -169,13 +180,16 @@ export async function POST(req: Request) {
   // connessione molto prima. Il risultato era il peggiore possibile — l'utente
   // vedeva un 504 mentre il lavoro finiva bene in silenzio. Si risponde subito,
   // il documento resta "In lavorazione" e la lista si aggiorna da sola.
-  after(async () => {
-    try {
-      await indexSource(source.id, { force: true });
-    } catch {
-      // indexSource marca già la sorgente come FAILED con il motivo.
-    }
-  });
+  // Se il file deve ancora arrivare non c'è niente da indicizzare: ci pensa
+  // PUT …/[id]/file quando lo stream è finito.
+  if (!awaitingFile)
+    after(async () => {
+      try {
+        await indexSource(source.id, { force: true });
+      } catch {
+        // indexSource marca già la sorgente come FAILED con il motivo.
+      }
+    });
 
-  return NextResponse.json({ ok: true, id: source.id, queued: true });
+  return NextResponse.json({ ok: true, id: source.id, queued: !awaitingFile, awaitingFile });
 }

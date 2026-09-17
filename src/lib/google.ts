@@ -291,6 +291,8 @@ export type SendMailInput = {
   cc?: string[];
   subject: string;
   text: string;
+  /** Alternativa HTML: il testo resta come fallback (multipart/alternative). */
+  html?: string;
   attachments?: MailAttachment[];
 };
 
@@ -323,13 +325,30 @@ export async function sendGmailAs(userId: string, input: SendMailInput): Promise
     "",
   ].join("\r\n");
 
-  const body = [
-    `--${boundary}`,
+  const plain = [
     'Content-Type: text/plain; charset="UTF-8"',
     "Content-Transfer-Encoding: base64",
     "",
     b64Lines(Buffer.from(input.text, "utf8")),
   ].join("\r\n");
+
+  // Con l'HTML il corpo diventa un multipart/alternative annidato: chi legge da
+  // un client che non rende l'HTML vede comunque il testo.
+  const body = input.html
+    ? [
+        `--${boundary}`,
+        `Content-Type: multipart/alternative; boundary="${boundary}_alt"`,
+        "",
+        `--${boundary}_alt`,
+        plain,
+        `--${boundary}_alt`,
+        'Content-Type: text/html; charset="UTF-8"',
+        "Content-Transfer-Encoding: base64",
+        "",
+        b64Lines(Buffer.from(input.html, "utf8")),
+        `--${boundary}_alt--`,
+      ].join("\r\n")
+    : [`--${boundary}`, plain].join("\r\n");
 
   const parts = (input.attachments ?? []).map((a) =>
     [

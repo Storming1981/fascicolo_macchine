@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from "./Icon";
+import NotificationBell from "./NotificationBell";
 import { initials } from "@/lib/domain";
 
 type NavKey =
@@ -141,7 +142,7 @@ export default function AppShell({
         { href: "/service/pianificazione", label: "Pianificazione", icon: "clock", show: caps.service && nav.pianificazione },
         { href: "/service/mappa", label: "Mappa cantieri", icon: "pin", show: caps.service && nav.mappa },
         { href: "/service/clienti", label: "Clienti & Cantieri", icon: "people", show: caps.service && nav.clienti },
-        { href: "/service/notifiche", label: "Notifiche", icon: "bell", show: caps.service && nav.notifiche },
+        { href: "/service/notifiche", label: "Avvisi Service", icon: "bell", show: caps.service && nav.notifiche },
       ],
     },
     {
@@ -263,17 +264,8 @@ export default function AppShell({
               </div>
               <Avatar name={user.name} photo={user.photo} />
             </Link>
-            {caps.service ? (
-              <Link className="icon-btn" href="/service/notifiche" aria-label="Notifiche">
-                <Icon name="bell" size={18} />
-                <span className="dot" />
-              </Link>
-            ) : (
-              <button className="icon-btn" aria-label="Notifiche">
-                <Icon name="bell" size={18} />
-                <span className="dot" />
-              </button>
-            )}
+            <NotificationBell />
+
             {caps.settings ? (
               <Link className="icon-btn bordered" href="/impostazioni" aria-label="Impostazioni">
                 <Icon name="gear" size={18} />

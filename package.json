@@ -20,7 +20,9 @@
     "brain:seed": "tsx scripts/brain-sync.ts seed",
     "brain:sync": "tsx scripts/brain-sync.ts sync",
     "brain:pending": "tsx scripts/brain-sync.ts pending",
-    "brain:test-headers": "tsx scripts/test-header-strip.ts"
+    "brain:test-headers": "tsx scripts/test-header-strip.ts",
+    "notif:test": "tsx scripts/test-notifiche.ts",
+    "push:keys": "node -e \"const w=require('web-push');const k=w.generateVAPIDKeys();console.log('VAPID_PUBLIC_KEY='+k.publicKey);console.log('VAPID_PRIVATE_KEY='+k.privateKey)\""
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -38,6 +40,7 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "server-only": "^0.0.1",
+    "web-push": "^3.6.7",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -47,6 +50,7 @@
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/web-push": "^3.6.4",
     "dotenv": "^17.4.2",
     "mssql": "^12.5.4",
     "prisma": "^6.2.1",

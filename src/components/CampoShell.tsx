@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from "./Icon";
+import NotificationBell from "./NotificationBell";
 import { initials } from "@/lib/domain";
 
 type CampoApp = "interventi" | "fascicolo";
@@ -45,6 +46,7 @@ export default function CampoShell({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="campo-logo" src="/zato-logo.png" alt="ZATO" />
         <span className="campo-spacer" />
+        <NotificationBell variant="campo" />
         <button className="campo-user" onClick={() => setMenu((m) => !m)} aria-label="Menu utente">
           <span className="user-avatar">{initials(user.name)}</span>
         </button>

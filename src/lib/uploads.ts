@@ -26,6 +26,59 @@ export async function saveFile(file: File, scope: string): Promise<{ path: strin
   return { path: `/uploads/${safeSegment(scope)}/${name}`, size: buf.length };
 }
 
+/**
+ * Salva un flusso di byte su disco SENZA tenerlo in memoria.
+ *
+ * `req.formData()` bufferizza l'intero corpo della richiesta: va benissimo per
+ * un PDF da 10 MB, fa esplodere il container su un video di mezzo giga. Qui i
+ * byte passano dalla rete al disco a blocchi, con un tetto che interrompe la
+ * scrittura (e cancella il parziale) appena viene superato.
+ */
+export async function saveStream(
+  body: ReadableStream<Uint8Array>,
+  scope: string,
+  filename: string,
+  maxBytes: number
+): Promise<{ path: string; size: number } | { error: string }> {
+  const { Readable } = await import("stream");
+  const { createWriteStream } = await import("fs");
+  const { pipeline } = await import("stream/promises");
+
+  const dir = path.join(ROOT, safeSegment(scope));
+  await ensureDir(dir);
+  const ext = path.extname(filename).slice(0, 12) || "";
+  const name = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}${safeSegment(ext)}`;
+  const full = path.join(dir, name);
+
+  let size = 0;
+  let troppoGrande = false;
+  const source = Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]);
+
+  try {
+    await pipeline(
+      source,
+      async function* (chunks: AsyncIterable<Buffer>) {
+        for await (const c of chunks) {
+          size += c.length;
+          if (size > maxBytes) {
+            troppoGrande = true;
+            // Interrompere qui evita di scrivere gigabyte solo per poi rifiutarli.
+            throw new Error("oltre il limite");
+          }
+          yield c;
+        }
+      },
+      createWriteStream(full)
+    );
+  } catch (e) {
+    await fs.unlink(full).catch(() => {});
+    if (troppoGrande) return { error: `File troppo grande (massimo ${Math.round(maxBytes / 1024 / 1024)} MB)` };
+    return { error: e instanceof Error ? e.message : "Errore durante il caricamento" };
+  }
+
+  return { path: `/uploads/${safeSegment(scope)}/${name}`, size };
+}
+
 /** Salva una dataURL (es. firma a penna PNG base64) e ritorna il path pubblico. */
 export async function saveDataUrl(dataUrl: string, scope: string, prefix = "sig"): Promise<string> {
   const m = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);

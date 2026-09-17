@@ -1,10 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { isClosedStatus } from "@/lib/interventoService";
 import { INTERVENTO_TYPE_META } from "@/lib/domain";
 import { POS_BLOCK_MESSAGE, touchesPlanning } from "@/lib/pos";
+import { loadInterventoBrief, buildAssignmentNotices } from "@/lib/interventoNotify";
+import { createNotifications } from "@/lib/notifications";
+import { deliverNotifications } from "@/lib/notifyDeliver";
+import { absoluteUrl } from "@/lib/absoluteUrl";
 import type { InterventoStatus, Prisma } from "@prisma/client";
 
 const STATUSES: InterventoStatus[] = [
@@ -30,9 +34,19 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // Finché il Piano Operativo di Sicurezza non è caricato e validato dal
   // responsabile (flag + firma), l'intervento non si assegna, non si pianifica
   // e non esce dallo stato "Documentazione da validare".
+  // Lo stato PRIMA della modifica serve anche alle notifiche: senza non si
+  // distingue "assegnato adesso" da "scheda risalvata con lo stesso tecnico",
+  // e il capo cantiere riceverebbe la stessa mail a ogni salvataggio.
   const current = await prisma.intervento.findUnique({
     where: { id },
-    select: { posValidated: true, status: true },
+    select: {
+      posValidated: true,
+      status: true,
+      assignedTechId: true,
+      scheduledStart: true,
+      scheduledEnd: true,
+      participants: { select: { id: true } },
+    },
   });
   if (!current) return NextResponse.json({ error: "Intervento non trovato" }, { status: 404 });
   if (!current.posValidated) {
@@ -84,5 +98,41 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     return NextResponse.json({ error: "Nessun campo valido" }, { status: 400 });
 
   const intervento = await prisma.intervento.update({ where: { id }, data });
+
+  // ── Notifiche di cantiere ─────────────────────────────────────────
+  // Chi viene messo capo cantiere (o in squadra, o tolto, o gli spostano le
+  // date) lo scopre qui: pallino rosso nell'app + mail. Le notifiche si
+  // scrivono subito (il pallino deve comparire al primo refresh), le mail
+  // partono dopo la risposta: Gmail non deve far fallire l'assegnazione.
+  const touchedTeam = "assignedTechId" in b || Array.isArray(b.participantIds);
+  const touchedDates = b.scheduledStart !== undefined || b.scheduledEnd !== undefined;
+  if (touchedTeam || touchedDates) {
+    try {
+      const brief = await loadInterventoBrief(id);
+      if (brief) {
+        const notices = await buildAssignmentNotices(
+          brief,
+          {
+            leadId: current.assignedTechId,
+            participantIds: current.participants.map((p) => p.id),
+            scheduledStart: current.scheduledStart,
+            scheduledEnd: current.scheduledEnd,
+          },
+          { id: user.id, name: user.name }
+        );
+        if (notices.length) {
+          const ids = await createNotifications(notices.map((n) => n.notification));
+          const base = absoluteUrl(req, "");
+          after(async () => {
+            await deliverNotifications(ids, notices, user.id, base);
+          });
+        }
+      }
+    } catch (e) {
+      // Una notifica mancata non annulla un'assegnazione già scritta.
+      console.error("[notifiche] assegnazione intervento", id, e);
+    }
+  }
+
   return NextResponse.json({ ok: true, code: intervento.code });
 }

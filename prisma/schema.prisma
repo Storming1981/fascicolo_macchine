@@ -108,6 +108,7 @@ model User {
   presences      TechPresence[]
   googleToken    GoogleToken?
   notifications  Notification[] @relation("UserNotifications")
+  pushSubs       PushSubscription[] @relation("UserPushSubs")
 }
 
 /// Token OAuth Google PERSONALE di un utente, per inviare le email dalla propria
@@ -1032,4 +1033,28 @@ model Notification {
   @@index([userId, readAt])
   @@index([userId, createdAt])
   @@index([interventoId])
+}
+
+/// Iscrizione Web Push di un DISPOSITIVO (non di un utente): lo stesso tecnico
+/// ha il telefono e il tablet, e ognuno ha il suo endpoint. Serve a far
+/// arrivare la notifica ad app chiusa, cosa che il polling della campanella non
+/// puo' fare.
+///
+/// `endpoint` e' la chiave naturale (l'URL del push service di Google/Apple/
+/// Mozilla): il browser lo rigenera quando l'iscrizione decade, quindi un
+/// upsert su endpoint evita i doppioni.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique @db.Text
+  p256dh    String // chiave pubblica del client (cifratura del payload)
+  auth      String // segreto di autenticazione del client
+  userAgent String?  @db.Text // per far riconoscere il dispositivo nell'elenco
+  createdAt DateTime @default(now())
+  lastOkAt  DateTime? // ultimo invio andato a buon fine
+  failCount Int       @default(0) // errori consecutivi: a 404/410 si cancella
+
+  user User @relation("UserPushSubs", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

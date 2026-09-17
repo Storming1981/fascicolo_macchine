@@ -84,3 +84,19 @@ export function estimateCostUsd(
     ((usage.cacheWriteTokens ?? 0) / 1e6) * p.in * 2
   );
 }
+
+/**
+ * Tetti di dimensione per i file caricati nella Knowledge.
+ *
+ * I documenti restano piccoli; i video di procedura no: un filmato di cantiere
+ * girato col telefono sta fra i 100 MB e il mezzo giga, e caricarne uno era
+ * impossibile con il limite pensato per i PDF.
+ */
+export const UPLOAD_LIMITS = {
+  documentMb: Number(process.env.BRAIN_MAX_DOC_MB) || 60,
+  videoMb: Number(process.env.BRAIN_MAX_VIDEO_MB) || 2048,
+};
+
+export function maxBytesFor(type: string): number {
+  return (type === "VIDEO" ? UPLOAD_LIMITS.videoMb : UPLOAD_LIMITS.documentMb) * 1024 * 1024;
+}

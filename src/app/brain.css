@@ -22,6 +22,10 @@
 .kb-intro { display: flex; gap: 10px; align-items: flex-start; background: var(--accent-soft); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 16px; }
 .kb-intro p { font-size: 12.5px; line-height: 1.55; color: var(--text-2); margin: 0; }
 .kb-notice { background: var(--accent-soft); color: var(--accent); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 12.5px; margin-bottom: 12px; cursor: default; }
+.kb-progress { display: flex; align-items: center; gap: 9px; margin-top: 8px; }
+.kb-progress-track { flex: 1 1 0; height: 6px; border-radius: 99px; background: var(--border-strong); overflow: hidden; }
+.kb-progress-bar { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.2s; }
+.kb-progress span { font-size: 11.5px; font-weight: 700; min-width: 34px; text-align: right; }
 .kb-error { background: #fdecec; color: var(--red); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 12.5px; }
 
 /* ── Elenco fonti ── */

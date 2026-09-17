@@ -628,6 +628,57 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   + `/api/users/me` per la firma personale. Vincolo: il compilatore non può
   approvare il proprio verbale.
 
+- **Notifiche di cantiere** (`Notification`, `src/lib/notifications.ts`,
+  `src/lib/interventoNotify.ts`, `src/lib/notifyMail.ts`): quando si assegna il
+  **capo cantiere** di un intervento, quell'utente riceve il **pallino rosso col
+  numerino** sulla campanella e una **mail** con tutto il cantiere.
+  - **Un solo punto di innesco**: `PATCH /api/interventi/[id]`. Le tre strade per
+    assegnare (tendina nella scheda, modale Squadra, drag della Pianificazione)
+    passano tutte di lì, quindi non serve agganciare nulla altrove.
+  - **Il brief** (`loadInterventoBrief`) raccoglie tipo, priorità, stato,
+    cliente + telefono, cantiere con indirizzo, macchina (codice/tipologia/job),
+    commessa, periodo, SLA, capo cantiere, squadra e descrizione. La stessa
+    struttura alimenta pannello e mail: un dato si aggiunge in un posto solo.
+  - **Non si rinotifica a vuoto**: la route rilegge lo stato *prima* della
+    modifica e confronta. Senza, ogni salvataggio della scheda rispedirebbe
+    notifica e mail alle stesse persone. Quattro casi: `INTERVENTO_ASSEGNATO`
+    (nuovo capo cantiere), `INTERVENTO_SQUADRA` (entra), `INTERVENTO_RIMOSSO`
+    (esce dalla squadra **o viene sostituito come capo cantiere**),
+    `INTERVENTO_RIPROGRAMMATO` (date spostate per chi c'era già). Chi fa la
+    modifica non si autonotifica. Il capo cantiere sostituito va avvisato per
+    forza: e' il caso che fa piu' danno, perche' altrimenti in due si preparano
+    per lo stesso cantiere.
+  - **La mail parte dopo la risposta HTTP** (`after()`): assegnare un intervento
+    non deve fallire perché Gmail è lento o nessuno ha collegato una casella.
+    L'esito resta sulla riga (`emailSentAt` / `emailFrom` / `emailError`),
+    altrimenti una mail mai partita non si scoprirebbe mai. Mittente =
+    `sendGmailAs(chi assegna)`: casella personale se collegata, altrimenti
+    quella aziendale — il capo cantiere può rispondere a chi gli ha dato il
+    cantiere.
+  - **Indirizzi non recapitabili**: 11 dei 21 utenti attivi sono operatori
+    importati dal timbratore e hanno `NNN@timbratore.local` (gli accessi portale
+    hanno `@portale.zato`). Non sono caselle vere: `notifyMail.ts` le scarta e
+    scrive il motivo in `emailError`, invece di riempire di bounce la posta di
+    chi assegna. **La notifica nell'app arriva lo stesso** — per far partire
+    anche la mail basta mettere l'indirizzo vero in Persone.
+  - **UI**: `src/components/NotificationBell.tsx` in **entrambi i gusci** — il
+    capo cantiere sta sul tablet, quindi la campanella c'è anche in Campo, dove
+    il pannello va quasi a tutto schermo e il clic porta a
+    `/campo/interventi/[id]` invece che alla pagina desktop. Polling a 45s solo
+    a scheda visibile (niente canale push: non c'è service worker), più il
+    numerino sull'icona dell'app installata via **Badging API**
+    (`navigator.setAppBadge`, silenzioso dove non c'è).
+  - **Due pagine diverse, nomi diversi**: `/notifiche` ("Le mie notifiche") è
+    l'archivio personale dietro alla campanella; `/service/notifiche`
+    ("Avvisi Service") resta il cruscotto del service (SLA, P.O.S. da validare)
+    e guarda gli interventi di tutti.
+  - **Il vincolo P.O.S. viene prima**: finché il piano non è validato la route
+    rifiuta l'assegnazione (409), quindi la prima notifica non può partire prima
+    che il cantiere sia davvero assegnabile.
+  - API: `GET /api/notifications` (`?count=1` per il solo numerino) ·
+    `POST /api/notifications` (`{ids}` o `{all:true}` per segnare lette).
+    Prova a secco senza inviare nulla: `npm run notif:test [INT-2491]`.
+
 ## Note operative
 
 - Avvio sviluppo: `npm run dev` · build: `npm run build` · prod: `npm start` (porta 3000)

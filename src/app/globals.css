@@ -129,7 +129,6 @@ h1, h2, h3, h4 { margin: 0; }
 .icon-btn { background: none; border: 1px solid transparent; cursor: pointer; padding: 8px; border-radius: 9px; color: var(--muted); display: grid; place-items: center; position: relative; }
 .icon-btn:hover { background: var(--hover); color: var(--text); }
 .icon-btn.bordered { border-color: var(--border); }
-.icon-btn .dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--red); border: 1.5px solid #fff; }
 
 /* ── View ────────────────────────────────────────────────── */
 .view {
@@ -1117,3 +1116,103 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .app-access-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
 .app-access-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; }
 .app-access-row select { max-width: 190px; }
+
+/* ── Notifiche: campanella, pallino col numerino, pannello ───────────── */
+.notif-wrap { position: relative; }
+
+/* Il numerino sul pallino rosso: fino a 9 resta un cerchio, poi si allunga. */
+.notif-badge {
+  position: absolute; top: 1px; right: 1px;
+  min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 99px; background: var(--red); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 17px; text-align: center;
+  border: 2px solid #fff; box-sizing: content-box;
+  font-variant-numeric: tabular-nums;
+}
+
+.notif-panel {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 60;
+  width: min(400px, calc(100vw - 32px));
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.notif-panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--bg-3);
+}
+.notif-panel-head strong { font-size: 14px; color: var(--navy); }
+.notif-count { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+.notif-linkbtn {
+  background: none; border: none; cursor: pointer; font: inherit;
+  font-size: 12px; font-weight: 600; color: var(--accent); padding: 2px 0;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+.notif-linkbtn:hover { text-decoration: underline; }
+
+.notif-list { max-height: min(62vh, 520px); overflow: auto; -webkit-overflow-scrolling: touch; }
+.notif-empty { padding: 26px 14px; text-align: center; color: var(--muted); font-size: 13px; }
+
+.notif-item { border-bottom: 1px solid var(--border); padding: 0 14px 2px; }
+.notif-item:last-child { border-bottom: none; }
+.notif-item.unread { background: var(--accent-soft); }
+.notif-main {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%;
+  background: none; border: none; cursor: pointer; font: inherit; text-align: left;
+  padding: 11px 0;
+}
+.notif-main:hover .notif-title { color: var(--accent); }
+.notif-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.notif-title { font-size: 13px; font-weight: 650; color: var(--navy); }
+.notif-body {
+  font-size: 12px; color: var(--text-2); line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.notif-meta { font-size: 11px; color: var(--muted-2); margin-top: 2px; }
+.notif-unread-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  flex-shrink: 0; margin-top: 6px;
+}
+.notif-more { margin: 0 0 8px 42px; font-size: 11.5px; }
+.notif-detail {
+  margin: 0 0 12px 42px; padding: 10px 12px; background: var(--bg-3);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 12px; line-height: 1.55; color: var(--text-2);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+/* Campo: il pannello parte dalla barra in alto e va quasi a tutto schermo,
+   perché su un telefono un menu da 400px appoggiato all'angolo non si legge. */
+.campo-bell { color: var(--navy); }
+.notif-panel.campo {
+  position: fixed; top: calc(54px + env(safe-area-inset-top)); left: 8px; right: 8px; width: auto;
+  max-height: calc(100vh - 74px - env(safe-area-inset-top));
+}
+.notif-panel.campo .notif-list { max-height: calc(100vh - 142px - env(safe-area-inset-top)); }
+.notif-panel.campo .notif-title { font-size: 14px; }
+.notif-panel.campo .notif-main { padding: 13px 0; }
+.notif-panel-foot { padding: 10px 14px; border-top: 1px solid var(--border); background: var(--bg-3); text-align: center; }
+
+/* Riga di attivazione delle notifiche di sistema, in testa al pannello. */
+.notif-push {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px; border-bottom: 1px solid var(--border);
+  background: #fffaf0;
+}
+.notif-push.on { background: #f0fdf7; }
+.notif-push-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.notif-push-txt strong { font-size: 12.5px; color: var(--navy); display: inline-flex; align-items: center; gap: 4px; }
+.notif-push-txt span { font-size: 11.5px; color: var(--text-2); line-height: 1.45; }
+.notif-push-msg {
+  padding: 9px 14px; font-size: 11.5px; color: var(--text-2);
+  background: var(--bg-3); border-bottom: 1px solid var(--border);
+}
+.btn-mini {
+  flex-shrink: 0; cursor: pointer; font: inherit; font-size: 12px; font-weight: 650;
+  padding: 7px 14px; border-radius: 8px; border: none;
+  background: var(--accent); color: #fff;
+}
+.btn-mini:hover:not(:disabled) { background: #2559d0; }
+.btn-mini:disabled { opacity: .6; cursor: default; }
+.btn-mini.ghost { background: none; color: var(--muted); border: 1px solid var(--border-strong); }
+.btn-mini.ghost:hover:not(:disabled) { background: var(--hover); color: var(--text); }
