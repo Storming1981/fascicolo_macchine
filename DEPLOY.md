@@ -280,6 +280,55 @@ prompt cache attiva dal secondo messaggio). L'indicizzazione dei documenti
 testuali è **gratuita**: l'AI interviene solo su PDF scansionati (OCR) e
 immagini. La stima per richiesta è mostrata sotto ogni risposta nella UI.
 
+## 8-ter. Notifiche push (prima attivazione)
+
+Le notifiche di cantiere arrivano **anche ad app chiusa** via Web Push. Servono
+una coppia di chiavi VAPID e il `db push` (tabelle `Notification` e
+`PushSubscription`).
+
+```bash
+cd /srv/machines-zato-app
+git pull
+docker compose build app tools
+docker compose run --rm tools npx prisma db push
+
+# genera la coppia VAPID (una sola volta)
+docker compose run --rm tools npm run push:keys
+```
+
+Copia le due righe in `.env.production` e aggiungi il soggetto:
+
+```bash
+nano .env.production
+#   VAPID_PUBLIC_KEY=...
+#   VAPID_PRIVATE_KEY=...
+#   VAPID_SUBJECT=mailto:service@zato.it
+docker compose up -d      # il container rilegge l'env solo se ricreato
+```
+
+Verifica dal server (non serve un telefono):
+
+```bash
+docker compose run --rm tools npm run push:test
+# atteso: firma VAPID presente, aes128gcm, payload cifrato, 410 -> rimossa SI
+```
+
+> **Le chiavi VAPID non si rigenerano a cuor leggero**: cambiarle invalida tutte
+> le iscrizioni gia' fatte dai dispositivi, che dovrebbero premere di nuovo
+> *Attiva* dalla campanella. Senza chiavi l'app parte identica e restano
+> campanella e mail.
+
+Sul dispositivo: aprire la campanella -> **Attiva** -> arriva una notifica di
+prova. Su **iPhone/iPad** funziona solo con l'app aggiunta alla schermata Home
+(Condividi -> Aggiungi alla schermata Home): da Safari normale l'iscrizione
+fallisce sempre.
+
+Il service worker e' `public/sw.js`, servito da `/sw.js` in ambito `/`: il proxy
+non deve riscriverlo ne' metterlo in cache lunga, o i dispositivi resterebbero
+al worker vecchio dopo un aggiornamento.
+
+---
+
 ## 9. Backup (consigliato: cron giornaliero)
 
 ```bash

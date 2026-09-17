@@ -675,11 +675,55 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     scrive il motivo in `emailError`, invece di riempire di bounce la posta di
     chi assegna. **La notifica nell'app arriva lo stesso** — per far partire
     anche la mail basta mettere l'indirizzo vero in Persone.
+  - **Notifica ad app chiusa (Web Push)** — la campanella si aggiorna col
+    polling, ma **solo mentre l'app è aperta**: il capo cantiere che riceve il
+    cantiere la sera, col telefono in tasca, senza push lo scoprirebbe solo
+    dalla mail. Pezzi: `public/sw.js` (service worker), `src/lib/push.ts`
+    (invio, `web-push`), `src/lib/pushClient.ts` (iscrizione lato browser),
+    `POST|GET|DELETE /api/push`, modello `PushSubscription`.
+    - **L'iscrizione è per DISPOSITIVO, non per utente**: telefono e tablet
+      dello stesso tecnico sono due righe, e si spedisce a tutte. La chiave
+      naturale è `endpoint` (l'URL del push service), con upsert: il browser lo
+      rigenera quando l'iscrizione decade e senza upsert si accumulerebbero
+      doppioni morti.
+    - **Il permesso si chiede solo da un gesto**: `requestPermission()` al
+      caricamento viene rifiutato in blocco dai browser, e su Safari brucia
+      l'unica occasione (un "no" non si ripropone). Da qui il bottone *Attiva*
+      in testa al pannello della campanella, che subito dopo manda una **prova**
+      (`POST /api/push {test:true}`): l'utente deve poter verificare da solo,
+      senza aspettare che qualcuno gli assegni un cantiere.
+    - **Su iPhone e iPad serve l'app installata** (Condividi → Aggiungi alla
+      schermata Home): da Safari normale l'API esiste ma l'iscrizione fallisce
+      sempre. Il pannello lo dice, invece di mostrare un bottone che non
+      funzionerà mai.
+    - **Le iscrizioni morte si cancellano da sole**: a 404/410 la riga sparisce
+      (app disinstallata, permesso revocato, endpoint ruotato), altrimenti
+      resterebbe a fallire per sempre a ogni notifica. Gli altri errori
+      incrementano `failCount` **e finiscono a log**: un push rotto per
+      configurazione (VAPID sbagliata, proxy che blocca) sparirebbe senza
+      lasciare traccia e nessuno riceverebbe più niente.
+    - Il service worker **non fa cache offline**: l'app è server-rendered e una
+      cache sbagliata servirebbe fascicoli vecchi, che in cantiere è peggio di
+      un errore di rete. Gestisce solo `push` e `notificationclick`.
+    - Il push porta **solo la frase di apertura + cliente · cantiere · date**:
+      sulla schermata bloccata il brief intero verrebbe troncato a metà parola.
+    - **`web-push` va in `serverExternalPackages`** (`next.config.ts`): senza,
+      non finisce in `.next/standalone/node_modules` e in container il push
+      muore. È la stessa trappola del worker di pdfjs, e in locale non si vede
+      perché lì `node_modules` è completo. Verificato su due build pulite.
+    - Chiavi VAPID in `.env` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+      `VAPID_SUBJECT`), generate con `npm run push:keys`. **Rigenerarle invalida
+      tutte le iscrizioni** già fatte dai dispositivi. Senza chiavi l'app parte
+      identica: restano campanella e mail.
+    - Prova senza browser: `npm run push:test` — verifica firma VAPID,
+      `aes128gcm`, che il payload sia davvero cifrato e che un 410 cancelli
+      l'iscrizione. Se questa passa e sul telefono non arriva niente, il
+      problema è il permesso del browser o il proxy, non il server.
   - **UI**: `src/components/NotificationBell.tsx` in **entrambi i gusci** — il
     capo cantiere sta sul tablet, quindi la campanella c'è anche in Campo, dove
     il pannello va quasi a tutto schermo e il clic porta a
     `/campo/interventi/[id]` invece che alla pagina desktop. Polling a 45s solo
-    a scheda visibile (niente canale push: non c'è service worker), più il
+    a scheda visibile (ad app aperta; ad app chiusa arriva il push), più il
     numerino sull'icona dell'app installata via **Badging API**
     (`navigator.setAppBadge`, silenzioso dove non c'è).
   - **Due pagine diverse, nomi diversi**: `/notifiche` ("Le mie notifiche") è
