@@ -1,9 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { saveFile } from "@/lib/uploads";
 import { POS_CATEGORY } from "@/lib/domain";
+import { loadInterventoBrief, buildPosToValidateNotices } from "@/lib/interventoNotify";
+import { createNotifications } from "@/lib/notifications";
+import { deliverNotifications } from "@/lib/notifyDeliver";
+import { absoluteUrl } from "@/lib/absoluteUrl";
 
 const CATEGORIES = [POS_CATEGORY, "allegato", "sicurezza", "formazione", "dpi", "altro"];
 
@@ -67,6 +71,33 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     });
     created.push({ id: rec.id, name: rec.name, path: rec.path });
   }
+
+  // ── P.O.S. caricato: ora il responsabile può firmarlo ──────────────
+  // È il momento in cui ha davvero qualcosa da fare: alla creazione sapeva
+  // che l'intervento esisteva, ma senza il file non poteva validare nulla.
+  if (category === POS_CATEGORY && created.length) {
+    try {
+      const brief = await loadInterventoBrief(id);
+      if (brief) {
+        const notices = await buildPosToValidateNotices(
+          brief,
+          { id: user.id, name: user.name },
+          created[0].name
+        );
+        if (notices.length) {
+          const ids = await createNotifications(notices.map((n) => n.notification));
+          const base = absoluteUrl(req, "");
+          after(async () => {
+            await deliverNotifications(ids, notices, user.id, base);
+          });
+        }
+      }
+    } catch (e) {
+      // Il file è già salvato: un avviso mancato non lo annulla.
+      console.error("[notifiche] caricamento P.O.S.", id, e);
+    }
+  }
+
   return NextResponse.json({ ok: true, count: created.length, documents: created });
 }
 

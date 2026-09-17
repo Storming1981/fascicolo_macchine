@@ -737,8 +737,23 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     ("Avvisi Service") resta il cruscotto del service (SLA, P.O.S. da validare)
     e guarda gli interventi di tutti.
   - **Il vincolo P.O.S. viene prima**: finché il piano non è validato la route
-    rifiuta l'assegnazione (409), quindi la prima notifica non può partire prima
-    che il cantiere sia davvero assegnabile.
+    rifiuta l'assegnazione (409), quindi la notifica di assegnazione non può
+    partire prima che il cantiere sia davvero assegnabile.
+  - **Avvisi al responsabile del P.O.S.** — l'intervento nasce bloccato, quindi
+    chi lo sblocca va avvisato, altrimenti il cantiere resta fermo in attesa di
+    qualcuno che non sa di doverci mettere mano. Due momenti:
+    `POS_DA_CARICARE` alla **creazione** (`POST /api/interventi`) e
+    `POS_DA_VALIDARE` al **caricamento del file** (`POST …/documents` con
+    `category=pos`) — è lì che ha davvero qualcosa da firmare, perché alla
+    creazione il documento non esiste ancora.
+    Destinatari (`posRecipients` in `interventoNotify.ts`): chi ha il flag
+    **`posValidator`** in anagrafica, oggi il solo Fausto Zanotti. Gli ADMIN
+    *potrebbero* validare (`canValidatePos` li ammette) ma non è il loro
+    mestiere: in produzione sono quattro e avvisarli a ogni intervento creato
+    renderebbe il pallino rosso rumore da ignorare proprio per chi lo deve
+    guardare. **Se però nessuno ha il flag si ripiega sugli ADMIN**: una
+    notifica senza destinatari è peggio di una di troppo, perché l'intervento
+    resterebbe bloccato e basta. Chi crea o carica non si autonotifica.
   - API: `GET /api/notifications` (`?count=1` per il solo numerino) ·
     `POST /api/notifications` (`{ids}` o `{all:true}` per segnare lette).
     Prova a secco senza inviare nulla: `npm run notif:test [INT-2491]`.

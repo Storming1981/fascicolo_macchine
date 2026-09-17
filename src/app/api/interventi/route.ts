@@ -1,8 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { nextInterventoCode } from "@/lib/interventoService";
+import { loadInterventoBrief, buildPosToUploadNotices } from "@/lib/interventoNotify";
+import { createNotifications } from "@/lib/notifications";
+import { deliverNotifications } from "@/lib/notifyDeliver";
+import { absoluteUrl } from "@/lib/absoluteUrl";
 import { INTERVENTO_TYPE_META, DEFAULT_INTERVENTO_TYPE } from "@/lib/domain";
 import type { InterventoStatus, Prisma } from "@prisma/client";
 
@@ -87,6 +91,28 @@ export async function POST(req: Request) {
       machineId: intervento.machineId,
     },
   });
+
+  // ── Avviso al responsabile del P.O.S. ─────────────────────────────
+  // L'intervento nasce bloccato in DOCUMENTAZIONE: finché il Piano Operativo
+  // di Sicurezza non è caricato e validato non si assegna e non si pianifica.
+  // Chi lo valida deve saperlo subito, altrimenti il cantiere resta fermo in
+  // attesa di qualcuno che non sa di doverci mettere mano.
+  try {
+    const brief = await loadInterventoBrief(intervento.id);
+    if (brief) {
+      const notices = await buildPosToUploadNotices(brief, { id: user.id, name: user.name });
+      if (notices.length) {
+        const ids = await createNotifications(notices.map((n) => n.notification));
+        const base = absoluteUrl(req, "");
+        after(async () => {
+          await deliverNotifications(ids, notices, user.id, base);
+        });
+      }
+    }
+  } catch (e) {
+    // Un avviso mancato non deve annullare un intervento già creato.
+    console.error("[notifiche] creazione intervento", intervento.id, e);
+  }
 
   return NextResponse.json({ ok: true, id: intervento.id, code });
 }

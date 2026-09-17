@@ -297,3 +297,84 @@ export async function buildAssignmentNotices(
   // Chi fa la modifica non si autonotifica: lo sa già.
   return out.filter((n) => n.notification.userId !== actor.id);
 }
+
+/* ───────────────────────── P.O.S. da validare ────────────────────────────── */
+
+/**
+ * Chi va avvisato che c'e' un P.O.S. da sbrigare.
+ *
+ * Sono le persone col flag **`posValidator`** in anagrafica (di fatto Fausto
+ * Zanotti). Gli ADMIN *potrebbero* validare — `canValidatePos` li ammette — ma
+ * non è il loro mestiere: avvisarli tutti a ogni intervento creato riempirebbe
+ * di rumore quattro caselle e il pallino rosso finirebbe ignorato proprio da
+ * chi lo deve guardare.
+ *
+ * Se pero' nessuno ha il flag si ripiega sugli ADMIN: una notifica che non ha
+ * destinatari è peggio di una notifica di troppo, perché l'intervento
+ * resterebbe bloccato in "Documentazione da validare" senza che nessuno sappia
+ * di doverci mettere mano.
+ */
+async function posRecipients(excludeUserId: string) {
+  const flagged = await prisma.user.findMany({
+    where: { active: true, posValidator: true },
+    select: { id: true, email: true },
+  });
+  const list = flagged.length
+    ? flagged
+    : await prisma.user.findMany({
+        where: { active: true, role: "ADMIN" },
+        select: { id: true, email: true },
+      });
+  // Chi carica o crea non si autonotifica: lo sa già.
+  return list.filter((u) => u.id !== excludeUserId);
+}
+
+/**
+ * Intervento appena creato: il P.O.S. non c'e' ancora e finche' non arriva
+ * l'intervento non si assegna né si pianifica.
+ */
+export async function buildPosToUploadNotices(
+  brief: InterventoBrief,
+  actor: { id: string; name: string }
+): Promise<Notice[]> {
+  const to = await posRecipients(actor.id);
+  return to.map((u) =>
+    notice("POS_DA_CARICARE", {
+      userId: u.id,
+      title: `Nuovo intervento da documentare: ${brief.code}`,
+      intro:
+        `${actor.name} ha creato l'intervento ${brief.code} — ${brief.title}. ` +
+        `Serve il Piano Operativo di Sicurezza: finché non è caricato e validato ` +
+        `l'intervento non si può assegnare né pianificare.`,
+      brief,
+      tone: "warn",
+      icon: "flag",
+      actor,
+      emailTo: u.email,
+    })
+  );
+}
+
+/** Il file del P.O.S. è stato caricato: ora il responsabile lo deve firmare. */
+export async function buildPosToValidateNotices(
+  brief: InterventoBrief,
+  actor: { id: string; name: string },
+  fileName: string
+): Promise<Notice[]> {
+  const to = await posRecipients(actor.id);
+  return to.map((u) =>
+    notice("POS_DA_VALIDARE", {
+      userId: u.id,
+      title: `P.O.S. da validare: ${brief.code}`,
+      intro:
+        `${actor.name} ha caricato il P.O.S. ("${fileName}") dell'intervento ` +
+        `${brief.code} — ${brief.title}. Manca la tua presa visione e la firma ` +
+        `perché l'intervento diventi pianificabile.`,
+      brief,
+      tone: "alert",
+      icon: "doc",
+      actor,
+      emailTo: u.email,
+    })
+  );
+}

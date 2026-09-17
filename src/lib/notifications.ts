@@ -14,7 +14,9 @@ export type NotifKind =
   | "INTERVENTO_ASSEGNATO"
   | "INTERVENTO_SQUADRA"
   | "INTERVENTO_RIPROGRAMMATO"
-  | "INTERVENTO_RIMOSSO";
+  | "INTERVENTO_RIMOSSO"
+  | "POS_DA_CARICARE" // intervento appena creato: il P.O.S. non c'e' ancora
+  | "POS_DA_VALIDARE"; // file caricato: il responsabile lo deve firmare
 
 export type NotifTone = "info" | "ok" | "warn" | "alert";
 
