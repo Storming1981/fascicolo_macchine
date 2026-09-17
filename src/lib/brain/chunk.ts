@@ -157,7 +157,7 @@ export function chunkTranscript(transcript: string, docTitle: string): Chunk[] {
   for (const line of lines) {
     const m = line.match(/^\[?(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\]?\s*[-–]?\s*(.*)$/);
     if (m && m[4]) {
-      const at = (Number(m[1] || 0) * 3600) + Number(m[2]) * 60 + Number(m[3]);
+      const at = Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]);
       stamped.push({ at, text: m[4] });
     } else if (stamped.length) {
       stamped[stamped.length - 1].text += " " + line;
@@ -166,33 +166,35 @@ export function chunkTranscript(transcript: string, docTitle: string): Chunk[] {
     }
   }
 
+  // UN FRAMMENTO PER CAPITOLO, non per lunghezza.
+  //
+  // Accorpando i capitoli finché non si riempie un chunk da 1800 caratteri,
+  // tre righe brevi ("00:00 Introduzione e DPI / 02:15 Sezionamento LOTO /
+  // 05:40 Smontaggio carter") diventavano un frammento solo, agganciato a 0:00:
+  // il Brain avrebbe sempre proposto l'inizio del filmato. Ma il minuto giusto
+  // È il valore del video — un tecnico in cantiere non si guarda venti minuti
+  // per arrivare al pezzo che gli serve.
+  //
+  // Per lo stesso motivo il titolo del video entra nel testo del frammento:
+  // "Sezionamento LOTO" da solo sono diciassette caratteri, sotto la soglia
+  // minima, e il capitolo sparirebbe dall'indice.
   const chunks: Chunk[] = [];
-  let buf = "";
-  let at = 0;
   let seq = 0;
-  const push = () => {
-    const body = buf.trim();
-    if (body.length < 40) return;
-    chunks.push({
-      seq: seq++,
-      breadcrumb: `${docTitle} › video ${fmt(at)}`,
-      heading: null,
-      page: null,
-      text: body,
-      tokens: estimateTokens(body),
-      videoAt: at,
-    });
-  };
   for (const s of stamped) {
-    if (!buf) at = s.at;
-    if (buf.length + s.text.length > INDEX.chunkChars) {
-      push();
-      buf = "";
-      at = s.at;
+    const testo = s.text.trim();
+    if (!testo) continue;
+    for (const pezzo of splitLong(`${docTitle} — ${testo}`)) {
+      chunks.push({
+        seq: seq++,
+        breadcrumb: `${docTitle} › video ${fmt(s.at)}`,
+        heading: null,
+        page: null,
+        text: pezzo,
+        tokens: estimateTokens(pezzo),
+        videoAt: s.at,
+      });
     }
-    buf += (buf ? " " : "") + s.text;
   }
-  push();
   return chunks;
 }
 
