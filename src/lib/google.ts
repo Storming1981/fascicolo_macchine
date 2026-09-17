@@ -300,18 +300,42 @@ export type SendMailInput = {
  * Invia una mail per conto di `userId`: usa la casella personale se collegata,
  * altrimenti quella aziendale. Lancia se nessuna delle due è disponibile.
  * Ritorna l'indirizzo mittente effettivo e l'id del messaggio.
+ *
+ * **Se la casella personale è rotta si ripiega su quella aziendale.** Prima il
+ * ripiego scattava solo quando la casella personale non c'era: bastava un token
+ * vecchio (chiave di cifratura cambiata, consenso revocato) perché le mail di
+ * quell'utente smettessero di partire in silenzio, mentre per gli altri
+ * funzionava tutto. È successo davvero: le notifiche assegnate dall'account
+ * amministratore non partivano, quelle assegnate da un altro utente sì.
  */
 export async function sendGmailAs(userId: string, input: SendMailInput): Promise<{ id: string; from: string }> {
   const personal = await readUserToken(userId);
-  const stored = personal ?? (await readCompanyToken());
-  if (!stored)
-    throw new Error("Nessuna casella Gmail collegata: collega la tua in Impostazioni o chiedi all'amministratore.");
+  const company = await readCompanyToken();
+  if (!personal && !company)
+    throw new Error("Nessuna casella Gmail collegata: collega la tua nel Profilo o chiedi all'amministratore.");
 
-  const saveBack = personal
-    ? (a: string, e: number) => writeUserAccess(userId, a, e)
-    : (a: string, e: number) => writeCompanyAccess(a, e);
+  let stored = personal ?? company!;
+  let usingPersonal = Boolean(personal);
+  let token: string;
 
-  const token = await ensureAccessToken(stored, saveBack);
+  const saveFor = (isPersonal: boolean) =>
+    isPersonal
+      ? (a: string, e: number) => writeUserAccess(userId, a, e)
+      : (a: string, e: number) => writeCompanyAccess(a, e);
+
+  try {
+    token = await ensureAccessToken(stored, saveFor(usingPersonal));
+  } catch (e) {
+    if (!usingPersonal || !company) {
+      // Niente su cui ripiegare: l'errore dice quale casella è da ricollegare,
+      // altrimenti chi legge non sa dove mettere le mani.
+      throw new Error(`${(e as Error).message} (casella ${stored.email})`);
+    }
+    stored = company;
+    usingPersonal = false;
+    token = await ensureAccessToken(stored, saveFor(false));
+  }
+
   const from = stored.email;
   const boundary = `zato_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 

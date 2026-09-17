@@ -668,7 +668,13 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     altrimenti una mail mai partita non si scoprirebbe mai. Mittente =
     `sendGmailAs(chi assegna)`: casella personale se collegata, altrimenti
     quella aziendale — il capo cantiere può rispondere a chi gli ha dato il
-    cantiere.
+    cantiere. **Se la personale è rotta si ripiega sull'aziendale**: prima il
+    ripiego scattava solo quando la personale non c'era, così un token vecchio
+    (chiave di cifratura cambiata col trasloco del DB sulla VPS, consenso
+    revocato) faceva sparire le mail di quel solo utente, in silenzio, mentre
+    per gli altri partivano. Visto in produzione: le assegnazioni fatte
+    dall'account *Amministratore ZATO* non spedivano nulla, quelle fatte da un
+    altro utente sì. L'errore ora dice anche **quale casella** ricollegare.
   - **Indirizzi non recapitabili**: 11 dei 21 utenti attivi sono operatori
     importati dal timbratore e hanno `NNN@timbratore.local` (gli accessi portale
     hanno `@portale.zato`). Non sono caselle vere: `notifyMail.ts` le scarta e
