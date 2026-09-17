@@ -85,6 +85,10 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
         if (status === 404 || status === 410) {
           await prisma.pushSubscription.delete({ where: { id: s.id } }).catch(() => null);
         } else {
+          // Un push che fallisce per configurazione (VAPID sbagliata, proxy che
+          // blocca) sparirebbe senza lasciare traccia: a quel punto nessuno
+          // riceve piu' niente e non c'e' nulla da guardare.
+          console.error("[push] invio fallito", status ?? "", (e as Error)?.message ?? e);
           await prisma.pushSubscription
             .update({ where: { id: s.id }, data: { failCount: { increment: 1 } } })
             .catch(() => null);

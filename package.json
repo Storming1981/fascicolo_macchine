@@ -22,7 +22,8 @@
     "brain:pending": "tsx scripts/brain-sync.ts pending",
     "brain:test-headers": "tsx scripts/test-header-strip.ts",
     "notif:test": "tsx scripts/test-notifiche.ts",
-    "push:keys": "node -e \"const w=require('web-push');const k=w.generateVAPIDKeys();console.log('VAPID_PUBLIC_KEY='+k.publicKey);console.log('VAPID_PRIVATE_KEY='+k.privateKey)\""
+    "push:keys": "node -e \"const w=require('web-push');const k=w.generateVAPIDKeys();console.log('VAPID_PUBLIC_KEY='+k.publicKey);console.log('VAPID_PRIVATE_KEY='+k.privateKey)\"",
+    "push:test": "tsx scripts/test-push.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

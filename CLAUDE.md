@@ -230,7 +230,21 @@ si paga pieno una volta, poi al 10%. Per questo il dizionario può essere genero
   più rispedita al modello.
 - **Video** → il filmato non passa mai dal modello. Si indicizzano titolo e
   capitoli con timestamp (`02:15 Sezionamento`): il Brain propone il video già
-  posizionato sul minuto giusto.
+  posizionato sul minuto giusto. **Un frammento per capitolo**, non per
+  lunghezza: accorpandoli finiva tutto in un frammento a 0:00 e il minuto — che
+  è il valore del video — si perdeva. Il titolo entra nel testo del frammento,
+  altrimenti un capitolo breve ("Sezionamento LOTO") sta sotto la soglia minima
+  e sparisce dall'indice.
+- **Caricamento dei video: in streaming, due tempi.** Fino a 2 GB
+  (`BRAIN_MAX_VIDEO_MB`); i documenti restano a 60 MB (`BRAIN_MAX_DOC_MB`).
+  `req.formData()` tiene l'intero corpo in memoria — bene per un PDF, esplosivo
+  per mezzo giga — quindi prima si creano i metadati (`POST` JSON con
+  `awaitingFile: true`, nessuna indicizzazione) e poi il file arriva su
+  `PUT /api/knowledge/sources/[id]/file`, che passa i byte dalla rete al disco a
+  blocchi. Il client usa **XHR** perché `fetch` non espone l'avanzamento
+  dell'upload. Lato proxy serve una `location` dedicata con
+  `client_max_body_size 2g` e **`proxy_request_buffering off`**: senza, nginx
+  scrive prima l'intero file in un suo temporaneo e solo dopo lo inoltra.
 
 ### Retrieval
 
