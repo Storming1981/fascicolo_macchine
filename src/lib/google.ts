@@ -230,15 +230,42 @@ async function revoke(refreshEnc: string) {
 /** Scollega la casella personale di un utente. */
 export async function disconnectUser(userId: string): Promise<void> {
   const t = await prisma.googleToken.findUnique({ where: { userId } });
-  if (t) await revoke(t.refreshToken);
+  if (t && !(await emailStillLinked(t.email, { exceptUserId: userId }))) await revoke(t.refreshToken);
   await prisma.googleToken.deleteMany({ where: { userId } });
 }
 
 /** Scollega la casella aziendale. */
 export async function disconnectCompany(): Promise<void> {
   const acc = await getGoogleAccount();
-  if (acc) await revoke(acc.refreshToken);
+  if (acc && !(await emailStillLinked(acc.email, { exceptCompany: true }))) await revoke(acc.refreshToken);
   await clearGoogleAccount();
+}
+
+/**
+ * La stessa casella Gmail è collegata anche altrove (un altro utente o la
+ * casella aziendale)? Succede davvero: admin@zato.it e s.camisani@zato.it usano
+ * entrambi s.camisani@zato.it.
+ *
+ * In quel caso "Scollega" deve solo togliere il collegamento dall'app, SENZA
+ * revocare presso Google: la revoca toglie all'app l'accesso all'intera
+ * casella e invalida tutti i token emessi per quell'indirizzo, quindi
+ * scollegando un account smetterebbero di spedire anche gli altri — in
+ * silenzio, fino al primo "Token Google illeggibile".
+ */
+async function emailStillLinked(
+  email: string,
+  opts: { exceptUserId?: string; exceptCompany?: boolean }
+): Promise<boolean> {
+  const others = await prisma.googleToken.count({
+    where: {
+      email: { equals: email, mode: "insensitive" },
+      ...(opts.exceptUserId ? { userId: { not: opts.exceptUserId } } : {}),
+    },
+  });
+  if (others > 0) return true;
+  if (opts.exceptCompany) return false;
+  const acc = await getGoogleAccount();
+  return !!acc && acc.email.toLowerCase() === email.toLowerCase();
 }
 
 /* ─────────────────────── Info per la UI (no token) ─────────────────────── */
