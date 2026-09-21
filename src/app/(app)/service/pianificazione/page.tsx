@@ -82,11 +82,27 @@ export default async function PianificazionePage({
     };
   });
 
-  const [techs, scheduled, pending, posBlocked] = await Promise.all([
+  const [techs, turni, scheduled, pending, posBlocked] = await Promise.all([
     prisma.user.findMany({
       where: { active: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true, zona: true },
+    }),
+    // Turni di presenza che toccano la finestra visualizzata: sono loro a
+    // disegnare il Gantt, non piu' la finestra unica dell'intervento.
+    prisma.interventoTurno.findMany({
+      where: { start: { lt: end }, end: { gte: start }, intervento: { deletedAt: null } },
+      select: {
+        id: true,
+        userId: true,
+        role: true,
+        start: true,
+        end: true,
+        overlapOk: true,
+        intervento: {
+          select: { id: true, code: true, title: true, priority: true, customer: { select: { name: true } } },
+        },
+      },
     }),
     prisma.intervento.findMany({
       where: { assignedTechId: { not: null }, scheduledStart: { gte: start, lt: end }, deletedAt: null },
@@ -122,50 +138,54 @@ export default async function PianificazionePage({
 
   const dayIndex = (iso: string) => daysArr.findIndex((d) => d.iso === iso);
 
-  // Conflitti: un tecnico (responsabile O partecipante) su due interventi con
-  // date sovrapposte. Chiave "<interventoId>|<techId>".
-  const conflictKey = new Set<string>();
+  // Conflitti: due TURNI della stessa persona che si sovrappongono. Prima si
+  // confrontavano le finestre degli interventi, che erano condivise da tutta la
+  // squadra: ora il confronto e' sulla presenza reale della singola persona.
+  const conflictTurno = new Set<string>();
   {
-    const byTech = new Map<string, { id: string; start: number; end: number }[]>();
-    for (const s of scheduled) {
-      const st = s.scheduledStart!.getTime();
-      const en = (s.scheduledEnd ?? s.scheduledStart!).getTime();
-      const team = new Set([s.assignedTechId, ...s.participants.map((p) => p.id)].filter((x): x is string => !!x));
-      for (const techId of team) {
-        const arr = byTech.get(techId) ?? [];
-        arr.push({ id: s.id, start: st, end: en });
-        byTech.set(techId, arr);
-      }
+    const byUser = new Map<string, { id: string; s: number; e: number; ok: boolean }[]>();
+    for (const t of turni) {
+      const arr = byUser.get(t.userId) ?? [];
+      arr.push({ id: t.id, s: t.start.getTime(), e: t.end.getTime(), ok: t.overlapOk });
+      byUser.set(t.userId, arr);
     }
-    for (const [techId, arr] of byTech) {
+    for (const arr of byUser.values())
       for (let i = 0; i < arr.length; i++)
         for (let j = i + 1; j < arr.length; j++) {
-          if (arr[i].start < arr[j].end && arr[j].start < arr[i].end) {
-            conflictKey.add(`${arr[i].id}|${techId}`);
-            conflictKey.add(`${arr[j].id}|${techId}`);
+          if (arr[i].ok || arr[j].ok) continue; // sovrapposizione voluta
+          if (arr[i].s <= arr[j].e && arr[j].s <= arr[i].e) {
+            conflictTurno.add(arr[i].id);
+            conflictTurno.add(arr[j].id);
           }
         }
-    }
   }
 
+  // Stessa informazione vista per intervento+persona, per la vista "Per cantiere".
+  const conflictPair = new Set<string>();
+  for (const t of turni)
+    if (conflictTurno.has(t.id)) conflictPair.add(`${t.intervento.id}|${t.userId}`);
+
   const ganttTechs: GanttTech[] = techs.map((t) => {
-    const blocks = scheduled
-      .filter((s) => s.assignedTechId === t.id || s.participants.some((p) => p.id === t.id))
-      .map((s) => {
-        const sIso = isoDate(s.scheduledStart!);
-        const eIso = isoDate(s.scheduledEnd ?? s.scheduledStart!);
-        const di = Math.max(0, dayIndex(sIso));
-        const rawDj = dayIndex(eIso);
+    const blocks = turni
+      .filter((x) => x.userId === t.id)
+      .map((x) => {
+        const di = Math.max(0, dayIndex(isoDate(x.start)));
+        const rawDj = dayIndex(isoDate(x.end));
         const dj = rawDj < 0 ? daysArr.length - 1 : rawDj;
-        const len = Math.max(1, dj - di + 1);
-        const role: "lead" | "member" = s.assignedTechId === t.id ? "lead" : "member";
-        return { id: s.id, code: s.code, title: s.title, priority: s.priority, day: di, len, role };
+        return {
+          turnoId: x.id,
+          id: x.intervento.id,
+          code: x.intervento.code,
+          title: x.intervento.title,
+          priority: x.intervento.priority,
+          day: di,
+          len: Math.max(1, dj - di + 1),
+          role: (x.role === "lead" ? "lead" : "member") as "lead" | "member",
+          conflict: conflictTurno.has(x.id),
+        };
       })
       .sort((a, b) => a.day - b.day);
-    // conflitto: il tecnico è su due interventi sovrapposti (come responsabile
-    // o partecipante) — usa il calcolo per data reale (conflictKey).
-    const conflict = blocks.some((b) => conflictKey.has(`${b.id}|${t.id}`));
-    return { id: t.id, name: t.name, zona: t.zona, blocks, conflict };
+    return { id: t.id, name: t.name, zona: t.zona, blocks, conflict: blocks.some((b) => b.conflict) };
   });
 
   // vista mese: interventi per giorno (espansi sulla durata)
@@ -217,11 +237,11 @@ export default async function PianificazionePage({
         len,
         supervisorId: s.assignedTechId,
         supervisorName: s.tech?.name ?? null,
-        supervisorConflict: s.assignedTechId ? conflictKey.has(`${s.id}|${s.assignedTechId}`) : false,
+        supervisorConflict: s.assignedTechId ? conflictPair.has(`${s.id}|${s.assignedTechId}`) : false,
         participants: s.participants.map((p) => ({
           id: p.id,
           name: p.name,
-          conflict: conflictKey.has(`${s.id}|${p.id}`),
+          conflict: conflictPair.has(`${s.id}|${p.id}`),
         })),
       };
     })

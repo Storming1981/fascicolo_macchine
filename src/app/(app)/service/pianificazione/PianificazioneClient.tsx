@@ -26,7 +26,17 @@ export type GanttDay = {
 
 export type MonthItem = { id: string; code: string; title: string; priority: number; tech: string | null };
 export type MonthDay = GanttDay & { inMonth: boolean; items: MonthItem[] };
-type Block = { id: string; code: string; title: string; priority: number; day: number; len: number; role?: "lead" | "member" };
+type Block = {
+  turnoId: string;
+  id: string;
+  code: string;
+  title: string;
+  priority: number;
+  day: number;
+  len: number;
+  role?: "lead" | "member";
+  conflict?: boolean;
+};
 export type GanttTech = {
   id: string;
   name: string;
@@ -104,36 +114,48 @@ export default function PianificazioneClient({
   const [page, setPage] = useState(1);
   const [dropTech, setDropTech] = useState<string | null>(null);
 
-  async function patchPlan(id: string, techId: string, dayIso: string, nDays = 1) {
-    const start = new Date(`${dayIso}T09:00:00`);
-    const end = new Date(start);
-    end.setDate(start.getDate() + (nDays - 1));
-    end.setHours(18, 0, 0, 0);
-    await fetch(`/api/interventi/${id}`, {
-      method: "PATCH",
+  /**
+   * Scrive un turno di presenza. Il conflitto lo decide il server (409 con i
+   * dettagli): qui si apre il dialogo con le azioni possibili.
+   */
+  type TurnoReq = {
+    interventoId?: string;
+    turnoId?: string;
+    userId?: string;
+    start?: string;
+    end?: string;
+    role?: "lead" | "member";
+    force?: boolean;
+    fit?: boolean;
+  };
+  type ConflictResp = {
+    userName: string;
+    conflicts: { turnoId: string; interventoId: string; code: string; title: string; customer: string | null; start: string; end: string }[];
+    free: { start: string; end: string }[];
+  };
+
+  async function writeTurno(req: TurnoReq): Promise<boolean> {
+    const res = await fetch("/api/turni", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        assignedTechId: techId,
-        scheduledStart: start.toISOString(),
-        scheduledEnd: end.toISOString(),
-        status: "PIANIFICATO",
-      }),
+      body: JSON.stringify(req),
     });
-  }
-  async function schedule(id: string, techId: string, dayIso: string) {
-    await patchPlan(id, techId, dayIso);
-    router.refresh();
+    if (res.ok) {
+      router.refresh();
+      return true;
+    }
+    const d = await res.json().catch(() => null);
+    if (res.status === 409 && d?.conflicts) {
+      setConflict({ req, ...(d as ConflictResp) });
+      return false;
+    }
+    alert(d?.error ?? "Non riesco a salvare il turno.");
+    return false;
   }
 
-  type ConflictInfo = { id: string; title: string; prio: number; techId: string; techName: string; dayIso: string; dayLabel: string; other: Block };
-  const [conflict, setConflict] = useState<ConflictInfo | null>(null);
+  type ConflictState = ConflictResp & { req: TurnoReq };
+  const [conflict, setConflict] = useState<ConflictState | null>(null);
 
-  function overlapBlock(blocks: Block[], day: number, len: number, exceptId?: string): Block | undefined {
-    // i conflitti riguardano solo gli interventi di cui il tecnico è responsabile
-    return blocks.find(
-      (b) => b.role !== "member" && b.id !== exceptId && day < b.day + b.len && b.day < day + len
-    );
-  }
   function draggedLabel(id: string): { title: string; prio: number } {
     const p = pending.find((x) => x.id === id);
     if (p) return { title: p.title, prio: p.priority };
@@ -141,54 +163,46 @@ export default function PianificazioneClient({
     return b ? { title: b.title, prio: b.priority } : { title: "Intervento", prio: 3 };
   }
 
+  /** Trascinato un intervento (dalla lista) o un turno (dal Gantt) su un tecnico. */
   function dropOnTech(e: DragEvent<HTMLDivElement>, techId: string) {
     e.preventDefault();
     setDropTech(null);
-    const id = e.dataTransfer.getData("text/intervento");
-    if (!id) return;
+    const interventoId = e.dataTransfer.getData("text/intervento");
+    const turnoId = e.dataTransfer.getData("text/turno");
+    if (!interventoId && !turnoId) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const idx = Math.max(0, Math.min(days.length - 1, Math.floor((e.clientX - rect.left) / (rect.width / days.length))));
-    const t = techs.find((x) => x.id === techId);
-    const other = t ? overlapBlock(t.blocks, idx, 1, id) : undefined;
-    if (other && t) {
-      const d = days[idx];
-      const dl = draggedLabel(id);
-      setConflict({ id, title: dl.title, prio: dl.prio, techId, techName: t.name, dayIso: d.iso, dayLabel: `${d.weekday} ${d.dayNum} ${d.month}`, other });
+    const idx = Math.max(
+      0,
+      Math.min(days.length - 1, Math.floor((e.clientX - rect.left) / (rect.width / days.length)))
+    );
+    const day = days[idx].iso;
+
+    if (turnoId) {
+      // spostamento: stessa durata, altra data (e, se cambia riga, altra persona)
+      const b = techs.flatMap((t) => t.blocks).find((x) => x.turnoId === turnoId);
+      const len = b?.len ?? 1;
+      const endIdx = Math.min(days.length - 1, idx + len - 1);
+      void writeTurno({ turnoId, userId: techId, start: day, end: days[endIdx].iso });
     } else {
-      schedule(id, techId, days[idx].iso);
+      void writeTurno({ interventoId, userId: techId, start: day, end: day, role: "lead" });
     }
   }
 
-  async function resolveKeep() {
+  /** Conferma del dialogo: accavalla comunque, oppure tieni solo i giorni liberi. */
+  async function resolveConflict(mode: "force" | "fit") {
     if (!conflict) return;
-    await patchPlan(conflict.id, conflict.techId, conflict.dayIso);
+    const req = { ...conflict.req, [mode]: true };
     setConflict(null);
-    router.refresh();
+    await writeTurno(req);
   }
-  async function resolveMoveOther() {
-    if (!conflict) return;
-    const curIdx = days.findIndex((d) => d.iso === conflict.dayIso);
-    const nextIdx = Math.min(days.length - 1, curIdx + 1);
-    await patchPlan(conflict.other.id, conflict.techId, days[nextIdx].iso, conflict.other.len);
-    await patchPlan(conflict.id, conflict.techId, conflict.dayIso);
-    setConflict(null);
+
+  async function removeTurno(turnoId: string) {
+    await fetch(`/api/turni?turnoId=${turnoId}`, { method: "DELETE" });
     router.refresh();
   }
 
   // ridimensionamento blocchi (durata in giorni)
   const [resize, setResize] = useState<{ id: string; day: number; baseLen: number; previewLen: number; cellW: number; startX: number } | null>(null);
-  async function setSpan(id: string, startIso: string, nDays: number) {
-    const start = new Date(`${startIso}T09:00:00`);
-    const end = new Date(start);
-    end.setDate(start.getDate() + (nDays - 1));
-    end.setHours(18, 0, 0, 0);
-    await fetch(`/api/interventi/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scheduledStart: start.toISOString(), scheduledEnd: end.toISOString() }),
-    });
-    router.refresh();
-  }
   async function loadLive() {
     const res = await fetch("/api/presence/live");
     const d = await res.json().catch(() => null);
@@ -380,37 +394,42 @@ export default function PianificazioneClient({
               ))}
               {t.blocks.map((b) => {
                 const prio = PRIORITY_META[b.priority] ?? PRIORITY_META[3];
-                const isResizing = resize?.id === b.id;
+                const isResizing = resize?.id === b.turnoId;
                 const len = isResizing ? resize!.previewLen : b.len;
                 const isMember = b.role === "member";
                 return (
                   <Link
-                    key={b.id}
+                    key={b.turnoId}
                     href={`/service/interventi/${b.id}`}
-                    className={"gantt-block" + (isResizing ? " resizing" : "") + (isMember ? " member" : "")}
-                    draggable={canEdit && !isResizing && !isMember}
+                    className={
+                      "gantt-block" +
+                      (isResizing ? " resizing" : "") +
+                      (isMember ? " member" : "") +
+                      (b.conflict ? " conflict" : "")
+                    }
+                    draggable={canEdit && !isResizing}
                     onDragStart={(e) => {
-                      if (isMember) return;
                       e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/intervento", b.id);
+                      e.dataTransfer.setData("text/turno", b.turnoId);
                     }}
                     style={{
                       left: `calc(${b.day} * ${colW} + 3px)`,
                       width: `calc(${len} * ${colW} - 6px)`,
                       background: isMember ? "transparent" : prio.color,
-                      borderColor: prio.color,
+                      borderColor: b.conflict ? "var(--red)" : prio.color,
                     }}
                     title={
-                      isMember
-                        ? `${b.code} · ${b.title} — partecipante`
-                        : `${b.code} · ${b.title} (${len} ${len === 1 ? "giorno" : "giorni"})`
+                      `${b.code} · ${b.title}` +
+                      (isMember ? " — in squadra" : " — capo cantiere") +
+                      ` (${len} ${len === 1 ? "giorno" : "giorni"})` +
+                      (b.conflict ? " — SOVRAPPOSTO a un altro impegno" : "")
                     }
                   >
                     <span className="gantt-block-title">
                       {isMember ? "· " : ""}
                       {b.title}
                     </span>
-                    {canEdit && !isMember && (
+                    {canEdit && (
                       <span
                         className="gantt-block-handle"
                         title="Trascina per cambiare la durata"
@@ -425,19 +444,26 @@ export default function PianificazioneClient({
                           if (!cellsEl) return;
                           const cellW = cellsEl.getBoundingClientRect().width / days.length;
                           e.currentTarget.setPointerCapture(e.pointerId);
-                          setResize({ id: b.id, day: b.day, baseLen: b.len, previewLen: b.len, cellW, startX: e.clientX });
+                          setResize({ id: b.turnoId, day: b.day, baseLen: b.len, previewLen: b.len, cellW, startX: e.clientX });
                         }}
                         onPointerMove={(e) => {
-                          if (!resize || resize.id !== b.id) return;
+                          if (!resize || resize.id !== b.turnoId) return;
                           const deltaDays = Math.round((e.clientX - resize.startX) / resize.cellW);
                           const previewLen = Math.max(1, Math.min(days.length - resize.day, resize.baseLen + deltaDays));
                           if (previewLen !== resize.previewLen) setResize({ ...resize, previewLen });
                         }}
                         onPointerUp={() => {
-                          if (resize && resize.id === b.id) {
+                          if (resize && resize.id === b.turnoId) {
                             const finalLen = resize.previewLen;
                             setResize(null);
-                            if (finalLen !== b.len) setSpan(b.id, days[b.day].iso, finalLen);
+                            if (finalLen !== b.len) {
+                              const endIdx = Math.min(days.length - 1, b.day + finalLen - 1);
+                              void writeTurno({
+                                turnoId: b.turnoId,
+                                start: days[b.day].iso,
+                                end: days[endIdx].iso,
+                              });
+                            }
                           } else {
                             setResize(null);
                           }
@@ -538,42 +564,50 @@ export default function PianificazioneClient({
         <div className="modal-backdrop" onClick={() => setConflict(null)}>
           <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Conflitto di pianificazione</h2>
+              <h2>Attenzione: possibile conflitto</h2>
               <button className="icon-btn" onClick={() => setConflict(null)} aria-label="Chiudi">
                 <Icon name="x" size={18} />
               </button>
             </div>
             <div className="modal-body">
-              <p style={{ fontSize: 13.5, lineHeight: 1.5 }}>
-                <strong>{conflict.techName}</strong> è già occupato <strong>{conflict.dayLabel}</strong> con{" "}
-                «<strong>{conflict.other.title}</strong>» ({PRIORITY_META[conflict.other.priority]?.short}).
+              <p style={{ fontSize: 13.5, lineHeight: 1.55, marginTop: 0 }}>
+                <strong>{conflict.userName}</strong> in quei giorni è già impegnato:
               </p>
-              <div className="conflict-cmp">
-                <div className="conflict-cmp-col">
-                  <span className="field-label">Vuoi pianificare</span>
-                  <span className="prio-chip" style={{ background: (PRIORITY_META[conflict.prio]?.color ?? "#64748b") + "1f", color: PRIORITY_META[conflict.prio]?.color }}>
-                    {PRIORITY_META[conflict.prio]?.short}
-                  </span>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{conflict.title}</span>
-                </div>
-                <div className="conflict-cmp-col">
-                  <span className="field-label">Al posto di</span>
-                  <span className="prio-chip" style={{ background: (PRIORITY_META[conflict.other.priority]?.color ?? "#64748b") + "1f", color: PRIORITY_META[conflict.other.priority]?.color }}>
-                    {PRIORITY_META[conflict.other.priority]?.short}
-                  </span>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{conflict.other.title}</span>
-                </div>
-              </div>
+              <ul className="conflict-list">
+                {conflict.conflicts.map((c) => (
+                  <li key={c.turnoId}>
+                    <a href={`/service/interventi/${c.interventoId}`}>
+                      <strong>{c.code}</strong> · {c.title}
+                    </a>
+                    <span className="muted small">
+                      {c.customer ? `${c.customer} · ` : ""}
+                      dal {c.start} al {c.end}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {conflict.free.length > 0 ? (
+                <p className="conflict-free">
+                  Giorni liberi nel periodo che hai scelto:{" "}
+                  <strong>
+                    {conflict.free.map((f) => (f.start === f.end ? f.start : `${f.start} → ${f.end}`)).join(" · ")}
+                  </strong>
+                </p>
+              ) : (
+                <p className="conflict-free">Nel periodo scelto non c'è nessun giorno libero.</p>
+              )}
             </div>
             <div className="modal-footer" style={{ flexWrap: "wrap", gap: 8 }}>
               <button className="btn-ghost" onClick={() => setConflict(null)}>
                 Annulla
               </button>
-              <button className="btn-ghost" onClick={resolveMoveOther}>
-                Sposta «{conflict.other.title}» al giorno dopo
-              </button>
-              <button className="btn-primary" onClick={resolveKeep}>
-                Pianifica comunque (priorità a questo)
+              {conflict.free.length > 0 && (
+                <button className="btn-ghost" onClick={() => resolveConflict("fit")}>
+                  Adatta ai giorni liberi
+                </button>
+              )}
+              <button className="btn-primary" onClick={() => resolveConflict("force")}>
+                Va bene lo stesso
               </button>
             </div>
           </div>

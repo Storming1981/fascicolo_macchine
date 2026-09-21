@@ -110,6 +110,7 @@ model User {
   notifications  Notification[] @relation("UserNotifications")
   pushSubs       PushSubscription[] @relation("UserPushSubs")
   interventoAcks InterventoAck[]    @relation("UserInterventoAcks")
+  turni          InterventoTurno[] @relation("UserTurni")
 }
 
 /// Token OAuth Google PERSONALE di un utente, per inviare le email dalla propria
@@ -513,6 +514,7 @@ model Intervento {
   conversations Conversation[]
   notifications Notification[]
   acks          InterventoAck[]
+  turni         InterventoTurno[]
 
   @@index([customerId])
   @@index([machineId])
@@ -1113,4 +1115,42 @@ model InterventoAck {
 
   @@unique([interventoId, userId])
   @@index([userId, acceptedAt])
+}
+
+/// Presenza di UNA persona su un intervento, per un periodo.
+///
+/// E' il pezzo che mancava al planner: prima "quando si lavora" era una
+/// proprieta' dell'intervento (una sola coppia di date per tutta la squadra),
+/// quindi non si poteva interrompere la presenza di qualcuno e farlo tornare —
+/// e per farlo si finiva ad aprire interventi figli sulla stessa commessa.
+///
+/// Con i turni la discontinuita' sta dove sta davvero, cioe' sulla persona:
+/// Luca 21-26 set su INT-2498, altrove il 27-28, di nuovo qui dal 29. Un solo
+/// intervento, un solo P.O.S., una sola commessa.
+///
+/// `Intervento.scheduledStart/End`, `assignedTechId` e `participants` restano
+/// e vengono RICALCOLATI dai turni (`reconcileIntervento`): tutto il resto
+/// dell'app — rapportini, ore, notifiche, app Campo — continua a leggere quelli
+/// senza sapere che i turni esistono.
+model InterventoTurno {
+  id            String   @id @default(cuid())
+  interventoId  String
+  userId        String
+  start         DateTime // primo giorno di presenza
+  end           DateTime // ultimo giorno (incluso)
+  role          String   @default("member") // lead (capo cantiere) | member
+  /// Sovrapposizione accettata di proposito (mezza giornata, passaggio di
+  /// consegne): senza, il planner continuerebbe a segnalarla come errore.
+  overlapOk     Boolean  @default(false)
+  note          String?
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  intervento Intervento @relation(fields: [interventoId], references: [id], onDelete: Cascade)
+  user       User       @relation("UserTurni", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, start])
+  @@index([interventoId])
 }

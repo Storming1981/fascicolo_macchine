@@ -802,6 +802,55 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     `POST /api/notifications` (`{ids}` o `{all:true}` per segnare lette).
     Prova a secco senza inviare nulla: `npm run notif:test [INT-2491]`.
 
+### Pianificazione a turni di presenza
+
+**Il problema.** "Quando si lavora" era una proprietà dell'**intervento**: una
+sola coppia di date condivisa da tutta la squadra. Quindi non si poteva
+interrompere la presenza di uno e farlo tornare (l'unica uscita era aprire
+interventi figli sulla stessa commessa), né dare a Tizio 3 giorni e a Caio tutto
+il mese, e allungare il periodo di uno lo allungava **per tutti**. INT-2498 era
+arrivato a **81 giorni** con una persona: una barra continua di tre mesi che non
+somigliava a quello che succedeva in cantiere.
+
+**La soluzione.** `InterventoTurno` (`src/lib/turni.ts`): *intervento + persona
++ dal/al + ruolo*, **più turni per la stessa persona sullo stesso intervento**.
+La discontinuità sta dove sta davvero, cioè sulla persona. Un solo intervento,
+un solo P.O.S., una sola commessa.
+
+**I turni sono la verità, il resto è derivato.** `reconcileIntervento()`
+ricalcola da essi `assignedTechId` (chi ha ruolo `lead`), `participants` e la
+finestra `scheduledStart/End` (min/max dei turni). Così rapportini, ore,
+milestone, notifiche, brief e app Campo continuano a leggere i campi di sempre
+senza sapere che i turni esistono: è la scelta che ha reso la migrazione
+indolore.
+
+**Conflitti.** Due turni della stessa persona che si sovrappongono — non più un
+confronto fra finestre di interventi condivise da tutta la squadra. Il controllo
+è **lato server** (`POST /api/turni` risponde **409** con: chi è occupato, su
+quale intervento/cliente, in che giorni, e i **tratti liberi** dentro il periodo
+chiesto). Il planner è a trascinamento e non è l'unica strada per scrivere un
+turno: il controllo non poteva stare solo nella pagina.
+
+Tre uscite dal dialogo, e la seconda **esisteva solo grazie ai turni**:
+`Annulla` · `Adatta ai giorni liberi` (`fit`: tiene i tratti liberi, creando un
+turno per tratto) · `Va bene lo stesso` (`force`: segna `overlapOk`, così una
+sovrapposizione voluta — mezza giornata, passaggio di consegne — non risuona
+come errore a ogni apertura della pagina).
+
+**Attenzione al ridimensionamento**: prima il conflitto si controllava solo sul
+*trascinamento*, e solo sui blocchi da capo cantiere. Allungare la barra di un
+tecnico sopra un altro impegno non diceva nulla — che è il caso da cui è partita
+tutta questa revisione.
+
+**Date dalla scheda intervento**: le seguono solo i turni di chi ha **un'unica**
+presenza continua. Chi ne ha più d'uno è stato spezzato apposta nel planner, e
+riallinearlo alla finestra cancellerebbe il lavoro di pianificazione.
+
+Migrazione: `npm run service:backfill-turni` — un turno per assegnazione
+esistente con le date dell'intervento, quindi il Gantt disegna esattamente
+quello che disegnava prima. Idempotente (salta chi ha già turni).
+API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=`.
+
 ## Note operative
 
 - Avvio sviluppo: `npm run dev` · build: `npm run build` · prod: `npm start` (porta 3000)

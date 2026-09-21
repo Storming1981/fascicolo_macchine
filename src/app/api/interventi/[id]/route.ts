@@ -8,6 +8,7 @@ import { POS_BLOCK_MESSAGE, touchesPlanning } from "@/lib/pos";
 import { loadInterventoBrief, buildAssignmentNotices } from "@/lib/interventoNotify";
 import { createNotifications } from "@/lib/notifications";
 import { syncAcks } from "@/lib/interventoAck";
+import { syncTurniFromAssignment, reconcileIntervento } from "@/lib/turni";
 import { deliverNotifications } from "@/lib/notifyDeliver";
 import { absoluteUrl } from "@/lib/absoluteUrl";
 import type { InterventoStatus, Prisma } from "@prisma/client";
@@ -121,6 +122,18 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
           },
           { id: user.id, name: user.name }
         );
+        // I turni di presenza seguono la squadra scelta qui (chi, non quando):
+        // chi entra prende la finestra dell'intervento, chi esce li perde.
+        await syncTurniFromAssignment(
+          id,
+          brief.leadId,
+          brief.participants.map((p) => p.id),
+          { start: intervento.scheduledStart, end: intervento.scheduledEnd },
+          { id: user.id, name: user.name },
+          touchedDates
+        );
+        await reconcileIntervento(id);
+
         // Chi è assegnato deve poter rispondere: una riga di presa in carico
         // per ognuno, in attesa finché non preme Accetta.
         await syncAcks(
