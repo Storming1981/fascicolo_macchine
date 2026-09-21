@@ -102,6 +102,8 @@ type Data = {
   summaryTechName: string | null;
   summaryClientName: string | null;
   participants: { id: string; name: string }[];
+  createdByName: string | null;
+  createdAt: string;
   acks: {
     userId: string;
     name: string;
@@ -493,6 +495,22 @@ export default function InterventoDetail({
               ) : (
                 <div className="readout">{data.siteName ?? "—"}</div>
               )}
+            </div>
+            <div className="field">
+              <span className="field-label">Creato da</span>
+              <div className="readout">
+                {data.createdByName ? (
+                  <>
+                    {data.createdByName}
+                    <span className="muted small"> · {fmtDateTime(data.createdAt)}</span>
+                  </>
+                ) : (
+                  <span className="muted">
+                    non registrato
+                    <span className="small"> · aperto il {fmtDateTime(data.createdAt)}</span>
+                  </span>
+                )}
+              </div>
             </div>
             <div className="field">
               <span className="field-label">Segnalato da</span>

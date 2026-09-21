@@ -107,6 +107,11 @@ export async function loadInterventoDetail(id: string) {
     // Chi ha preso in carico: e' il quadro che il responsabile guarda dopo aver
     // pianificato, per sapere se la squadra ci sara' davvero.
     acks: await listAcks(intervento.id),
+    // Chi ha aperto l'intervento e quando. Null sugli interventi creati prima
+    // che l'autore venisse registrato: si mostra "non registrato", non un nome
+    // inventato.
+    createdByName: intervento.createdByName,
+    createdAt: intervento.createdAt.toISOString(),
     scheduledStart: intervento.scheduledStart?.toISOString() ?? null,
     scheduledEnd: intervento.scheduledEnd?.toISOString() ?? null,
     completedAt: intervento.completedAt?.toISOString() ?? null,
