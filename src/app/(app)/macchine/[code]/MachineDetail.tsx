@@ -17,6 +17,7 @@ import {
 import { CUSTOM_MODEL, hasTiranteGiunto } from "@/lib/plant";
 import { hasAllestimentoSheets } from "@/lib/allestimento";
 import AllestimentoSheets from "@/components/AllestimentoSheets";
+import HoursAnalysisCard from "@/components/HoursAnalysisCard";
 import { MILESTONES, milestoneDef, SOURCE_LABEL, isAutoSource } from "@/lib/milestones";
 import { checklistFor, type ChecklistItem } from "@/lib/checklist";
 import { fmtDate, fmtBytes, fmtDateTime } from "@/lib/format";
@@ -803,6 +804,11 @@ function TabAnagrafica({
         </section>
 
         <ErpCard machine={machine} canEdit={canEdit} onDone={onDone} notify={notify} />
+
+        <HoursAnalysisCard
+          machineId={machine.id}
+          jobsKey={[machine.job, machine.jobBody, machine.jobContainer].join("|")}
+        />
 
         <section className="card">
           <div className="card-header">

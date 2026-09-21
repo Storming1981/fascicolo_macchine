@@ -12,6 +12,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "erp:sync": "tsx scripts/erp-sync-all.ts",
+    "timbratore:storico": "tsx --conditions=react-server scripts/timbratore-storico.ts",
     "service:seed": "tsx scripts/seed-service.ts",
     "service:backfill-customers": "tsx scripts/backfill-customers.ts",
     "operators:import": "tsx scripts/import-operators.ts",

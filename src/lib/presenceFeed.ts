@@ -133,6 +133,8 @@ export type StampingRow = {
   utente: string | null;
   commessa: string | null;
   anagrafica: string | null;
+  /** Nome della commessa nel timbratore (colonna 6). */
+  descrizione: string | null;
   startedAt: Date | null;
   finishedAt: Date | null;
   /** Tipologia della timbratura: "Lavoro", "Viaggio", ... (colonna 12). */
@@ -161,6 +163,7 @@ export function parseStampingsHtml(html: string): StampingRow[] {
       utente: cells[3] || null,
       commessa: cells[4] || null,
       anagrafica: cells[5] || null,
+      descrizione: cells[6] || null,
       startedAt: parseItDate(cells[9] || null),
       finishedAt,
       tipologia: cells[12] || null,
@@ -420,6 +423,102 @@ export async function fetchCommessaHours(
     for (const op of Object.keys(byDayOperator[day]))
       byDayOperator[day][op] = Math.round(byDayOperator[day][op] * 100) / 100;
   return { total: Math.round(total * 100) / 100, byDay, byDayOperator, sessions };
+}
+
+/**
+ * Copia nel DB (tabella Stamping) le timbrature con inizio in [from, to]
+ * (YYYY-MM-DD). Serve all'analisi ore: il filtro del timbratore trova solo il
+ * codice ESATTO (non il prefisso: `1260354` non trova `126035401`) e la tabella
+ * è paginata a 25 righe, quindi le ore di un fascicolo — sparse su job, job+2
+ * cifre e commesse di service — non si possono chiedere al volo.
+ *
+ * Le righe della finestra che il timbratore non restituisce più vengono
+ * cancellate (timbrature corrette o eliminate là), ma solo se la lettura è
+ * arrivata in fondo: una pagina fallita non deve svuotare mezzo mese.
+ */
+export async function syncStampingHistory(
+  from: string,
+  to: string
+): Promise<{ fetched: number; pages: number; removed: number }> {
+  const base = process.env.PRESENCE_FEED_URL;
+  if (!base) throw new Error("PRESENCE_FEED_URL non configurato");
+  const token = process.env.PRESENCE_FEED_TOKEN;
+  const cookie = token ? null : await login();
+  const headers: Record<string, string> = {
+    accept: "text/html",
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+    ...(cookie ? { cookie } : {}),
+  };
+
+  const now = new Date();
+  const seen = new Set<string>();
+  let pages = 0;
+  let complete = false;
+  for (let page = 1; page <= 2000; page++) {
+    const u = new URL(base);
+    u.searchParams.set("search[date_from]", from);
+    u.searchParams.set("search[date_to]", to);
+    u.searchParams.set("page", String(page));
+    const res = await fetch(u.toString(), { headers });
+    if (!res.ok) throw new Error(`Timbratore: HTTP ${res.status} a pagina ${page}`);
+    const rows = parseStampingsHtml(await res.text());
+    if (page === 1 && rows.length === 0 && seen.size === 0) {
+      complete = true; // finestra vuota
+      break;
+    }
+    const fresh = rows.filter((r) => !seen.has(r.externalId));
+    if (fresh.length === 0) {
+      complete = true;
+      break;
+    }
+    pages = page;
+    for (const r of fresh) {
+      seen.add(r.externalId);
+      const hours = r.startedAt
+        ? Math.max(0, ((r.finishedAt ?? now).getTime() - r.startedAt.getTime()) / 3600000)
+        : 0;
+      const data = {
+        matricola: r.matricola,
+        operator: r.utente,
+        commessa: r.commessa?.trim() || null,
+        anagrafica: r.anagrafica,
+        description: r.descrizione,
+        startedAt: r.startedAt,
+        finishedAt: r.finishedAt,
+        hours: Math.round(hours * 100) / 100,
+        tipologia: r.tipologia,
+        open: r.open,
+      };
+      await prisma.stamping.upsert({
+        where: { externalId: r.externalId },
+        update: data,
+        create: { externalId: r.externalId, ...data },
+      });
+    }
+  }
+
+  let removed = 0;
+  if (complete) {
+    // date_to del timbratore è inclusivo: la finestra locale arriva a fine giornata
+    const [fy, fm, fd] = from.split("-").map(Number);
+    const [ty, tm, td] = to.split("-").map(Number);
+    const del = await prisma.stamping.deleteMany({
+      where: {
+        startedAt: { gte: new Date(fy, fm - 1, fd), lt: new Date(ty, tm - 1, td + 1) },
+        externalId: { notIn: [...seen] },
+      },
+    });
+    removed = del.count;
+  }
+  return { fetched: seen.size, pages, removed };
+}
+
+/** Sync incrementale: ultimi `days` giorni (le aperte si chiudono, le correzioni arrivano). */
+export async function syncRecentStampings(days = 14) {
+  const now = new Date();
+  const from = isoDay(new Date(now.getTime() - days * 86400000));
+  const to = isoDay(new Date(now.getTime() + 86400000));
+  return syncStampingHistory(from, to);
 }
 
 export type OpenStamping = {

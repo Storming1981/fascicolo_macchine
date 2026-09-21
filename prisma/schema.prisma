@@ -682,6 +682,27 @@ model Message {
 /// Presenza/timbratura di un tecnico in cantiere (feed dalla web app esterna
 /// delle presenze, o inserimento manuale). Il tecnico timbra su una COMMESSA
 /// (= Machine.job): il cantiere si deriva commessa → macchina → cliente → Site.
+/// Copia locale delle timbrature del timbratore esterno (/stampings), per
+/// l'analisi ore: il timbratore filtra solo per codice esatto e pagina a 25
+/// righe, quindi interrogarlo al volo per ogni fascicolo non regge.
+model Stamping {
+  externalId  String    @id // id timbratura nel timbratore
+  matricola   String? // matricola operatore
+  operator    String? // nome operatore come nel timbratore
+  commessa    String? // codice commessa timbrato (job, job+2 cifre, service…)
+  anagrafica  String? // cliente
+  description String? // nome della commessa nel timbratore
+  startedAt   DateTime? // inizio (ora italiana)
+  finishedAt  DateTime? // fine; null = ancora aperta
+  hours       Float     @default(0) // durata; per le aperte fino all'ultima lettura
+  tipologia   String? // Lavoro | Viaggio | …
+  open        Boolean   @default(false)
+  syncedAt    DateTime  @default(now()) @updatedAt
+
+  @@index([commessa])
+  @@index([startedAt])
+}
+
 model TechPresence {
   id         String    @id @default(cuid())
   externalId String?   @unique // id timbratura nel sistema esterno (dedup sessioni)

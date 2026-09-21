@@ -784,6 +784,32 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   `src/lib/pdfCommon.ts`. **Il piede della carta intestata è alto 143 pt**: il
   blocco firma spesso finisce su una pagina sua, che infatti ripete il
   riferimento dell'intervento.
+- **Analisi ore del fascicolo** (card *Analisi ore* in Anagrafica, sotto i dati
+  ERP): **produzione** dal gestionale (`avlavp`, come la card ERP: diretta in
+  locale, snapshot del sync-agent sulla VPS) + **cantiere** dal timbratore
+  (lavoro / viaggio), con dettaglio per commessa, per mese e per operatore.
+  `src/lib/hoursAnalysis.ts` → `GET|POST /api/machines/[id]/hours` (POST
+  rilegge dal timbratore gli ultimi 14 giorni) → `HoursAnalysisCard.tsx`.
+  - **Copia locale delle timbrature** (`Stamping`): il filtro `search[order_name]`
+    del timbratore trova il codice **esatto o il nome** della commessa, **non il
+    prefisso** (`1260354` non trova `126035401`), e la tabella è paginata a 25
+    righe: chiedere al volo le ore di un fascicolo non regge. `syncStampingHistory`
+    (`presenceFeed.ts`) copia una finestra di date e cancella le righe della
+    finestra sparite dal timbratore, ma solo a lettura completa. Sync orario
+    degli ultimi 14 giorni in `instrumentation.ts`; a tabella vuota scarica prima
+    lo storico (il timbratore parte dal **2024**: ~4.200 timbrature, ~35.700 h).
+    A mano: `npm run timbratore:storico [anni]`. L'export CSV del timbratore
+    **non serve**: ha solo badge/giorno/entrata/uscita, niente commessa.
+  - **Come una timbratura si aggancia al fascicolo** (il timbratore conosce solo
+    la commessa): codice == job/jobBody/jobContainer · job **+ 2 cifre**
+    (126035401 = installazione di 1260354) · commessa di un **intervento** del
+    fascicolo · job **citato nel nome** della commessa di service ("CAMBIO LAME
+    GF4000.II 1230155", legame dedotto, badge ambra). 999999999 escluso. Sui dati
+    attuali si agganciano ~11.000 h su 35.700: il resto sono BLUE SHARK senza
+    fascicolo e commesse di service (2…, 3…, 4…) senza intervento collegato.
+  - Reparti del timbratore: UTE, PRO, APV. Anche gli operatori PRO timbrano lì
+    solo le **trasferte**: le ore di officina restano quelle del gestionale,
+    quindi le due fonti si sommano senza doppioni.
 - **Tipologia timbratura nel rapportino** (Lavoro / Viaggio): il timbratore la
   espone nella colonna **12** della tabella `/stampings` (`StampingRow.tipologia`,
   13 = "tipologia di lavoro", non usata). Viaggia con le sessioni
