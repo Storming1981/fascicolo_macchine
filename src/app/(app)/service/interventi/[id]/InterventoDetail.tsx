@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import { fmtHM, fmtDateTime } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtDayShort, fmtHM } from "@/lib/format";
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import PosCard from "@/components/PosCard";
@@ -538,7 +538,7 @@ export default function InterventoDetail({
                   }
                 />
               ) : (
-                <span>{data.scheduledStart ? new Date(data.scheduledStart).toLocaleString("it-IT") : "—"}</span>
+                <span>{fmtDateTime(data.scheduledStart)}</span>
               )}
             </div>
 
@@ -554,7 +554,7 @@ export default function InterventoDetail({
                   }
                 />
               ) : (
-                <span>{data.scheduledEnd ? new Date(data.scheduledEnd).toLocaleString("it-IT") : "—"}</span>
+                <span>{fmtDateTime(data.scheduledEnd)}</span>
               )}
               {canEdit && !posOk && <span className="muted small">Bloccato: P.O.S. da validare</span>}
             </div>
@@ -882,7 +882,7 @@ export default function InterventoDetail({
                     {st?.closed ? (
                       <span className="status-chip" style={{ background: "#10b98122", color: "#0a7d52" }}>
                         <Icon name="check" size={11} /> Chiusa
-                        {st.compiledAt ? ` · ${new Date(st.compiledAt).toLocaleDateString("it-IT")}` : ""}
+                        {st.compiledAt ? ` · ${fmtDate(st.compiledAt)}` : ""}
                       </span>
                     ) : (
                       <span className="status-chip" style={{ background: "#f59e0b22", color: "#b45309" }}>
@@ -1308,7 +1308,7 @@ function RapportinoDay({
     }
   }
 
-  const giorno = new Date(date + "T00:00:00").toLocaleDateString("it-IT");
+  const giorno = fmtDate(date + "T00:00:00");
   const mailSubject = `Rapportino ${interventoCode} — ${giorno}`;
   const mailBody =
     `Buongiorno,\n\nin allegato il rapportino dell'intervento ${interventoCode} ` +
@@ -1343,11 +1343,7 @@ function RapportinoDay({
     }
   }
 
-  const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("it-IT", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-  });
+  const dateLabel = fmtDayShort(date + "T00:00:00");
   const revisions = rapportino?.revisions ?? [];
   // vecchi rapportini: nessuna sessione ma ore aggregate per operatore
   const roLegacyOps = rapportino?.hoursByOperator ?? [];
@@ -1723,7 +1719,7 @@ function RapportinoDay({
                     <li key={rev.id}>
                       <div className="rev-head">
                         <strong>{rev.editedByName}</strong>
-                        <span className="muted small">{new Date(rev.editedAt).toLocaleString("it-IT")}</span>
+                        <span className="muted small">{fmtDateTime(rev.editedAt)}</span>
                       </div>
                       {rev.note && <div className="small">{rev.note}</div>}
                       <div className="muted small">
@@ -1770,7 +1766,7 @@ function RapportinoDay({
               {rapportino.sentAt && (
                 <span className="muted small">
                   <Icon name="check" size={12} /> Inviato a {rapportino.sentTo} il{" "}
-                  {new Date(rapportino.sentAt).toLocaleString("it-IT")}
+                  {fmtDateTime(rapportino.sentAt)}
                 </span>
               )}
               {!rapportino.closed && (
@@ -2018,7 +2014,7 @@ function DocumentiCard({
       {d.userName && <span className="muted small">· {d.userName}</span>}
       <span style={{ flex: 1 }} />
       <span className="muted small">
-        {fmtSize(d.sizeBytes)} · {new Date(d.createdAt).toLocaleDateString("it-IT")}
+        {fmtSize(d.sizeBytes)} · {fmtDate(d.createdAt)}
       </span>
       {deletable && (
         <button className="icon-btn sm" onClick={() => remove(d.id)} aria-label="Elimina">

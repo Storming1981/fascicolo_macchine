@@ -4,6 +4,7 @@ import Icon from "@/components/Icon";
 import BrainChat from "@/components/BrainChat";
 import { INTERVENTO_STATUS_META } from "@/lib/domain";
 import type { InterventoStatus } from "@prisma/client";
+import { fmtDayMonthTime } from "@/lib/format";
 
 type Item = {
   id: string;
@@ -167,12 +168,7 @@ export default function PortaleClient({ brainConfigured = false }: { brainConfig
                     </a>
                   )}
                   <div className="pmsg-time mono">
-                    {new Date(m.sentAt).toLocaleString("it-IT", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {fmtDayMonthTime(m.sentAt)}
                   </div>
                 </div>
               ))}

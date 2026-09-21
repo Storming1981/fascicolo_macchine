@@ -15,6 +15,7 @@ import {
   initials,
 } from "@/lib/domain";
 import type { InterventoStatus } from "@prisma/client";
+import { fmtDate } from "@/lib/format";
 
 export type InterventoRow = {
   id: string;
@@ -504,7 +505,7 @@ function Cestino({
                   {i.machineJob && <div className="muted small mono">{i.machineJob}</div>}
                 </td>
                 <td className="muted small">
-                  {i.deletedAt ? new Date(i.deletedAt).toLocaleDateString("it-IT") : "—"}
+                  {fmtDate(i.deletedAt)}
                   {i.deletedByName ? ` · ${i.deletedByName}` : ""}
                 </td>
                 <td style={{ textAlign: "right" }}>

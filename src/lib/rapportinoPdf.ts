@@ -2,7 +2,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { PDFDocument, StandardFonts, rgb, type PDFImage } from "pdf-lib";
-import { fmtHM } from "./format";
+import { fmtDateLong, fmtDateTime, fmtHM } from "./format";
 
 /** Carica (best-effort) le immagini della carta intestata ZATO. */
 async function loadLetterhead(): Promise<{ header?: Buffer; footer?: Buffer }> {
@@ -183,7 +183,7 @@ export async function generateRapportinoPdf(input: RapportinoPdfInput): Promise<
   ensure(16);
   page.drawText(san("Data giornata:"), { x: M, y: y - 10, size: 9.5, font: bold, color: NAVY });
   page.drawText(
-    san(input.date.toLocaleDateString("it-IT", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })),
+    san(fmtDateLong(input.date)),
     { x: M + 90, y: y - 10, size: 9.5, font, color: INK }
   );
   page.drawText(input.closed ? san("CHIUSO") : san("BOZZA"), {
@@ -382,7 +382,7 @@ export async function generateRapportinoPdf(input: RapportinoPdfInput): Promise<
   // Riga di validazione
   y -= 4;
   text(
-    `Documento generato il ${input.compiledAt.toLocaleString("it-IT")} · SHA256 ${input.hash.slice(0, 32)}`,
+    `Documento generato il ${fmtDateTime(input.compiledAt)} · SHA256 ${input.hash.slice(0, 32)}`,
     { size: 7.5, font, color: GREY, gap: 2 }
   );
 

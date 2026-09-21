@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "./Icon";
+import { fmtDate } from "@/lib/format";
 import {
   getPushState,
   enablePush,
@@ -54,7 +55,7 @@ function ago(iso: string): string {
   const d = Math.floor(h / 24);
   if (d === 1) return "ieri";
   if (d < 30) return `${d} giorni fa`;
-  return new Date(iso).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return fmtDate(iso);
 }
 
 /** Badge sull'icona dell'app installata (PWA). Silenzioso dove non c'è. */

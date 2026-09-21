@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
+import { fmtDayMonthTime } from "@/lib/format";
 
 export type ConversationRow = {
   id: string;
@@ -304,12 +305,7 @@ export default function ChatClient({
                       </a>
                     )}
                     <div className="msg-time mono">
-                      {new Date(m.sentAt).toLocaleString("it-IT", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {fmtDayMonthTime(m.sentAt)}
                     </div>
                   </div>
                 ))}

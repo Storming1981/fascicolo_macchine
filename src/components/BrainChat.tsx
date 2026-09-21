@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Icon from "@/components/Icon";
+import { fmtDayMonth } from "@/lib/format";
 
 /**
  * Pannello di conversazione con lo ZATO Brain.
@@ -380,11 +381,7 @@ export default function BrainChat({
                   <button onClick={() => void openThread(t.id)}>
                     <span className="brain-histitem-title">{t.title}</span>
                     <span className="brain-histitem-meta">
-                      {new Date(t.updatedAt).toLocaleDateString("it-IT", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "2-digit",
-                      })}
+                      {fmtDayMonth(t.updatedAt)}
                       {" · "}
                       {Math.ceil(t.messages / 2)} domand{Math.ceil(t.messages / 2) === 1 ? "a" : "e"}
                     </span>

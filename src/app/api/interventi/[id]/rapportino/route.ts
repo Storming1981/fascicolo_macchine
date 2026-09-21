@@ -4,6 +4,7 @@ import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { saveFile, saveDataUrl, saveBytes, sha256 } from "@/lib/uploads";
 import { renderRapportinoPdf } from "@/lib/rapportinoRender";
+import { fmtDate } from "@/lib/format";
 
 type RicambioLine = { code: string; desc: string; qty: string; note: string };
 type OperatorLine = { name: string; matricola: string | null; hours: number };
@@ -300,7 +301,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // Modifica di un rapportino chiuso: resta chiuso, aggiorna l'evento del diario collegato.
   if (wasClosed && existing) {
     if (existing.diaryEventId) {
-      const giorno = date.toLocaleDateString("it-IT");
+      const giorno = fmtDate(date);
       await prisma.diaryEvent.update({
         where: { id: existing.diaryEventId },
         data: {
@@ -342,7 +343,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const hash = sha256(`${id}|${rapportino.id}|${techName}|${now.toISOString()}`);
 
   if (intervento.machine?.id && !diaryEventId) {
-    const giorno = date.toLocaleDateString("it-IT");
+    const giorno = fmtDate(date);
     const event = await prisma.diaryEvent.create({
       data: {
         machineId: intervento.machine.id,

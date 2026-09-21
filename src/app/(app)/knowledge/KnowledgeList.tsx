@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import { PLANT_TYPES } from "@/lib/plant";
+import { fmtDate } from "@/lib/format";
 
 export type ArticleRow = {
   id: string;
@@ -171,7 +172,7 @@ export function RecurringIssuesPanel({ canManage }: { canManage: boolean }) {
           <>
             <p className="muted small" style={{ marginBottom: 10 }}>
               {insight.data.summary} <span className="mono">· {insight.interventiCount} interventi ·{" "}
-              {new Date(insight.createdAt).toLocaleDateString("it-IT")}</span>
+              {fmtDate(insight.createdAt)}</span>
             </p>
             <div className="ri-grid">
               {insight.data.issues.map((it, i) => (

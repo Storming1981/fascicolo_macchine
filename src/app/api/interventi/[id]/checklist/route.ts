@@ -6,6 +6,7 @@ import { saveDataUrl, saveBytes, sha256, readUploadAsDataUrl } from "@/lib/uploa
 import { CHECKLIST_DEFS, type ChecklistType } from "@/lib/checklistInterventi";
 import { generateChecklistPdf } from "@/lib/checklistPdf";
 import type { Prisma } from "@prisma/client";
+import { fmtDate } from "@/lib/format";
 
 const TYPES: ChecklistType[] = ["AMBIENTE_SICUREZZA"];
 
@@ -95,7 +96,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   // Testata autocompilata: indirizzo dall'anagrafica cantiere/cliente e date
   // dalle date pianificate dell'intervento.
-  const fmtDate = (d: Date | null) => (d ? d.toLocaleDateString("it-IT") : "—");
   const addr =
     [intervento.site?.address, [intervento.site?.city, intervento.site?.province].filter(Boolean).join(" ")]
       .filter(Boolean)

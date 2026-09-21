@@ -925,6 +925,19 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
   (ERR_ADDRESS_INVALID) a collegamento gia' riuscito. Si costruiscono dagli header
   `x-forwarded-proto` / `x-forwarded-host` (fallback `host`). Usato da callback e
   auth Google, login e logout.
+- **Le date si scrivono gg-mm-aaaa, ovunque** (`src/lib/format.ts`): `fmtDate`
+  (18-12-2026), `fmtDateTime` (+ hh:mm), `fmtDayMonth` / `fmtDayMonthTime` per
+  le etichette strette (mappa, chat), `fmtDateLong` ("venerdì 18-12-2026") e
+  `fmtDayShort` ("ven 18-12") per le intestazioni dei rapportini, dove il
+  giorno della settimana serve a chi legge in cantiere.
+  Sono costruite **a mano**, non con `toLocaleDateString`: così il formato è lo
+  stesso su server, browser e PDF, e non dipende dalla lingua del sistema né dal
+  fuso del container — con `toLocaleString` la stessa data poteva uscire diversa
+  fra server e client, e in React quella differenza fa saltare l'idratazione.
+  **Chi mostra una data non usa `toLocaleDateString`**: passa da qui. Erano
+  sparse in una ventina di punti (pagine, PDF, route, corpus del Brain).
+  Restano fuori i campi `<input type="date">`, che mostrano il formato del
+  sistema operativo e non si possono ritematizzare.
 - **Ore in ore e minuti** (`fmtHM` in `src/lib/format.ts`): le sessioni nascono da
   timbrature HH:MM, quindi la somma decimale non si legge ("8.72" sono 8h 43m).
   Usata nel PDF rapportino e nella scheda intervento. **Non** per `plantHours`

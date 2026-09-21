@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import Icon from "@/components/Icon";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import { POS_CATEGORY } from "@/lib/domain";
+import { fmtDate, fmtDateTime } from "@/lib/format";
 
 export type PosDoc = {
   id: string;
@@ -161,7 +162,7 @@ export default function PosCard({
         {state.validated ? (
           <span className="status-chip" style={{ background: "#10b98122", color: "#0a7d52" }}>
             <Icon name="check" size={11} /> Validato
-            {state.validatedAt ? ` · ${new Date(state.validatedAt).toLocaleDateString("it-IT")}` : ""}
+            {state.validatedAt ? ` · ${fmtDate(state.validatedAt)}` : ""}
           </span>
         ) : (
           <span className="status-chip" style={{ background: "#d9770622", color: "#b45309" }}>
@@ -189,7 +190,7 @@ export default function PosCard({
             </a>
             <span style={{ flex: 1 }} />
             <span className="muted small">
-              {fmtSize(doc.sizeBytes)} · {new Date(doc.createdAt).toLocaleDateString("it-IT")}
+              {fmtSize(doc.sizeBytes)} · {fmtDate(doc.createdAt)}
               {doc.uploadedByName ? ` · ${doc.uploadedByName}` : ""}
             </span>
             {canEdit && !state.validated && (
@@ -225,7 +226,7 @@ export default function PosCard({
             <span>
               <strong>{state.validatedByName ?? "—"}</strong>
               {state.validatedAt
-                ? ` · ${new Date(state.validatedAt).toLocaleString("it-IT")}`
+                ? ` · ${fmtDateTime(state.validatedAt)}`
                 : ""}
             </span>
             {state.signature && (

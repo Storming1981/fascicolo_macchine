@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
+import { fmtDayMonthTime } from "@/lib/format";
 
 type Msg = {
   id: string;
@@ -130,12 +131,7 @@ export default function CampoChat({
                   </a>
                 )}
                 <div className="cmsg-time mono">
-                  {new Date(m.sentAt).toLocaleString("it-IT", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {fmtDayMonthTime(m.sentAt)}
                 </div>
               </div>
             ))}

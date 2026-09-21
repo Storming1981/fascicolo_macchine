@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { indexSource } from "./indexer";
+import { fmtDate } from "../format";
 
 /**
  * Il corpus vivo di ZATO.
@@ -114,7 +115,7 @@ export async function syncRapportini(limit = 500): Promise<SyncStat> {
     const lines: string[] = [];
     lines.push(`Intervento ${i.code} — ${i.title} (${i.type})`);
     lines.push(
-      `Data: ${r.date.toLocaleDateString("it-IT")} · Cliente: ${i.customer?.name ?? "n/d"}` +
+      `Data: ${fmtDate(r.date)} · Cliente: ${i.customer?.name ?? "n/d"}` +
         (i.site?.name ? ` · Cantiere: ${i.site.name}${i.site.city ? " (" + i.site.city + ")" : ""}` : "")
     );
     if (m) lines.push(`Macchina: ${m.code} · ${m.plantType ?? ""} ${m.model ?? ""}`.trim());
@@ -135,7 +136,7 @@ export async function syncRapportini(limit = 500): Promise<SyncStat> {
       originKind: "rapportino",
       originId: r.id,
       type: "RAPPORTINO",
-      title: `Rapportino ${i.code} — ${r.date.toLocaleDateString("it-IT")}`,
+      title: `Rapportino ${i.code} — ${fmtDate(r.date)}`,
       body: lines.join("\n"),
       plantType: m?.plantType ?? null,
       model: m?.model ?? null,
@@ -192,7 +193,7 @@ export async function syncConversations(limit = 400): Promise<SyncStat> {
       .filter((m) => m.body?.trim())
       .map(
         (m) =>
-          `[${m.sentAt.toLocaleDateString("it-IT")}] ${m.direction === "OUT" ? "ZATO" : m.authorName}: ${m.body!.trim()}`
+          `[${fmtDate(m.sentAt)}] ${m.direction === "OUT" ? "ZATO" : m.authorName}: ${m.body!.trim()}`
       )
       .join("\n");
 
@@ -262,7 +263,7 @@ export async function syncDiaries(limit = 200): Promise<SyncStat> {
       `Anno: ${m.year} · Cliente: ${m.customer}${m.site ? " · Sito: " + m.site : ""}`,
     ];
     const events = m.diaryEvents.map((e) => {
-      const bits = [`[${e.date.toLocaleDateString("it-IT")}] ${e.phase} · ${e.type}: ${e.title}`];
+      const bits = [`[${fmtDate(e.date)}] ${e.phase} · ${e.type}: ${e.title}`];
       if (e.note?.trim()) bits.push(`  ${e.note.trim()}`);
       if (e.componentRef) bits.push(`  Componente: ${e.componentRef}`);
       if (e.oldSerial || e.newSerial)

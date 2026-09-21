@@ -11,6 +11,7 @@ import {
 } from "@/lib/permissions";
 import { NAV_ITEMS, type NavVisibility, type NavKey } from "@/lib/nav";
 import type { AppAccessMatrix, AppProfile } from "@/lib/appAccess";
+import { fmtDateTime } from "@/lib/format";
 
 type PlantConfig = { name: string; models: string[] }[];
 
@@ -687,7 +688,7 @@ export default function SettingsClient({
                             </tr>
                             <tr>
                               <td>Data collegamento</td>
-                              <td>{new Date(googleMe.connectedAt).toLocaleString("it-IT")}</td>
+                              <td>{fmtDateTime(googleMe.connectedAt)}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -754,7 +755,7 @@ export default function SettingsClient({
                             </tr>
                             <tr>
                               <td>Data collegamento</td>
-                              <td>{new Date(googleCompany.connectedAt).toLocaleString("it-IT")}</td>
+                              <td>{fmtDateTime(googleCompany.connectedAt)}</td>
                             </tr>
                           </tbody>
                         </table>

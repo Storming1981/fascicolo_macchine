@@ -3,6 +3,7 @@ import type { DiaryPhase } from "@prisma/client";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
+import { fmtDateTime } from "@/lib/format";
 
 /**
  * Foto del fascicolo.
@@ -61,7 +62,7 @@ function describe(photo: LoadedPhoto) {
     phase = "TESTING";
   } else where = "Produzione";
 
-  const uploaded = photo.takenAt.toLocaleString("it-IT", { timeZone: "Europe/Rome" });
+  const uploaded = fmtDateTime(photo.takenAt);
   const note = [
     `Cartella: ${where}`,
     photo.caption ? `Didascalia: ${photo.caption}` : null,
@@ -102,7 +103,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (!photo.deletedAt) return NextResponse.json({ ok: true, notDeleted: true });
 
   const { phase, note } = describe(photo);
-  const deleted = photo.deletedAt.toLocaleString("it-IT", { timeZone: "Europe/Rome" });
+  const deleted = fmtDateTime(photo.deletedAt);
   await prisma.$transaction([
     prisma.photo.update({
       where: { id: photo.id },

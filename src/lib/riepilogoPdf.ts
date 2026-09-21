@@ -1,6 +1,6 @@
 import "server-only";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
-import { fmtHM } from "./format";
+import { fmtDate, fmtDateLong, fmtDateTime, fmtHM } from "./format";
 import { A4, GREY, INK, LINE, MARGIN as M, NAVY, TRAVEL, ZEBRA, isTravel, loadLetterhead, san } from "./pdfCommon";
 
 /**
@@ -42,8 +42,8 @@ export type RiepilogoPdfInput = {
 
 const W = A4[0];
 const fmtDay = (d: Date) =>
-  d.toLocaleDateString("it-IT", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-const fmtShort = (d: Date) => d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
+  fmtDateLong(d);
+const fmtShort = (d: Date) => fmtDate(d);
 
 export async function generateRiepilogoPdf(input: RiepilogoPdfInput): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
@@ -300,7 +300,7 @@ export async function generateRiepilogoPdf(input: RiepilogoPdfInput): Promise<Ui
   page.drawText(
     san(
       input.signedAt
-        ? `Firma unica di fine intervento, apposta il ${input.signedAt.toLocaleString("it-IT")} — vale per tutte le ${input.days.length} giornate del riepilogo.`
+        ? `Firma unica di fine intervento, apposta il ${fmtDateTime(input.signedAt)} — vale per tutte le ${input.days.length} giornate del riepilogo.`
         : `Riepilogo non ancora firmato — ${input.days.length} giornate.`
     ),
     { x: M, y, size: 8, font, color: GREY }
@@ -308,7 +308,7 @@ export async function generateRiepilogoPdf(input: RiepilogoPdfInput): Promise<Ui
   y -= 12;
 
   text(
-    `Documento generato il ${input.generatedAt.toLocaleString("it-IT")} · SHA256 ${input.hash.slice(0, 32)}`,
+    `Documento generato il ${fmtDateTime(input.generatedAt)} · SHA256 ${input.hash.slice(0, 32)}`,
     { size: 7.5, color: GREY, gap: 2 }
   );
 

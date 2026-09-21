@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import { PRIORITY_META, initials } from "@/lib/domain";
+import { fmtDate } from "@/lib/format";
 
 type LiveTech = {
   userId: string | null;
@@ -581,7 +582,7 @@ export default function PianificazioneClient({
                     </a>
                     <span className="muted small">
                       {c.customer ? `${c.customer} · ` : ""}
-                      dal {c.start} al {c.end}
+                      dal {fmtDate(c.start + "T12:00:00")} al {fmtDate(c.end + "T12:00:00")}
                     </span>
                   </li>
                 ))}
@@ -590,7 +591,13 @@ export default function PianificazioneClient({
                 <p className="conflict-free">
                   Giorni liberi nel periodo che hai scelto:{" "}
                   <strong>
-                    {conflict.free.map((f) => (f.start === f.end ? f.start : `${f.start} → ${f.end}`)).join(" · ")}
+                    {conflict.free
+                      .map((f) =>
+                        f.start === f.end
+                          ? fmtDate(f.start + "T12:00:00")
+                          : `${fmtDate(f.start + "T12:00:00")} → ${fmtDate(f.end + "T12:00:00")}`
+                      )
+                      .join(" · ")}
                   </strong>
                 </p>
               ) : (

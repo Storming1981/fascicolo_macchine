@@ -2,6 +2,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+import { fmtDate, fmtDateTime } from "./format";
 import {
   MATRICOLA_LABEL,
   sheetCtx,
@@ -82,7 +83,7 @@ async function embedDataUrl(doc: PDFDocument, dataUrl: string | null): Promise<P
   }
 }
 
-const fmtDay = (d: Date) => d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
+const fmtDay = (d: Date) => fmtDate(d);
 
 export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Promise<Uint8Array> {
   const def = sheetDef(input.kind);
@@ -278,7 +279,7 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
 
   // Riga di servizio su ogni pagina
   const pages = doc.getPages();
-  const stamp = `Fascicolo ${input.machineCode} · generato il ${new Date().toLocaleString("it-IT")}`;
+  const stamp = `Fascicolo ${input.machineCode} · generato il ${fmtDateTime(new Date())}`;
   pages.forEach((p, i) => {
     const t = [
       `${def.code} ${def.title.charAt(0)}${def.title.slice(1).toLowerCase()}`,

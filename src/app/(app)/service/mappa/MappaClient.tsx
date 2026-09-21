@@ -4,6 +4,7 @@ import Link from "next/link";
 import Icon from "@/components/Icon";
 import { INTERVENTO_STATUS_META, PRIORITY_META, initials } from "@/lib/domain";
 import type { InterventoStatus } from "@prisma/client";
+import { fmtDayMonth } from "@/lib/format";
 
 type LiveTech = {
   id: string;
@@ -368,7 +369,7 @@ export default function MappaClient({ sites, planned }: { sites: MapSite[]; plan
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600 }}>{p.customer ?? p.title}</div>
                       <div className="muted small">
-                        {new Date(p.scheduledStart).toLocaleDateString("it-IT", { day: "2-digit", month: "short" })}
+                        {fmtDayMonth(p.scheduledStart)}
                         {p.tech ? ` · ${p.tech}` : ""}
                         {p.machine ? ` · ${p.machine}` : ""}
                       </div>
