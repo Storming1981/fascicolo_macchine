@@ -818,6 +818,14 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   (targhetta ambra per il viaggio) e nel PDF, con riga **"di cui viaggio"** sotto
   al totale di giornata. I rapportini gia' esistenti prendono la tipologia al
   primo *Sincronizza ore*.
+- **Nome dell'autore nella chat**: nella *Chat unificata* desktop il nome si
+  mostrava solo sui messaggi entranti (`direction === "IN"`), quindi le note
+  interne scritte da ZATO risultavano anonime — mentre in Campo
+  (`CampoChat.tsx`) il nome c'era sempre. Ora `ChatClient.tsx` lo mostra su
+  tutti i messaggi (il dato era già salvato: `Message.authorName = user.name`
+  anche sugli OUT). Sul messaggio in uscita lo sfondo è blu pieno, quindi il
+  nome va in bianco (`.msg.out .msg-author`). Nel **portale cliente** resta
+  volutamente "ZATO Service": al cliente non si mostra chi ha scritto.
 - **Link assoluti dietro al proxy** (`src/lib/absoluteUrl.ts`): in build standalone
   `new URL(path, req.url)` restituisce l'indirizzo di ascolto del container, non il
   dominio: il ritorno dal consenso Google finiva su `https://0.0.0.0:3000/profilo`

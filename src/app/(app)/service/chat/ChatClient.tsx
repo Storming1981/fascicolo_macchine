@@ -276,7 +276,10 @@ export default function ChatClient({
                       (m.visibility === "PUBLIC" ? "" : " internal")
                     }
                   >
-                    {m.direction === "IN" && <div className="msg-author">{m.authorName}</div>}
+                    {/* Il nome va su TUTTI i messaggi, non solo sugli entranti:
+                        in una chat interna scrivono in più persone da ZATO e
+                        senza nome non si sa chi ha detto cosa (in Campo c'era già). */}
+                    {m.authorName && <div className="msg-author">{m.authorName}</div>}
                     <div className="msg-vis">
                       {m.visibility === "PUBLIC" ? (
                         <span className="vis-badge pub">Cliente</span>
