@@ -7,6 +7,7 @@ import { INTERVENTO_TYPE_META } from "@/lib/domain";
 import { POS_BLOCK_MESSAGE, touchesPlanning } from "@/lib/pos";
 import { loadInterventoBrief, buildAssignmentNotices } from "@/lib/interventoNotify";
 import { createNotifications } from "@/lib/notifications";
+import { syncAcks } from "@/lib/interventoAck";
 import { deliverNotifications } from "@/lib/notifyDeliver";
 import { absoluteUrl } from "@/lib/absoluteUrl";
 import type { InterventoStatus, Prisma } from "@prisma/client";
@@ -120,6 +121,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
           },
           { id: user.id, name: user.name }
         );
+        // Chi è assegnato deve poter rispondere: una riga di presa in carico
+        // per ognuno, in attesa finché non preme Accetta.
+        await syncAcks(
+          id,
+          brief.leadId,
+          brief.participants.map((p) => p.id),
+          { id: user.id, name: user.name },
+          touchedDates
+        );
+
         if (notices.length) {
           const ids = await createNotifications(notices.map((n) => n.notification));
           const base = absoluteUrl(req, "");

@@ -1,8 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { currentUser, verifyPin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { saveDataUrl } from "@/lib/uploads";
 import { canValidatePos, hasPosDocument } from "@/lib/pos";
+import { loadInterventoBrief, buildPosValidatedNotices } from "@/lib/interventoNotify";
+import { createNotifications } from "@/lib/notifications";
+import { deliverNotifications } from "@/lib/notifyDeliver";
+import { absoluteUrl } from "@/lib/absoluteUrl";
 
 /**
  * Validazione del P.O.S. (Piano Operativo di Sicurezza) di un intervento.
@@ -27,7 +31,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const intervento = await prisma.intervento.findUnique({
     where: { id },
-    select: { id: true, code: true, status: true, posValidated: true },
+    select: { id: true, code: true, status: true, posValidated: true, createdById: true },
   });
   if (!intervento) return NextResponse.json({ error: "Intervento non trovato" }, { status: 404 });
 
@@ -85,6 +89,29 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     },
     select: { status: true, posValidatedAt: true },
   });
+
+  // ── Torna a chi ha creato l'intervento ────────────────────────────
+  // Chi l'ha aperto finora sapeva solo di aver chiesto qualcosa: da qui in poi
+  // l'intervento è sbloccato e tocca a lui (o al responsabile) pianificarlo.
+  try {
+    const brief = await loadInterventoBrief(id);
+    if (brief) {
+      const notices = await buildPosValidatedNotices(brief, intervento.createdById, {
+        id: user.id,
+        name: user.name,
+      });
+      if (notices.length) {
+        const ids = await createNotifications(notices.map((n) => n.notification));
+        const base = absoluteUrl(req, "");
+        after(async () => {
+          await deliverNotifications(ids, notices, user.id, base);
+        });
+      }
+    }
+  } catch (e) {
+    // La validazione è già scritta: un avviso mancato non la annulla.
+    console.error("[notifiche] validazione P.O.S.", id, e);
+  }
 
   return NextResponse.json({
     ok: true,

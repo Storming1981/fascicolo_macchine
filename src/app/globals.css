@@ -1248,3 +1248,27 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .btn-mini:disabled { opacity: .6; cursor: default; }
 .btn-mini.ghost { background: none; color: var(--muted); border: 1px solid var(--border-strong); }
 .btn-mini.ghost:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+
+/* Presa in carico dalla campanella */
+.notif-ack { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px 42px; }
+.notif-ack span { font-size: 11.5px; color: var(--text-2); font-weight: 600; }
+.notif-ack .btn-mini { padding: 5px 12px; font-size: 11.5px; }
+
+/* Quadro delle prese in carico nella scheda intervento */
+.ack-board { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.ack-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 8px 12px; background: var(--bg-3); border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 650; color: var(--navy);
+}
+.ack-row { display: flex; align-items: center; gap: 9px; padding: 8px 12px; font-size: 12.5px; flex-wrap: wrap; }
+.ack-row + .ack-row { border-top: 1px solid var(--border); }
+.ack-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--muted-2); }
+.ack-dot.accettato { background: var(--green); }
+.ack-dot.rifiutato { background: var(--red); }
+.ack-name { flex: 1; min-width: 0; color: var(--text); font-weight: 600; }
+.ack-name em { font-style: normal; font-weight: 400; color: var(--muted); }
+.ack-state { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--hover); color: var(--muted); }
+.ack-state.accettato { background: #e7f8f1; color: #0f7a5a; }
+.ack-state.rifiutato { background: #fef2f2; color: #b91c1c; }
+.ack-note { width: 100%; padding-left: 17px; color: var(--text-2); font-size: 11.5px; font-style: italic; }

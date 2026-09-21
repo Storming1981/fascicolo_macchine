@@ -77,6 +77,9 @@ export async function POST(req: Request) {
       customerId: b.customerId || null,
       siteId: b.siteId || null,
       machineId: b.machineId || null,
+      // Chi crea: gli torna la notifica quando il P.O.S. viene validato.
+      createdById: user.id,
+      createdByName: user.name,
     },
   });
 

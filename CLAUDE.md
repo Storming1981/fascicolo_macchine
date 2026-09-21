@@ -754,6 +754,44 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     guardare. **Se però nessuno ha il flag si ripiega sugli ADMIN**: una
     notifica senza destinatari è peggio di una di troppo, perché l'intervento
     resterebbe bloccato e basta. Chi crea o carica non si autonotifica.
+  - **Il giro completo: ogni passaggio torna a chi aspetta.** Prima le notifiche
+    andavano solo "in avanti": chi apriva un intervento non sapeva più nulla, e
+    chi pianificava non sapeva se la squadra ci sarebbe stata davvero.
+
+    | # | Evento | Chi riceve | Kind |
+    |---|---|---|---|
+    | 1 | Intervento creato | validatore P.O.S. | `POS_DA_CARICARE` |
+    | 2 | File P.O.S. caricato | validatore P.O.S. | `POS_DA_VALIDARE` |
+    | 3 | P.O.S. validato | **chi ha creato l'intervento** | `POS_VALIDATO` |
+    | 4 | Capo cantiere + squadra + date | gli assegnati, **da accettare** | `INTERVENTO_ASSEGNATO` / `_SQUADRA` |
+    | 5 | Accetta / non può | **chi ha assegnato**, col quadro della squadra | `INTERVENTO_ACCETTATO` / `_RIFIUTATO` |
+
+  - **Chi crea l'intervento ora si registra** (`Intervento.createdById` /
+    `createdByName`): senza, al punto 3 non c'era nessun destinatario. Gli
+    interventi creati prima hanno il campo nullo e non generano l'avviso, invece
+    di indovinare a chi mandarlo.
+  - **Prese in carico** (`InterventoAck`, `src/lib/interventoAck.ts`): una riga
+    per `(intervento, persona)`, in attesa finché non risponde. Il pulsante
+    *Accetto / Non posso* sta **nella campanella**, sull'avviso stesso: farlo
+    aprire l'intervento per rispondere significherebbe che molti non rispondono.
+    `POST /api/interventi/[id]/ack` `{accept, note}` · `GET` per il quadro.
+    Nessun permesso di ruolo — **si risponde solo per sé**, il filtro è la riga
+    intestata all'utente loggato.
+  - **Cosa azzera una risposta già data** (`syncAcks`): chi **cambia ruolo** (da
+    squadra a capo cantiere) torna in attesa, perché accettare di partecipare
+    non è accettare di guidare il cantiere; e **se si spostano le date** tornano
+    in attesa tutti, perché chi aveva accettato dal 12 al 16 non ha accettato
+    dal 20 al 24. Chi resta con lo stesso ruolo e le stesse date **tiene la sua
+    risposta**: altrimenti ogni salvataggio della scheda azzererebbe tutto.
+  - **Il quadro per il responsabile**: card *Prese in carico* nella scheda
+    intervento ("2 di 3 confermate", chi ha accettato, chi ha rifiutato e
+    perché), e la stessa sintesi dentro la notifica di risposta — così non deve
+    aprire l'intervento per sapere a che punto è.
+  - Prova del giro intero senza spedire nulla: `npm run notif:flusso` — crea un
+    intervento finto, percorre i cinque passaggi stampando chi riceve cosa, e lo
+    cancella. **Vuole cinque persone diverse**: con attori coincidenti scatta la
+    regola del "non ci si autonotifica" e dei passaggi sembrerebbero rotti
+    mentre funzionano (successo davvero alla prima esecuzione).
   - API: `GET /api/notifications` (`?count=1` per il solo numerino) ·
     `POST /api/notifications` (`{ids}` o `{all:true}` per segnare lette).
     Prova a secco senza inviare nulla: `npm run notif:test [INT-2491]`.

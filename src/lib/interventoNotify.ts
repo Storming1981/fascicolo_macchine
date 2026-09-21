@@ -378,3 +378,111 @@ export async function buildPosToValidateNotices(
     })
   );
 }
+
+/* ────────────── Giro di ritorno: P.O.S. validato e prese in carico ─────────── */
+
+/**
+ * Il P.O.S. e' stato validato: torna a **chi ha creato l'intervento**, che
+ * finora sapeva solo di aver chiesto qualcosa. Da qui si puo' pianificare.
+ *
+ * Gli interventi creati prima che si registrasse l'autore non hanno
+ * `createdById`: in quel caso non c'e' nessuno da avvisare e si restituisce
+ * una lista vuota, invece di indovinare un destinatario.
+ */
+export async function buildPosValidatedNotices(
+  brief: InterventoBrief,
+  creatorId: string | null,
+  actor: { id: string; name: string }
+): Promise<Notice[]> {
+  if (!creatorId || creatorId === actor.id) return [];
+  const u = await prisma.user.findUnique({
+    where: { id: creatorId },
+    select: { id: true, email: true, active: true },
+  });
+  if (!u?.active) return [];
+  return [
+    notice("POS_VALIDATO", {
+      userId: u.id,
+      title: `P.O.S. validato: ${brief.code}`,
+      intro:
+        `${actor.name} ha validato il Piano Operativo di Sicurezza dell'intervento ` +
+        `${brief.code} — ${brief.title}. L'intervento è sbloccato: ora si può ` +
+        `assegnare il capo cantiere e fissare le date.`,
+      brief,
+      tone: "ok",
+      icon: "check",
+      actor,
+      emailTo: u.email,
+    }),
+  ];
+}
+
+/** Riepilogo delle prese in carico, per dare al responsabile il quadro completo. */
+export type AckTally = {
+  accepted: string[];
+  declined: string[];
+  pending: string[];
+};
+
+export async function ackTally(interventoId: string): Promise<AckTally> {
+  const rows = await prisma.interventoAck.findMany({
+    where: { interventoId },
+    include: { user: { select: { name: true } } },
+    orderBy: { assignedAt: "asc" },
+  });
+  return {
+    accepted: rows.filter((r) => r.acceptedAt).map((r) => r.user.name),
+    declined: rows.filter((r) => r.declinedAt).map((r) => r.user.name),
+    pending: rows.filter((r) => !r.acceptedAt && !r.declinedAt).map((r) => r.user.name),
+  };
+}
+
+/** Riga di stato squadra: "2 accettato · 1 in attesa" e chi sono. */
+export function tallyToText(t: AckTally): string {
+  const parts: string[] = [];
+  if (t.accepted.length) parts.push(`Hanno accettato (${t.accepted.length}): ${t.accepted.join(", ")}`);
+  if (t.declined.length) parts.push(`Hanno rifiutato (${t.declined.length}): ${t.declined.join(", ")}`);
+  if (t.pending.length) parts.push(`Ancora in attesa (${t.pending.length}): ${t.pending.join(", ")}`);
+  return parts.join("\n");
+}
+
+/**
+ * Un assegnato ha risposto: la notifica torna a **chi lo aveva assegnato**, con
+ * il quadro aggiornato di tutta la squadra — il responsabile non deve aprire
+ * l'intervento per sapere a che punto è.
+ */
+export async function buildAckNotices(
+  brief: InterventoBrief,
+  who: { id: string; name: string },
+  assignedById: string | null,
+  accepted: boolean,
+  note: string | null
+): Promise<Notice[]> {
+  if (!assignedById || assignedById === who.id) return [];
+  const u = await prisma.user.findUnique({
+    where: { id: assignedById },
+    select: { id: true, email: true, active: true },
+  });
+  if (!u?.active) return [];
+
+  const t = await ackTally(brief.id);
+  const summary = tallyToText(t);
+  const esito = accepted
+    ? `${who.name} ha accettato l'intervento ${brief.code} — ${brief.title}.`
+    : `${who.name} NON può andare sull'intervento ${brief.code} — ${brief.title}.` +
+      (note ? ` Motivo: ${note}` : "");
+
+  const n = notice(accepted ? "INTERVENTO_ACCETTATO" : "INTERVENTO_RIFIUTATO", {
+    userId: u.id,
+    title: accepted
+      ? `${who.name} ha accettato ${brief.code}`
+      : `${who.name} ha rifiutato ${brief.code}`,
+    intro: `${esito}${summary ? `\n\n${summary}` : ""}`,
+    brief,
+    tone: accepted ? "ok" : "alert",
+    icon: accepted ? "check" : "x",
+    actor: who,
+    emailTo: u.email,
+  });
+  return [n];
+}

@@ -16,7 +16,10 @@ export type NotifKind =
   | "INTERVENTO_RIPROGRAMMATO"
   | "INTERVENTO_RIMOSSO"
   | "POS_DA_CARICARE" // intervento appena creato: il P.O.S. non c'e' ancora
-  | "POS_DA_VALIDARE"; // file caricato: il responsabile lo deve firmare
+  | "POS_DA_VALIDARE" // file caricato: il responsabile lo deve firmare
+  | "POS_VALIDATO" // torna a chi ha creato l'intervento: ora e' pianificabile
+  | "INTERVENTO_ACCETTATO" // un assegnato ha preso in carico
+  | "INTERVENTO_RIFIUTATO"; // un assegnato non puo' andarci
 
 export type NotifTone = "info" | "ok" | "warn" | "alert";
 
@@ -79,6 +82,8 @@ export type NotificationView = {
   read: boolean;
   actorName: string | null;
   createdAt: string;
+  /** L'utente e' assegnato a questo intervento e non ha ancora risposto. */
+  needsAck: boolean;
 };
 
 /** Ultime notifiche dell'utente, più recenti in testa. */
@@ -88,6 +93,19 @@ export async function listNotifications(userId: string, limit = 30): Promise<Not
     orderBy: { createdAt: "desc" },
     take: Math.min(Math.max(limit, 1), 100),
   });
+
+  // Quali interventi aspettano ancora una risposta da questo utente: una sola
+  // query, non una per notifica. Serve a mostrare "Accetto / Non posso" proprio
+  // sull'avviso che lo chiede, senza far cercare l'intervento a mano.
+  const pending = new Set(
+    (
+      await prisma.interventoAck.findMany({
+        where: { userId, acceptedAt: null, declinedAt: null },
+        select: { interventoId: true },
+      })
+    ).map((a) => a.interventoId)
+  );
+
   return rows.map((r) => ({
     id: r.id,
     kind: r.kind,
@@ -100,6 +118,7 @@ export async function listNotifications(userId: string, limit = 30): Promise<Not
     read: r.readAt !== null,
     actorName: r.actorName,
     createdAt: r.createdAt.toISOString(),
+    needsAck: !!r.interventoId && pending.has(r.interventoId),
   }));
 }
 

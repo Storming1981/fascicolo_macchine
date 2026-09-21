@@ -109,6 +109,7 @@ model User {
   googleToken    GoogleToken?
   notifications  Notification[] @relation("UserNotifications")
   pushSubs       PushSubscription[] @relation("UserPushSubs")
+  interventoAcks InterventoAck[]    @relation("UserInterventoAcks")
 }
 
 /// Token OAuth Google PERSONALE di un utente, per inviare le email dalla propria
@@ -492,6 +493,10 @@ model Intervento {
   // DB ma spariscono da tutte le liste; ripristinabili dal Cestino.
   deletedAt     DateTime?
   deletedByName String?
+  // Chi ha creato l'intervento: e' a lui che torna la notifica quando il
+  // P.O.S. viene validato. Null sugli interventi storici (creati prima).
+  createdById   String?
+  createdByName String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -507,6 +512,7 @@ model Intervento {
   photos        Photo[]
   conversations Conversation[]
   notifications Notification[]
+  acks          InterventoAck[]
 
   @@index([customerId])
   @@index([machineId])
@@ -1078,4 +1084,33 @@ model PushSubscription {
   user User @relation("UserPushSubs", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// Presa in carico di un intervento da parte di un singolo assegnato.
+///
+/// Serve a chiudere il giro: il responsabile pianifica, agli operai arriva la
+/// notifica, e finche' non premono "Accetta" il responsabile non sa se ci
+/// saranno davvero. Una riga per (intervento, persona): il capo cantiere e ogni
+/// membro della squadra accettano per se'.
+///
+/// La riga nasce all'assegnazione ed e' in attesa (`acceptedAt` e `declinedAt`
+/// nulli). Se la persona viene tolta dalla squadra la riga si cancella.
+model InterventoAck {
+  id             String    @id @default(cuid())
+  interventoId   String
+  userId         String
+  role           String    @default("member") // lead (capo cantiere) | member
+  assignedAt     DateTime  @default(now())
+  /// Chi ha fatto l'assegnazione: e' a lui che torna la risposta.
+  assignedById   String?
+  assignedByName String?
+  acceptedAt     DateTime?
+  declinedAt     DateTime?
+  note           String?   @db.Text // motivo del rifiuto
+
+  intervento Intervento @relation(fields: [interventoId], references: [id], onDelete: Cascade)
+  user       User       @relation("UserInterventoAcks", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([interventoId, userId])
+  @@index([userId, acceptedAt])
 }

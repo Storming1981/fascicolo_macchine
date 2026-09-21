@@ -102,6 +102,14 @@ type Data = {
   summaryTechName: string | null;
   summaryClientName: string | null;
   participants: { id: string; name: string }[];
+  acks: {
+    userId: string;
+    name: string;
+    role: "lead" | "member";
+    state: "accettato" | "rifiutato" | "in attesa";
+    at: string | null;
+    note: string | null;
+  }[];
   scheduledStart: string | null;
   scheduledEnd: string | null;
   completedAt: string | null;
@@ -631,6 +639,33 @@ export default function InterventoDetail({
               </div>
               {canEdit && !posOk && (
                 <span className="muted small">Squadra bloccata: P.O.S. da validare</span>
+              )}
+
+              {/* Quadro delle prese in carico: chi ha confermato che ci sara'.
+                  Senza, il responsabile pianifica e resta a sperare. */}
+              {data.acks.length > 0 && (
+                <div className="ack-board">
+                  <div className="ack-head">
+                    Prese in carico
+                    <span className="muted small">
+                      {data.acks.filter((a) => a.state === "accettato").length} di {data.acks.length} confermate
+                    </span>
+                  </div>
+                  {data.acks.map((a) => (
+                    <div key={a.userId} className="ack-row">
+                      <span className={"ack-dot " + a.state.replace(" ", "-")} />
+                      <span className="ack-name">
+                        {a.name}
+                        {a.role === "lead" && <em> · capo cantiere</em>}
+                      </span>
+                      <span className={"ack-state " + a.state.replace(" ", "-")}>{a.state}</span>
+                      {a.at && (
+                        <span className="muted small mono">{fmtDateTime(a.at)}</span>
+                      )}
+                      {a.note && <span className="ack-note">“{a.note}”</span>}
+                    </div>
+                  ))}
+                </div>
               )}
               {canPlan && (
                 <select

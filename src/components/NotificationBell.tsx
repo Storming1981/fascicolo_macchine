@@ -33,6 +33,7 @@ type Notif = {
   read: boolean;
   actorName: string | null;
   createdAt: string;
+  needsAck: boolean;
 };
 
 const TONE: Record<string, string> = {
@@ -85,6 +86,7 @@ export default function NotificationBell({
   const [push, setPush] = useState<PushState | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMsg, setPushMsg] = useState<string | null>(null);
+  const [acking, setAcking] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
 
   const loadCount = useCallback(async () => {
@@ -206,6 +208,35 @@ export default function NotificationBell({
     }
   }
 
+  /**
+   * Presa in carico dalla campanella: e' li' che l'avviso arriva, quindi e' li'
+   * che deve poter essere accettato. Farlo aprire l'intervento per rispondere
+   * significherebbe che molti non rispondono.
+   */
+  async function ack(n: Notif, accept: boolean) {
+    if (!n.interventoId) return;
+    const note = accept
+      ? null
+      : (window.prompt("Perche' non puoi andarci? (facoltativo)") ?? "").trim() || null;
+    setAcking(n.id);
+    try {
+      const r = await fetch(`/api/interventi/${n.interventoId}/ack`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accept, note }),
+      });
+      if (r.ok) {
+        // Sparisce il richiamo su tutte le notifiche dello stesso intervento.
+        setItems((prev) =>
+          prev.map((x) => (x.interventoId === n.interventoId ? { ...x, needsAck: false } : x))
+        );
+        if (!n.read) void markRead([n.id]);
+      }
+    } finally {
+      setAcking(null);
+    }
+  }
+
   function targetHref(n: Notif): string | null {
     // In Campo l'intervento ha una pagina sua: lo stesso href desktop porterebbe
     // a un guscio che l'utente operativo non può nemmeno aprire.
@@ -314,6 +345,25 @@ export default function NotificationBell({
                     </span>
                     {!n.read && <span className="notif-unread-dot" />}
                   </button>
+                  {n.needsAck && (
+                    <div className="notif-ack">
+                      <span>Confermi che ci sarai?</span>
+                      <button
+                        className="btn-mini"
+                        disabled={acking === n.id}
+                        onClick={() => ack(n, true)}
+                      >
+                        {acking === n.id ? "…" : "Accetto"}
+                      </button>
+                      <button
+                        className="btn-mini ghost"
+                        disabled={acking === n.id}
+                        onClick={() => ack(n, false)}
+                      >
+                        Non posso
+                      </button>
+                    </div>
+                  )}
                   {detail && (
                     <>
                       <button

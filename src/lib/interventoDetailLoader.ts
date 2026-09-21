@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { listAcks } from "./interventoAck";
 
 /**
  * Carica i dati della scheda intervento (dto + tecnici + macchine + commesse
@@ -103,6 +104,9 @@ export async function loadInterventoDetail(id: string) {
     summaryTechName: intervento.summaryTechName,
     summaryClientName: intervento.summaryClientName,
     participants: intervento.participants.map((p) => ({ id: p.id, name: p.name })),
+    // Chi ha preso in carico: e' il quadro che il responsabile guarda dopo aver
+    // pianificato, per sapere se la squadra ci sara' davvero.
+    acks: await listAcks(intervento.id),
     scheduledStart: intervento.scheduledStart?.toISOString() ?? null,
     scheduledEnd: intervento.scheduledEnd?.toISOString() ?? null,
     completedAt: intervento.completedAt?.toISOString() ?? null,
