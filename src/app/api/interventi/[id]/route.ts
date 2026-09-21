@@ -128,7 +128,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
           brief.leadId,
           brief.participants.map((p) => p.id),
           { id: user.id, name: user.name },
-          touchedDates
+          touchedDates,
+          intervento.status
         );
 
         if (notices.length) {

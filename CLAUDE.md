@@ -777,6 +777,12 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     `POST /api/interventi/[id]/ack` `{accept, note}` · `GET` per il quadro.
     Nessun permesso di ruolo — **si risponde solo per sé**, il filtro è la riga
     intestata all'utente loggato.
+  - **Su un cantiere gia' partito non si chiede niente**: per gli interventi in
+    `IN_CORSO` / `COMPLETATO` / `FATTURATO` le righe nascono **gia' accettate**
+    (`needsAcceptance`). Visto in produzione il giorno del rilascio: a chi stava
+    lavorando da settembre su INT-2498 e' comparso un "confermi che ci sarai?"
+    su un lavoro gia' in corso. Su un cantiere partito la presenza e' un fatto,
+    non una promessa. Recupero: `npm run service:backfill-ack` (idempotente).
   - **Cosa azzera una risposta già data** (`syncAcks`): chi **cambia ruolo** (da
     squadra a capo cantiere) torna in attesa, perché accettare di partecipare
     non è accettare di guidare il cantiere; e **se si spostano le date** tornano

@@ -25,7 +25,8 @@
     "notif:test": "tsx scripts/test-notifiche.ts",
     "push:keys": "node -e \"const w=require('web-push');const k=w.generateVAPIDKeys();console.log('VAPID_PUBLIC_KEY='+k.publicKey);console.log('VAPID_PRIVATE_KEY='+k.privateKey)\"",
     "push:test": "tsx scripts/test-push.ts",
-    "notif:flusso": "tsx scripts/test-flusso.ts"
+    "notif:flusso": "tsx scripts/test-flusso.ts",
+    "service:backfill-ack": "tsx scripts/backfill-ack.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

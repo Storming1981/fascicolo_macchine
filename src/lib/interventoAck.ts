@@ -11,6 +11,18 @@ import { prisma } from "./db";
 export type AckRole = "lead" | "member";
 
 /**
+ * Su un intervento gia' partito non si chiede di accettare: la squadra e' gia'
+ * in cantiere, e chiedere "confermi che ci sarai?" a chi ci sta lavorando da
+ * settimane e' solo un richiamo rosso da togliersi di torno. Le righe si creano
+ * comunque, ma nascono gia' accettate, cosi' il quadro resta completo.
+ */
+const STARTED: string[] = ["IN_CORSO", "COMPLETATO", "FATTURATO"];
+
+export function needsAcceptance(status: string): boolean {
+  return !STARTED.includes(status);
+}
+
+/**
  * Allinea le righe di presa in carico alla squadra attuale.
  *
  * - chi esce dalla squadra: la riga sparisce;
@@ -31,8 +43,11 @@ export async function syncAcks(
   leadId: string | null,
   participantIds: string[],
   actor: { id: string; name: string },
-  datesChanged = false
+  datesChanged = false,
+  status = "NUOVO"
 ): Promise<string[]> {
+  // Cantiere gia' partito: niente da confermare, le righe nascono accettate.
+  const ask = needsAcceptance(status);
   const desired = new Map<string, AckRole>();
   if (leadId) desired.set(leadId, "lead");
   for (const id of participantIds) if (!desired.has(id)) desired.set(id, "member");
@@ -47,20 +62,22 @@ export async function syncAcks(
   const toNotify: string[] = [];
   for (const [userId, role] of desired) {
     const row = byUser.get(userId);
+    const now = new Date();
     const pendingData = {
       role,
-      assignedAt: new Date(),
+      assignedAt: now,
       assignedById: actor.id,
       assignedByName: actor.name,
-      acceptedAt: null,
+      acceptedAt: ask ? null : now,
       declinedAt: null,
       note: null,
     };
     if (!row) {
       await prisma.interventoAck.create({ data: { interventoId, userId, ...pendingData } });
-      toNotify.push(userId);
+      if (ask) toNotify.push(userId);
       continue;
     }
+    if (!ask) continue; // cantiere partito: non si riapre una risposta gia' data
     const roleChanged = row.role !== role;
     if (roleChanged || datesChanged) {
       await prisma.interventoAck.update({ where: { id: row.id }, data: pendingData });
