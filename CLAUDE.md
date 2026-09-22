@@ -808,7 +808,17 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     L'ultimo pezzo mancava e il buco si e' visto al primo uso vero: su INT-2500
     la squadra era il solo capo cantiere, e chi seguiva il caso dalla chat senza
     essere assegnato non riceveva le risposte alle proprie domande. In una chat
-    chi ha scritto sta partecipando, anche se non e' in squadra. **Nessuna e-mail**: una mail per ogni riga di chat renderebbe la
+    chi ha scritto sta partecipando, anche se non e' in squadra.
+    Infine due ruoli che seguono i cantieri per mestiere e vanno avvisati
+    comunque: **responsabile cantieri** e **validatore P.O.S.** (oggi la stessa
+    persona). Gli **ADMIN restano fuori**: sono quattro, non seguono i cantieri,
+    e avvisarli a ogni riga renderebbe il pallino rumore — lo stesso errore
+    evitato sui P.O.S.
+  - **Segnare lette deve aggiornare anche le card**: la campanella fa
+    `router.refresh()` dopo *Segna lette*. Senza, il pallino rosso sul kanban
+    (che lo calcola il **server**) restava acceso con i conteggi della lettura
+    precedente finche' non si ricaricava la pagina a mano — visto in produzione:
+    zero non lette in banca dati, pallini ancora sulle card. **Nessuna e-mail**: una mail per ogni riga di chat renderebbe la
     casella rumore e farebbe ignorare anche gli avvisi che contano. Restano
     campanella e push.
   - **`/vai/chat/[conv]`** — la chat del desktop e quella del Campo sono due

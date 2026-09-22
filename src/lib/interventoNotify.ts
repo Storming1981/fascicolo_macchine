@@ -503,7 +503,13 @@ export async function buildAckNotices(
  * essere assegnato — non riceveva le risposte alle proprie domande. In una chat
  * chi ha scritto sta partecipando, anche se non e' in squadra.
  *
- * Restano fuori solo gli utenti del portale cliente: le loro notifiche non
+ * Ci sono poi due ruoli che seguono i cantieri per mestiere e vanno avvisati
+ * comunque: il **responsabile cantieri** e chi ha il flag **validatore P.O.S.**
+ * (oggi la stessa persona, Fausto Zanotti). Gli ADMIN restano **fuori**: sono
+ * quattro e non seguono i cantieri, avvisarli a ogni riga scritta renderebbe il
+ * pallino rosso rumore da ignorare — lo stesso errore evitato sui P.O.S.
+ *
+ * Restano fuori anche gli utenti del portale cliente: le loro notifiche non
  * esistono, e il canale verso di loro e' la chat stessa.
  *
  * **Niente e-mail**: una mail per ogni riga di chat trasformerebbe la casella in
@@ -525,11 +531,18 @@ export async function buildChatNotices(
     distinct: ["authorId"],
   });
 
+  // Chi segue i cantieri per mestiere: responsabile cantieri e validatore P.O.S.
+  const responsabili = await prisma.user.findMany({
+    where: { active: true, OR: [{ role: "RESPONSABILE_CANTIERI" }, { posValidator: true }] },
+    select: { id: true },
+  });
+
   const ids = [
     brief.leadId,
     ...brief.participants.map((p) => p.id),
     brief.createdById,
     ...scriventi.map((m) => m.authorId),
+    ...responsabili.map((r) => r.id),
   ].filter((x): x is string => !!x && x !== author.id);
 
   if (!ids.length) return [];

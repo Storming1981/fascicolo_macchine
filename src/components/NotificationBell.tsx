@@ -203,6 +203,10 @@ export default function NotificationBell({
         const d = (await r.json()) as { unread: number };
         setUnread(d.unread);
         setAppBadge(d.unread);
+        // Il pallino rosso sulle card del kanban lo calcola il server: senza
+        // questo, chi segna lette le notifiche continua a vedere i pallini
+        // della lettura precedente finche' non ricarica la pagina a mano.
+        router.refresh();
       }
     } catch {
       void loadCount();
@@ -232,6 +236,7 @@ export default function NotificationBell({
           prev.map((x) => (x.interventoId === n.interventoId ? { ...x, needsAck: false } : x))
         );
         if (!n.read) void markRead([n.id]);
+        else router.refresh();
       }
     } finally {
       setAcking(null);
