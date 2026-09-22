@@ -67,32 +67,55 @@ export function statusRequiresPos(s: InterventoStatus): boolean {
  * tenui sulle card (kanban/lista) e come chip nella scheda. Campo String su
  * Intervento per poter estendere l'elenco senza migrazioni.
  */
-export const INTERVENTO_TYPE_META: Record<string, { label: string; color: string }> = {
-  INSTALLAZIONE: { label: "Installazione", color: "#ca8a04" }, // giallo
-  MANUTENZIONE: { label: "Manutenzione", color: "#2563eb" }, // blu
-  RIPARAZIONE: { label: "Riparazione", color: "#ea580c" }, // arancio
-  SOSTITUZIONE: { label: "Sostituzione ricambi", color: "#db2777" }, // rosa
-  COLLAUDO: { label: "Collaudo / Completamento", color: "#7c3aed" }, // viola
-  FORMAZIONE: { label: "Formazione / Sicurezza", color: "#16a34a" }, // verde
-  TAGLIO: { label: "Taglio / Demolizione", color: "#0891b2" }, // ciano
-  ALTRO: { label: "Altro", color: "#64748b" }, // grigio
-};
-
 export const INTERVENTO_TYPE_ORDER = [
   "INSTALLAZIONE",
-  "MANUTENZIONE",
-  "RIPARAZIONE",
-  "SOSTITUZIONE",
-  "COLLAUDO",
-  "FORMAZIONE",
-  "TAGLIO",
-  "ALTRO",
+  "PAGAMENTO",
+  "GARANZIA",
+  "SERVIZI",
 ] as const;
 
-export const DEFAULT_INTERVENTO_TYPE = "MANUTENZIONE";
+/** I quattro tipi in uso: sono gli unici che si possono scegliere. */
+const TIPI_IN_USO: Record<string, { label: string; color: string }> = {
+  INSTALLAZIONE: { label: "Installazione", color: "#ca8a04" }, // giallo
+  PAGAMENTO: { label: "Intervento a pagamento", color: "#2563eb" }, // blu
+  GARANZIA: { label: "Intervento in garanzia", color: "#ea580c" }, // arancio
+  SERVIZI: { label: "Servizi", color: "#0891b2" }, // ciano
+};
+
+/**
+ * Tipi della vecchia classificazione (tecnica: cosa si fa) sostituita da quella
+ * commerciale (chi paga). Non si possono più scegliere, ma restano qui perché
+ * un intervento archiviato prima della conversione non vada mostrato con
+ * l'etichetta sbagliata. `npm run service:backfill-tipi` li converte.
+ */
+const TIPI_STORICI: Record<string, { label: string; color: string }> = {
+  MANUTENZIONE: { label: "Manutenzione (storico)", color: "#2563eb" },
+  RIPARAZIONE: { label: "Riparazione (storico)", color: "#ea580c" },
+  SOSTITUZIONE: { label: "Sostituzione ricambi (storico)", color: "#db2777" },
+  COLLAUDO: { label: "Collaudo / Completamento (storico)", color: "#7c3aed" },
+  FORMAZIONE: { label: "Formazione / Sicurezza (storico)", color: "#16a34a" },
+  TAGLIO: { label: "Taglio / Demolizione (storico)", color: "#0891b2" },
+  ALTRO: { label: "Altro (storico)", color: "#64748b" },
+};
+
+export const INTERVENTO_TYPE_META: Record<string, { label: string; color: string }> = {
+  ...TIPI_IN_USO,
+  ...TIPI_STORICI,
+};
+
+export const DEFAULT_INTERVENTO_TYPE = "PAGAMENTO";
+
+/** Solo i tipi in uso sono assegnabili: le API non accettano gli storici. */
+export function isInterventoType(t: string): boolean {
+  return (INTERVENTO_TYPE_ORDER as readonly string[]).includes(t);
+}
 
 export function interventoTypeMeta(type: string | null | undefined) {
-  return INTERVENTO_TYPE_META[type ?? ""] ?? INTERVENTO_TYPE_META[DEFAULT_INTERVENTO_TYPE];
+  // Un tipo sconosciuto si mostra com'è, in grigio: meglio di un'etichetta
+  // presa a caso dal default, che direbbe una cosa non vera.
+  return (
+    INTERVENTO_TYPE_META[type ?? ""] ?? { label: type?.trim() || "—", color: "#64748b" }
+  );
 }
 
 /** Priorità intervento: 1 = critico (P1), 2 = alto, 3 = normale. */

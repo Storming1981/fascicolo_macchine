@@ -3,7 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { isClosedStatus } from "@/lib/interventoService";
-import { INTERVENTO_TYPE_META } from "@/lib/domain";
+import { isInterventoType } from "@/lib/domain";
 import { POS_BLOCK_MESSAGE, touchesPlanning } from "@/lib/pos";
 import { loadInterventoBrief, buildAssignmentNotices } from "@/lib/interventoNotify";
 import { createNotifications } from "@/lib/notifications";
@@ -70,7 +70,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
   if (typeof b.title === "string" && b.title.trim()) data.title = b.title.trim();
   if (typeof b.description === "string") data.description = b.description.trim() || null;
-  if (typeof b.type === "string" && b.type in INTERVENTO_TYPE_META) data.type = b.type;
+  if (typeof b.type === "string" && isInterventoType(b.type)) data.type = b.type;
   if (typeof b.commessa === "string") data.commessa = b.commessa.trim() || null;
   if ([1, 2, 3].includes(b.priority)) data.priority = b.priority;
   if ("assignedTechId" in b)

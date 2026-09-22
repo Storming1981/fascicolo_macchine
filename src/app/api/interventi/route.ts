@@ -7,7 +7,7 @@ import { loadInterventoBrief, buildPosToUploadNotices } from "@/lib/interventoNo
 import { createNotifications } from "@/lib/notifications";
 import { deliverNotifications } from "@/lib/notifyDeliver";
 import { absoluteUrl } from "@/lib/absoluteUrl";
-import { INTERVENTO_TYPE_META, DEFAULT_INTERVENTO_TYPE } from "@/lib/domain";
+import { isInterventoType, DEFAULT_INTERVENTO_TYPE } from "@/lib/domain";
 import type { InterventoStatus, Prisma } from "@prisma/client";
 
 const STATUSES: InterventoStatus[] = [
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
   // e nessuna data finché il P.O.S. non è caricato e validato (src/lib/pos.ts).
   const status: InterventoStatus = "DOCUMENTAZIONE";
   const type =
-    typeof b.type === "string" && b.type in INTERVENTO_TYPE_META ? b.type : DEFAULT_INTERVENTO_TYPE;
+    typeof b.type === "string" && isInterventoType(b.type) ? b.type : DEFAULT_INTERVENTO_TYPE;
 
   const intervento = await prisma.intervento.create({
     data: {

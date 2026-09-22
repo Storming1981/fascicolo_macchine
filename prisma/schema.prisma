@@ -455,7 +455,7 @@ model Intervento {
   title         String
   description   String?
   status        InterventoStatus @default(DOCUMENTAZIONE)
-  type          String           @default("MANUTENZIONE") // INSTALLAZIONE | MANUTENZIONE | RIPARAZIONE | SOSTITUZIONE | COLLAUDO | FORMAZIONE | TAGLIO | ALTRO
+  type          String           @default("PAGAMENTO") // INSTALLAZIONE | PAGAMENTO | GARANZIA | SERVIZI (storici: MANUTENZIONE, RIPARAZIONE, SOSTITUZIONE, COLLAUDO, FORMAZIONE, TAGLIO, ALTRO)
   priority      Int              @default(3) // 1 = critico/P1, 2 = alto, 3 = normale
   channel       String?          // portale | whatsapp | telegram | email | telefono
   reportedBy    String?          // nome contatto cliente che ha segnalato

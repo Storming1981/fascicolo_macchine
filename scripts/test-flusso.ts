@@ -63,7 +63,7 @@ async function main() {
       code: `TEST-${Date.now().toString().slice(-6)}`,
       title: "PROVA flusso notifiche",
       description: "Intervento di prova, cancellato a fine test.",
-      type: "MANUTENZIONE",
+      type: "PAGAMENTO",
       priority: 2,
       customerId: cust?.id ?? null,
       siteId: cust?.sites[0]?.id ?? null,

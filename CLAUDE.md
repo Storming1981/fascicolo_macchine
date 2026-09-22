@@ -606,6 +606,21 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   nascono con il `customerId` agganciato).
 - **Ricerca topbar intelligente** (`/api/search`): matricola componente / codice
   fascicolo / job → apre direttamente la macchina; testo generico → lista filtrata.
+- **Tipi di intervento: quattro, commerciali** (`INTERVENTO_TYPE_ORDER` in
+  `domain.ts`) — **Installazione · Intervento a pagamento · Intervento in
+  garanzia · Servizi**. Hanno sostituito la vecchia targhettizzazione tecnica
+  (manutenzione, riparazione, sostituzione, collaudo, formazione, taglio,
+  altro): quella diceva *cosa si fa*, questa dice *chi paga*, che è il dato che
+  serve per fatturare. I tipi storici restano in `TIPI_STORICI` — non
+  selezionabili, ma un intervento archiviato non deve comparire con l'etichetta
+  sbagliata — e le API accettano solo quelli in uso (`isInterventoType`).
+  `INSTALLAZIONE` **non si rinomina**: la milestone "Installata"
+  (`milestoneAuto.ts`) cerca gli interventi di quel tipo.
+  Conversione dei dati: `npm run service:backfill-tipi` (`--dry` per provare).
+  Fra le due classificazioni non c'è corrispondenza esatta — una riparazione può
+  essere a pagamento o in garanzia — quindi il lavoro tecnico va d'ufficio su
+  *a pagamento* e lo script **stampa la lista da rivedere a mano**, invece di
+  inventare un dato commerciale.
 - **P.O.S. — Piano Operativo di Sicurezza (vincolo di pianificazione)**:
   ogni intervento nasce nello stato **DOCUMENTAZIONE** ("Documentazione da
   validare"). Finché il P.O.S. non è **caricato** (file Word/PDF compilato a
