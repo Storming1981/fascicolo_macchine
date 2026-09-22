@@ -1284,3 +1284,12 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .conflict-free { font-size: 12.5px; color: var(--text-2); margin: 0; line-height: 1.5; }
 /* turno che si accavalla a un altro impegno della stessa persona */
 .gantt-block.conflict { box-shadow: 0 0 0 2px var(--red) inset; }
+
+/* Pallino delle notifiche non lette sulla card dell'intervento */
+.ticket-unread {
+  display: inline-grid; place-items: center; margin-left: 6px;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px;
+  background: var(--red); color: #fff; font-size: 10px; font-weight: 700;
+  font-family: Inter, sans-serif; line-height: 1; vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}

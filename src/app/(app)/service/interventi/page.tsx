@@ -25,7 +25,7 @@ export default async function InterventiPage() {
     ? {}
     : { OR: [{ assignedTechId: user.id }, { participants: { some: { id: user.id } } }] };
 
-  const [rows, trashedRows, customerRows] = await Promise.all([
+  const [rows, trashedRows, customerRows, unreadRows] = await Promise.all([
     prisma.intervento.findMany({
       where: { ...scopeWhere, deletedAt: null },
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
@@ -59,6 +59,13 @@ export default async function InterventiPage() {
         machines: { orderBy: { code: "asc" }, select: { id: true, code: true, job: true, model: true } },
       },
     }),
+    // Notifiche non lette di CHI GUARDA, contate per intervento: una query
+    // sola, non una per card. Alimentano il pallino rosso sul kanban.
+    prisma.notification.groupBy({
+      by: ["interventoId"],
+      where: { userId: user.id, readAt: null, interventoId: { not: null } },
+      _count: { _all: true },
+    }),
   ]);
 
   const customers: CustomerOpt[] = customerRows.map((c) => ({
@@ -68,6 +75,7 @@ export default async function InterventiPage() {
     machines: c.machines,
   }));
 
+  const unread = new Map(unreadRows.map((r) => [r.interventoId as string, r._count._all]));
   const interventi: InterventoRow[] = rows.map((i) => ({
     id: i.id,
     code: i.code,
@@ -84,6 +92,7 @@ export default async function InterventiPage() {
     assignedTechId: i.assignedTechId,
     scheduledStart: i.scheduledStart ? i.scheduledStart.toISOString() : null,
     posValidated: i.posValidated,
+    unread: unread.get(i.id) ?? 0,
   }));
 
   const trashed: TrashedRow[] = trashedRows.map((i) => ({

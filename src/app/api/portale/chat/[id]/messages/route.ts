@@ -1,4 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { loadInterventoBrief, buildChatNotices } from "@/lib/interventoNotify";
+import { createNotifications } from "@/lib/notifications";
+import { deliverNotifications } from "@/lib/notifyDeliver";
+import { absoluteUrl } from "@/lib/absoluteUrl";
 import { prisma } from "@/lib/db";
 import { currentClient, clientConversation } from "@/lib/portalAuth";
 
@@ -35,6 +39,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const body = typeof b?.body === "string" ? b.body.trim() : "";
   if (!body) return NextResponse.json({ error: "Messaggio vuoto" }, { status: 400 });
 
+  const conv = await prisma.conversation.findUnique({
+    where: { id },
+    select: { interventoId: true },
+  });
+
   const now = new Date();
   // messaggio del cliente: in ingresso, sempre PUBLICO
   await prisma.message.create({
@@ -50,5 +59,34 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     },
   });
   await prisma.conversation.update({ where: { id }, data: { lastMessageAt: now } });
+
+  // ── Avviso alla squadra ───────────────────────────────────────────
+  // Una chat senza avviso e' una chat che nessuno legge: il messaggio resta li'
+  // finche' qualcuno per caso apre l'intervento.
+  if (conv?.interventoId) {
+    try {
+      const brief = await loadInterventoBrief(conv.interventoId!);
+      if (brief) {
+        const notices = await buildChatNotices(
+          brief,
+          id,
+          { id: null, name: client.name },
+          body,
+          true
+        );
+        if (notices.length) {
+          const ids = await createNotifications(notices.map((n) => n.notification));
+          const base = absoluteUrl(req, "");
+          after(async () => {
+            await deliverNotifications(ids, notices, "", base);
+          });
+        }
+      }
+    } catch (e) {
+      // Il messaggio e' gia' salvato: un avviso mancato non lo annulla.
+      console.error("[notifiche] messaggio chat", id, e);
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }

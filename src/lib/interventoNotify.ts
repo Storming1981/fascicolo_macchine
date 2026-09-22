@@ -26,6 +26,7 @@ export type InterventoBrief = {
   leadName: string | null;
   participants: { id: string; name: string; email: string }[];
   machineId: string | null;
+  createdById: string | null;
 };
 
 const dash = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
@@ -108,6 +109,7 @@ export async function loadInterventoBrief(id: string): Promise<InterventoBrief |
     leadName: i.tech?.name ?? null,
     participants: i.participants,
     machineId: i.machineId,
+    createdById: i.createdById,
   };
 }
 
@@ -485,4 +487,55 @@ export async function buildAckNotices(
     emailTo: u.email,
   });
   return [n];
+}
+
+/* ─────────────────────────── Messaggi di chat ────────────────────────────── */
+
+/**
+ * Nuovo messaggio nella chat di un intervento.
+ *
+ * Destinatari: **la squadra** (capo cantiere + partecipanti) e chi ha aperto
+ * l'intervento, meno l'autore. Chi scrive non si autonotifica, e chi non c'entra
+ * con quel cantiere non deve vedersi arrivare le conversazioni altrui.
+ *
+ * **Niente e-mail**: una mail per ogni riga di chat trasformerebbe la casella in
+ * rumore e farebbe ignorare anche le notifiche che contano (assegnazioni,
+ * P.O.S.). Restano campanella e push, che sono fatti per questo.
+ */
+export async function buildChatNotices(
+  brief: InterventoBrief,
+  conversationId: string,
+  author: { id: string | null; name: string },
+  preview: string,
+  fromCustomer: boolean
+): Promise<Notice[]> {
+  const ids = [
+    brief.leadId,
+    ...brief.participants.map((p) => p.id),
+    brief.createdById,
+  ].filter((x): x is string => !!x && x !== author.id);
+
+  if (!ids.length) return [];
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...new Set(ids)] }, active: true },
+    select: { id: true },
+  });
+
+  const testo = preview.length > 140 ? preview.slice(0, 140) + "…" : preview;
+  return users.map((u) => {
+    const n = notice("CHAT_MESSAGGIO", {
+      userId: u.id,
+      title: `${author.name} · ${brief.code}`,
+      intro: `${fromCustomer ? "Messaggio dal cliente" : "Nuovo messaggio"} nella chat di ${brief.code} — ${brief.title}:\n«${testo}»`,
+      brief,
+      tone: fromCustomer ? "warn" : "info",
+      icon: "sign",
+      actor: { id: author.id ?? "", name: author.name },
+      emailTo: null,
+    });
+    // Il clic porta nella chat, non nella scheda: chi apre l'avviso vuole
+    // rispondere. La rotta decide da sola se aprire il desktop o il Campo.
+    n.notification.href = `/vai/chat/${conversationId}`;
+    return n;
+  });
 }

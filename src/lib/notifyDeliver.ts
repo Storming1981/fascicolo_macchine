@@ -110,9 +110,10 @@ async function pushNotice(n: Notice, notificationId: string): Promise<void> {
     await sendPushToUser(userId, {
       title: n.notification.title,
       body: `${intro}\n${n.mail.brief.summary}`.trim(),
-      // In Campo la pagina dell'intervento è un'altra: il service worker apre
-      // un URL solo, quindi si manda quello che funziona per tutti i ruoli.
-      url: `/notifiche`,
+      // Il service worker apre un URL solo, quindi deve valere per tutti i
+      // ruoli: le scorciatoie /vai/… decidono lato server dove mandare chi
+      // tocca la notifica, per gli altri avvisi si apre l'archivio.
+      url: n.notification.href?.startsWith("/vai/") ? n.notification.href : "/notifiche",
       tag: `intervento-${n.mail.brief.id}`,
       priority: n.notification.tone === "alert" ? 1 : 3,
       notificationId,

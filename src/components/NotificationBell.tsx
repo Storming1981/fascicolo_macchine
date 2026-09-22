@@ -239,6 +239,9 @@ export default function NotificationBell({
   }
 
   function targetHref(n: Notif): string | null {
+    // Gli avvisi di chat puntano a /vai/chat/…, che decide da sé dove mandare
+    // chi apre (desktop o Campo): vale identico nei due gusci.
+    if (n.href?.startsWith("/vai/")) return n.href;
     // In Campo l'intervento ha una pagina sua: lo stesso href desktop porterebbe
     // a un guscio che l'utente operativo non può nemmeno aprire.
     if (variant === "campo") return n.interventoId ? `/campo/interventi/${n.interventoId}` : null;

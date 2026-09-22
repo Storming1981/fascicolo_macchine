@@ -798,6 +798,26 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     cancella. **Vuole cinque persone diverse**: con attori coincidenti scatta la
     regola del "non ci si autonotifica" e dei passaggi sembrerebbero rotti
     mentre funzionano (successo davvero alla prima esecuzione).
+  - **Messaggi di chat** (`CHAT_MESSAGGIO`, `buildChatNotices`): una chat senza
+    avviso e' una chat che nessuno legge — il messaggio resta li' finche'
+    qualcuno per caso apre l'intervento. Scatta da **entrambi** i punti in cui
+    nasce un messaggio: `POST /api/chat/[id]/messages` (interno) e
+    `POST /api/portale/chat/[id]/messages` (cliente, tono `warn`).
+    Destinatari: capo cantiere + squadra + chi ha creato l'intervento, meno
+    l'autore. **Nessuna e-mail**: una mail per ogni riga di chat renderebbe la
+    casella rumore e farebbe ignorare anche gli avvisi che contano. Restano
+    campanella e push.
+  - **`/vai/chat/[conv]`** — la chat del desktop e quella del Campo sono due
+    pagine diverse, ma il push porta **un URL solo**: questa rotta decide lato
+    server (`resolveShell`) e manda ognuno dove sa rispondere
+    (`/service/chat?conv=` oppure `/campo/interventi/[id]/chat`). Senza, un
+    tecnico di cantiere che tocca la notifica finirebbe rimbalzato al suo guscio
+    perdendo la conversazione. Arrivando da lì la casella di risposta è **già a
+    fuoco**: chi apre l'avviso vuole rispondere.
+  - **Pallino sulla card del kanban** (`InterventoRow.unread`): quante notifiche
+    non lette ha **chi guarda** su quell'intervento, da un `groupBy` solo in
+    `service/interventi/page.tsx` — non una query per card. Serve a capire a
+    colpo d'occhio quali cantieri attenzionare.
   - API: `GET /api/notifications` (`?count=1` per il solo numerino) ·
     `POST /api/notifications` (`{ids}` o `{all:true}` per segnare lette).
     Prova a secco senza inviare nulla: `npm run notif:test [INT-2491]`.

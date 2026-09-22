@@ -33,6 +33,8 @@ export type InterventoRow = {
   assignedTechId: string | null;
   scheduledStart: string | null;
   posValidated: boolean;
+  /** Notifiche non lette di chi sta guardando, su questo intervento. */
+  unread: number;
 };
 
 export type TrashedRow = {
@@ -324,6 +326,18 @@ function Ticket({
       <div className="ticket-top">
         <Link href={`/service/interventi/${i.id}`} className="ticket-id mono" draggable={false}>
           {i.code}
+          {/* Pallino rosso: su questo intervento c'e' qualcosa che ti riguarda e
+              non hai ancora letto — un messaggio in chat, un'assegnazione, una
+              risposta della squadra. Serve a capire a colpo d'occhio quali
+              cantieri guardare per primi. */}
+          {i.unread > 0 && (
+            <span
+              className="ticket-unread"
+              title={`${i.unread} ${i.unread === 1 ? "notifica non letta" : "notifiche non lette"}`}
+            >
+              {i.unread > 9 ? "9+" : i.unread}
+            </span>
+          )}
         </Link>
         <span className="prio-chip" style={{ background: prio.color + "1f", color: prio.color }}>
           {prio.label}

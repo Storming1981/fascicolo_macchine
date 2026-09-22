@@ -84,6 +84,13 @@ export default function ChatClient({
   const router = useRouter();
   const [filter, setFilter] = useState("tutto");
   const [selId, setSelId] = useState<string | null>(initialConvId ?? conversations[0]?.id ?? null);
+
+  // Chi arriva qui da una notifica di chat vuole rispondere: il cursore e' gia'
+  // nella casella, senza doverci cliccare sopra.
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (initialConvId) draftRef.current?.focus();
+  }, [initialConvId]);
   const [detail, setDetail] = useState<ConvDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState("");
@@ -340,6 +347,7 @@ export default function ChatClient({
                   </div>
                   <div className="thread-composer">
                     <textarea
+                      ref={draftRef}
                       rows={1}
                       placeholder={toClient ? "Messaggio al cliente…" : "Nota interna ZATO…"}
                       value={draft}

@@ -19,7 +19,8 @@ export type NotifKind =
   | "POS_DA_VALIDARE" // file caricato: il responsabile lo deve firmare
   | "POS_VALIDATO" // torna a chi ha creato l'intervento: ora e' pianificabile
   | "INTERVENTO_ACCETTATO" // un assegnato ha preso in carico
-  | "INTERVENTO_RIFIUTATO"; // un assegnato non puo' andarci
+  | "INTERVENTO_RIFIUTATO" // un assegnato non puo' andarci
+  | "CHAT_MESSAGGIO"; // un assegnato non puo' andarci
 
 export type NotifTone = "info" | "ok" | "warn" | "alert";
 
