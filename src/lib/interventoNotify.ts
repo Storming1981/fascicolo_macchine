@@ -494,9 +494,17 @@ export async function buildAckNotices(
 /**
  * Nuovo messaggio nella chat di un intervento.
  *
- * Destinatari: **la squadra** (capo cantiere + partecipanti) e chi ha aperto
- * l'intervento, meno l'autore. Chi scrive non si autonotifica, e chi non c'entra
- * con quel cantiere non deve vedersi arrivare le conversazioni altrui.
+ * Destinatari: **la squadra** (capo cantiere + partecipanti), chi ha aperto
+ * l'intervento e **chiunque abbia gia' scritto in quella conversazione**, meno
+ * l'autore.
+ *
+ * Quest'ultimo pezzo non c'era e il buco si e' visto subito: su INT-2500 la
+ * squadra era il solo capo cantiere, e chi seguiva il caso dalla chat — senza
+ * essere assegnato — non riceveva le risposte alle proprie domande. In una chat
+ * chi ha scritto sta partecipando, anche se non e' in squadra.
+ *
+ * Restano fuori solo gli utenti del portale cliente: le loro notifiche non
+ * esistono, e il canale verso di loro e' la chat stessa.
  *
  * **Niente e-mail**: una mail per ogni riga di chat trasformerebbe la casella in
  * rumore e farebbe ignorare anche le notifiche che contano (assegnazioni,
@@ -509,15 +517,25 @@ export async function buildChatNotices(
   preview: string,
   fromCustomer: boolean
 ): Promise<Notice[]> {
+  // Chi ha gia' scritto qui dentro: partecipa alla conversazione, quindi le
+  // risposte lo riguardano quanto la squadra.
+  const scriventi = await prisma.message.findMany({
+    where: { conversationId, authorId: { not: null } },
+    select: { authorId: true },
+    distinct: ["authorId"],
+  });
+
   const ids = [
     brief.leadId,
     ...brief.participants.map((p) => p.id),
     brief.createdById,
+    ...scriventi.map((m) => m.authorId),
   ].filter((x): x is string => !!x && x !== author.id);
 
   if (!ids.length) return [];
   const users = await prisma.user.findMany({
-    where: { id: { in: [...new Set(ids)] }, active: true },
+    // `role: CLIENTE` escluso: gli accessi al portale non hanno campanella.
+    where: { id: { in: [...new Set(ids)] }, active: true, role: { not: "CLIENTE" } },
     select: { id: true },
   });
 

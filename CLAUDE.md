@@ -803,8 +803,12 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     qualcuno per caso apre l'intervento. Scatta da **entrambi** i punti in cui
     nasce un messaggio: `POST /api/chat/[id]/messages` (interno) e
     `POST /api/portale/chat/[id]/messages` (cliente, tono `warn`).
-    Destinatari: capo cantiere + squadra + chi ha creato l'intervento, meno
-    l'autore. **Nessuna e-mail**: una mail per ogni riga di chat renderebbe la
+    Destinatari: capo cantiere + squadra + chi ha creato l'intervento +
+    **chiunque abbia gia' scritto in quella conversazione**, meno l'autore.
+    L'ultimo pezzo mancava e il buco si e' visto al primo uso vero: su INT-2500
+    la squadra era il solo capo cantiere, e chi seguiva il caso dalla chat senza
+    essere assegnato non riceveva le risposte alle proprie domande. In una chat
+    chi ha scritto sta partecipando, anche se non e' in squadra. **Nessuna e-mail**: una mail per ogni riga di chat renderebbe la
     casella rumore e farebbe ignorare anche gli avvisi che contano. Restano
     campanella e push.
   - **`/vai/chat/[conv]`** — la chat del desktop e quella del Campo sono due
