@@ -193,6 +193,9 @@ export default function InterventoDetail({
   const posDoc = data.documents.find((d) => d.category === POS_CATEGORY) ?? null;
   const posOk = data.posValidated;
   const canPlan = canEdit && posOk;
+  // Senza P.O.S. validato non si compilano rapportini: quel lavoro non doveva
+  // iniziare, e metterlo a verbale lo farebbe risultare regolare.
+  const canRapportino = canSign && posOk;
 
   const [savingMeta, setSavingMeta] = useState(false);
   async function patch(body: Record<string, unknown>) {
@@ -813,7 +816,7 @@ export default function InterventoDetail({
                   )}
                 </>
               )}
-              {canSign && !adding && (
+              {canRapportino && !adding && (
                 <button className="btn-ghost-sm" onClick={() => setAdding(true)}>
                   <Icon name="plus" size={13} /> Aggiungi giornata
                 </button>
@@ -828,7 +831,17 @@ export default function InterventoDetail({
             </div>
           )}
 
-          {data.rapportini.length === 0 && !adding && (
+          {!posOk && (
+            <div className="info-banner warn" style={{ marginBottom: 10 }}>
+              <Icon name="flag" size={15} />
+              <span>
+                <strong>Rapportini bloccati.</strong> Finché il P.O.S. non è validato dal
+                responsabile non si può compilare nessuna giornata di lavoro su questo cantiere.
+              </span>
+            </div>
+          )}
+
+          {data.rapportini.length === 0 && !adding && posOk && (
             <div className="muted small">Nessun rapportino. Aggiungi la prima giornata di lavoro.</div>
           )}
 
@@ -852,7 +865,7 @@ export default function InterventoDetail({
                 currentUserName={currentUserName}
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
-                canSign={canSign}
+                canSign={canRapportino}
                 defaultOpen={!r.closed}
                 onDone={() => router.refresh()}
               />
@@ -1013,7 +1026,7 @@ export default function InterventoDetail({
                 currentUserName={currentUserName}
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
-                canSign={canSign}
+                canSign={canRapportino}
                 defaultOpen
                 hideHeader
                 onDone={() => {

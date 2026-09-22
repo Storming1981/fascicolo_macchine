@@ -631,6 +631,12 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     "Documentazione da validare", filtro *P.O.S. da validare*, notifiche
     dedicate e avviso nella Pianificazione (gli interventi bloccati non
     compaiono tra i "Da pianificare").
+  - **Niente rapportini prima della validazione**: `POST …/rapportino` rifiuta
+    (409) finché `posValidated` è falso, e la card *Rapportini giornalieri*
+    sparisce dietro un avviso. Non è un cavillo amministrativo: se il P.O.S. non
+    è validato quel lavoro non doveva iniziare, e un rapportino lo metterebbe a
+    verbale come se fosse regolare. Vale anche per le **correzioni**, perché la
+    validazione può essere revocata a lavori aperti.
   - Backfill: `npm run service:backfill-pos` — grazia gli interventi storici
     (marcati "Storico (pre-P.O.S.)") e abilita il validatore.
 - **Check list di collaudo M7.3** (`src/lib/checklist.ts`, 63 voci): card nello
@@ -665,10 +671,17 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   - **La mail parte dopo la risposta HTTP** (`after()`): assegnare un intervento
     non deve fallire perché Gmail è lento o nessuno ha collegato una casella.
     L'esito resta sulla riga (`emailSentAt` / `emailFrom` / `emailError`),
-    altrimenti una mail mai partita non si scoprirebbe mai. Mittente =
-    `sendGmailAs(chi assegna)`: casella personale se collegata, altrimenti
-    quella aziendale — il capo cantiere può rispondere a chi gli ha dato il
-    cantiere. **Se la personale è rotta si ripiega sull'aziendale**: prima il
+    altrimenti una mail mai partita non si scoprirebbe mai.
+  - **Mittente = chi ha APERTO l'intervento** (`Intervento.createdById`), non chi
+    preme il bottone: l'intervento è suo, e il capo cantiere deve poter
+    rispondere a lui invece che a chi ha materialmente spostato una data.
+    Casella personale se collegata, altrimenti quella aziendale. Due eccezioni:
+    l'avviso **diretto al creatore** (es. "P.O.S. validato") parte da chi ha
+    agito — una mail che arriva dal proprio indirizzo Gmail la mostra come "io",
+    sembra una spoofata e non dice chi ha fatto la cosa — e gli interventi
+    **senza creatore registrato** (aperti prima che il campo esistesse, es.
+    INT-2500/2501) ripiegano su chi agisce, come prima.
+    **Se la personale è rotta si ripiega sull'aziendale**: prima il
     ripiego scattava solo quando la personale non c'era, così un token vecchio
     (chiave di cifratura cambiata col trasloco del DB sulla VPS, consenso
     revocato) faceva sparire le mail di quel solo utente, in silenzio, mentre

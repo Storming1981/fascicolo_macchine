@@ -16,9 +16,15 @@ import type { Notice } from "./interventoNotify";
  * (`emailSentAt` / `emailError`), altrimenti un'e-mail mai partita resterebbe
  * invisibile a tutti.
  *
- * Il mittente è la casella dell'utente che ha fatto l'assegnazione (Gmail
- * personale se collegata, altrimenti quella aziendale): il capo cantiere riceve
- * il cantiere da chi glielo ha dato, e può rispondere direttamente.
+ * **Il mittente è chi ha APERTO l'intervento** (Gmail personale se collegata,
+ * altrimenti quella aziendale): l'intervento è suo, ed è a lui che il capo
+ * cantiere deve poter rispondere — non a chi ha materialmente spostato una data
+ * o premuto un bottone. Due eccezioni, entrambe necessarie:
+ *   - **l'avviso diretto al creatore** (es. "P.O.S. validato") parte dalla
+ *     casella di chi ha agito: una mail che arriva dal proprio indirizzo Gmail
+ *     la mostra come "io", sembra una spoofata e non dice chi ha fatto la cosa;
+ *   - **gli interventi senza creatore registrato** (aperti prima che
+ *     `createdById` esistesse) ripiegano su chi agisce, come prima.
  *
  * **Il push va per primo**: è quello che fa vibrare il telefono, e non deve
  * aspettare che Gmail abbia finito di spedire agli altri della squadra.
@@ -157,8 +163,13 @@ export async function deliverNotifications(
     const link = baseUrl ? `${baseUrl}/service/interventi/${n.mail.brief.id}` : null;
     const text = [n.notification.body, link ? `\n\nApri l'intervento: ${link}` : ""].join("");
 
+    // Mittente: chi ha aperto l'intervento; chi agisce quando il destinatario
+    // è il creatore stesso (o l'intervento non sa chi l'ha aperto).
+    const owner = n.mail.brief.createdById;
+    const senderId = owner && owner !== n.notification.userId ? owner : actorId;
+
     try {
-      const res = await sendGmailAs(actorId, {
+      const res = await sendGmailAs(senderId, {
         to: [to],
         subject: `[ZATO] ${n.mail.subject}`,
         text,

@@ -189,6 +189,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   });
   if (!intervento) return NextResponse.json({ error: "Intervento non trovato" }, { status: 404 });
 
+  // Vincolo P.O.S.: su un cantiere la cui documentazione di sicurezza non è
+  // ancora validata non si compilano rapportini. Non è un cavillo
+  // amministrativo: se il P.O.S. non è validato quel lavoro non doveva
+  // iniziare, e un rapportino lo metterebbe a verbale come se fosse regolare.
+  // Vale anche per le correzioni, perché la validazione può essere stata
+  // revocata a lavori aperti.
+  if (!intervento.posValidated)
+    return NextResponse.json(
+      {
+        error:
+          "P.O.S. non validato: non si possono compilare rapportini finché il Piano Operativo di Sicurezza non è caricato e validato dal responsabile.",
+      },
+      { status: 409 }
+    );
+
   const form = await req.formData();
   const rapportinoId = String(form.get("rapportinoId") || "").trim() || null;
   const dateStr = String(form.get("date") || "").trim();
