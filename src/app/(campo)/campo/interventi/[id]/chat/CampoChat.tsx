@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
 import { fmtDayMonthTime } from "@/lib/format";
+import { NOTIF_EVENT } from "@/components/NotificationBell";
 
 type Msg = {
   id: string;
@@ -48,6 +49,9 @@ export default function CampoChat({
     const r = await fetch(`/api/chat/${convId}/messages`);
     const d = await r.json().catch(() => null);
     if (r.ok) setMessages(d.conversation?.messages ?? []);
+    // I suoi avvisi di chat il server li ha appena segnati letti: la campanella
+    // deve accorgersene subito, non al polling successivo.
+    window.dispatchEvent(new Event(NOTIF_EVENT));
     setLoading(false);
   }
   useEffect(() => {

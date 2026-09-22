@@ -37,6 +37,9 @@ type Notif = {
   needsAck: boolean;
 };
 
+/** Segnale interno: "ricontrolla le notifiche adesso". Lo manda chi le legge. */
+export const NOTIF_EVENT = "zato:notifiche";
+
 const TONE: Record<string, string> = {
   alert: "#dc2626",
   warn: "#f59e0b",
@@ -130,10 +133,15 @@ export default function NotificationBell({
     };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("focus", onVis);
+    // Chi legge una chat spegne i suoi avvisi lato server: senza questo segnale
+    // il numerino resterebbe su fino al giro di polling successivo, cioe' fino
+    // a 45 secondi dopo averli gia' letti.
+    window.addEventListener(NOTIF_EVENT, onVis);
     return () => {
       clearInterval(t);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("focus", onVis);
+      window.removeEventListener(NOTIF_EVENT, onVis);
     };
   }, [loadCount]);
 

@@ -814,6 +814,15 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     persona). Gli **ADMIN restano fuori**: sono quattro, non seguono i cantieri,
     e avvisarli a ogni riga renderebbe il pallino rumore — lo stesso errore
     evitato sui P.O.S.
+  - **Aprire la chat la segna letta.** Il `GET /api/chat/[id]/messages` spegne
+    gli avvisi `CHAT_MESSAGGIO` di quella conversazione per chi li sta leggendo.
+    Sta **nel server**, non nei client: vale cosi' per il desktop, per l'app
+    Campo e per qualunque schermata futura, senza doverselo ricordare ogni
+    volta. Senza, si leggevano due volte le stesse righe — prima in chat e poi
+    sulla campanella per toglierle. Gli avvisi di altro tipo sullo stesso
+    intervento (assegnazioni, P.O.S.) **restano non letti**: sono un'altra cosa.
+    La chat manda poi l'evento `NOTIF_EVENT` (`zato:notifiche`) alla campanella,
+    che riconta subito invece di aspettare fino a 45 secondi il polling.
   - **Segnare lette deve aggiornare anche le card**: la campanella fa
     `router.refresh()` dopo *Segna lette*. Senza, il pallino rosso sul kanban
     (che lo calcola il **server**) restava acceso con i conteggi della lettura

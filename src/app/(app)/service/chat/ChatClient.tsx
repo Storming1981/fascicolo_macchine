@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import { fmtDayMonthTime } from "@/lib/format";
+import { NOTIF_EVENT } from "@/components/NotificationBell";
 
 export type ConversationRow = {
   id: string;
@@ -132,6 +133,9 @@ export default function ChatClient({
       const res = await fetch(`/api/chat/${id}/messages`);
       const d = await res.json().catch(() => null);
       if (res.ok) setDetail(d.conversation);
+    // I suoi avvisi di chat il server li ha appena segnati letti: la campanella
+    // deve accorgersene subito, non al polling successivo.
+    window.dispatchEvent(new Event(NOTIF_EVENT));
     } finally {
       setLoading(false);
     }

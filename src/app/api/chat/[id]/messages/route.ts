@@ -26,6 +26,22 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     },
   });
   if (!conv) return NextResponse.json({ error: "Non trovata" }, { status: 404 });
+
+  // Aprire la chat vale come averla letta: gli avvisi di messaggio su questa
+  // conversazione si spengono da soli. Altrimenti si leggerebbero due volte le
+  // stesse righe — prima in chat e poi sulla campanella per toglierle.
+  // Sta qui, nel caricamento dei messaggi, e non nel client: cosi' vale per il
+  // desktop, per l'app Campo e per qualunque schermata futura.
+  await prisma.notification.updateMany({
+    where: {
+      userId: user.id,
+      kind: "CHAT_MESSAGGIO",
+      readAt: null,
+      href: `/vai/chat/${id}`,
+    },
+    data: { readAt: new Date() },
+  });
+
   return NextResponse.json({ conversation: conv });
 }
 
