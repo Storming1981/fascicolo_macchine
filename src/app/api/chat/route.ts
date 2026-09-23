@@ -31,13 +31,22 @@ export async function POST(req: Request) {
   if (!b || typeof b.title !== "string" || !b.title.trim())
     return NextResponse.json({ error: "Titolo obbligatorio" }, { status: 400 });
 
+  // Una chat aperta su un intervento eredita macchina e cliente: senza, le sue
+  // foto non arriverebbero mai nel fascicolo.
+  const parent = b.interventoId
+    ? await prisma.intervento.findUnique({
+        where: { id: String(b.interventoId) },
+        select: { machineId: true, customerId: true },
+      })
+    : null;
+
   const conv = await prisma.conversation.create({
     data: {
       title: b.title.trim(),
       channel: "native",
       contactName: typeof b.contactName === "string" ? b.contactName.trim() || null : null,
-      customerId: b.customerId || null,
-      machineId: b.machineId || null,
+      customerId: b.customerId || parent?.customerId || null,
+      machineId: b.machineId || parent?.machineId || null,
       interventoId: b.interventoId || null,
       lastMessageAt: new Date(),
     },

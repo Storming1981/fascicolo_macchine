@@ -26,7 +26,14 @@ import type { MachineStatus, InterventoStatus } from "@prisma/client";
 
 type ServiceData = {
   interventi: { id: string; code: string; title: string; status: InterventoStatus; priority: number }[];
-  chats: { id: string; title: string; channel: string; contactName: string | null; messages: number }[];
+  chats: {
+    id: string;
+    title: string;
+    channel: string;
+    contactName: string | null;
+    interventoCode: string | null;
+    messages: number;
+  }[];
 };
 
 type Item = { id: string; position: number; label: string; serial: string | null; note: string | null };
@@ -84,7 +91,7 @@ type Machine = {
 const TABS = [
   { id: "anagrafica", label: "Anagrafica", icon: "doc" },
   { id: "componenti", label: "Componenti & Matricole", icon: "gear" },
-  { id: "foto", label: "Foto produzione", icon: "image" },
+  { id: "foto", label: "Foto", icon: "image" },
   { id: "collaudo", label: "Collaudo & Firme", icon: "sign" },
   { id: "diario", label: "Diario macchina", icon: "clock" },
   { id: "service", label: "Service", icon: "wrench" },
@@ -3237,6 +3244,9 @@ function TabService({
             {service.chats.map((c) => (
               <li key={c.id}>
                 <Link href={`/service/chat?conv=${c.id}`} className="mini-row">
+                  <span className="mono muted small" style={{ minWidth: 68 }}>
+                    {c.interventoCode ?? "libera"}
+                  </span>
                   <span style={{ flex: 1, fontWeight: 600 }}>{c.contactName ?? c.title}</span>
                   <span className="muted small">{c.channel}</span>
                   <span className="mono muted small">{c.messages} msg</span>

@@ -101,6 +101,17 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   const intervento = await prisma.intervento.update({ where: { id }, data });
 
+  // Chat e foto dell'intervento seguono macchina e cliente, anche quando il
+  // collegamento arriva dopo la creazione.
+  if ("machineId" in b || "customerId" in b) {
+    const link: { machineId?: string | null; customerId?: string | null } = {};
+    if ("machineId" in b) link.machineId = intervento.machineId;
+    if ("customerId" in b) link.customerId = intervento.customerId;
+    await prisma.conversation.updateMany({ where: { interventoId: id }, data: link });
+    if ("machineId" in b)
+      await prisma.photo.updateMany({ where: { interventoId: id }, data: { machineId: intervento.machineId } });
+  }
+
   // ── Notifiche di cantiere ─────────────────────────────────────────
   // Chi viene messo capo cantiere (o in squadra, o tolto, o gli spostano le
   // date) lo scopre qui: pallino rosso nell'app + mail. Le notifiche si

@@ -20,15 +20,6 @@ export async function loadMachineDetailProps(code: string) {
         orderBy: { date: "asc" },
         include: { photos: { where: { deletedAt: null } }, signature: true },
       },
-      photos: {
-        where: { deletedAt: null },
-        orderBy: { createdAt: "desc" },
-        include: {
-          componentItem: { select: { label: true, component: { select: { groupId: true, label: true } } } },
-          intervento: { select: { code: true, title: true } },
-          diaryEvent: { select: { title: true, date: true } },
-        },
-      },
       documents: { orderBy: { uploadedAt: "desc" } },
       signatures: true,
       milestones: true,
@@ -54,16 +45,43 @@ export async function loadMachineDetailProps(code: string) {
   // tipologie/modelli configurabili: servono alla modifica dell'anagrafica
   const plantConfig = await getPlantConfig();
 
-  const [serviceInterventi, serviceChats] = await Promise.all([
-    prisma.intervento.findMany({
-      where: { machineId: machine.id, deletedAt: null },
+  const serviceInterventi = await prisma.intervento.findMany({
+    where: { machineId: machine.id, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, code: true, title: true, status: true, priority: true },
+  });
+  // Foto e chat si raccolgono anche PER INTERVENTO, non solo per collegamento
+  // diretto al fascicolo: una chat aperta prima che la macchina fosse collegata
+  // ha le foto legate al solo intervento, e nel fascicolo sparivano.
+  const interventoIds = serviceInterventi.map((i) => i.id);
+  const photoWhere = interventoIds.length
+    ? { OR: [{ machineId: machine.id }, { interventoId: { in: interventoIds } }] }
+    : { machineId: machine.id };
+  const photoInclude = {
+    componentItem: { select: { label: true, component: { select: { groupId: true, label: true } } } },
+    intervento: { select: { code: true, title: true } },
+    diaryEvent: { select: { title: true, date: true } },
+  };
+
+  const [machinePhotos, serviceChats] = await Promise.all([
+    prisma.photo.findMany({
+      where: { ...photoWhere, deletedAt: null },
       orderBy: { createdAt: "desc" },
-      select: { id: true, code: true, title: true, status: true, priority: true },
+      include: photoInclude,
     }),
     prisma.conversation.findMany({
-      where: { machineId: machine.id },
+      where: interventoIds.length
+        ? { OR: [{ machineId: machine.id }, { interventoId: { in: interventoIds } }] }
+        : { machineId: machine.id },
       orderBy: [{ lastMessageAt: "desc" }],
-      select: { id: true, title: true, channel: true, contactName: true, _count: { select: { messages: true } } },
+      select: {
+        id: true,
+        title: true,
+        channel: true,
+        contactName: true,
+        intervento: { select: { code: true } },
+        _count: { select: { messages: true } },
+      },
     }),
   ]);
   const qrDataUrl = await QRCode.toDataURL(
@@ -75,7 +93,7 @@ export async function loadMachineDetailProps(code: string) {
 
   // Cestino foto: eliminate (logicamente), ripristinabili dalla scheda Foto.
   const trashedPhotos = await prisma.photo.findMany({
-    where: { machineId: machine.id, deletedAt: { not: null } },
+    where: { ...photoWhere, deletedAt: { not: null } },
     orderBy: { deletedAt: "desc" },
     include: {
       componentItem: { select: { label: true, component: { select: { groupId: true, label: true } } } },
@@ -83,7 +101,7 @@ export async function loadMachineDetailProps(code: string) {
       diaryEvent: { select: { title: true, date: true } },
     },
   });
-  const mapPhoto = (p: (typeof machine.photos)[number]) => {
+  const mapPhoto = (p: (typeof machinePhotos)[number]) => {
     const comp = p.componentItem?.component;
     const groupLabel = comp
       ? COMPONENT_GROUPS.find((g) => g.id === comp.groupId)?.label ?? comp.label ?? "Componente"
@@ -167,7 +185,7 @@ export async function loadMachineDetailProps(code: string) {
       signed: !!e.signature,
       photos: e.photos.map((p) => ({ id: p.id, path: p.path, caption: p.caption })),
     })),
-    photos: machine.photos.map(mapPhoto),
+    photos: machinePhotos.map(mapPhoto),
     photoTrash: trashedPhotos.map(mapPhoto),
     documents: machine.documents.map((d) => ({
       id: d.id,
@@ -236,6 +254,7 @@ export async function loadMachineDetailProps(code: string) {
         title: c.title,
         channel: c.channel,
         contactName: c.contactName,
+        interventoCode: c.intervento?.code ?? null,
         messages: c._count.messages,
       })),
     },

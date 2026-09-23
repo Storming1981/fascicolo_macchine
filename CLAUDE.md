@@ -479,6 +479,23 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   (automatica) con una **sottocartella per intervento** di service col codice
   `INT-…` (foto di rapportini e chat via `Photo.interventoId`), poi quelle del
   diario del fascicolo (`diaryEventId`). Classificazione in `folderOf()`.
+- **Le foto e le chat di un intervento appartengono al fascicolo.** La linguetta
+  si chiama **Foto** (non più "Foto produzione") e la cartella *Interventi* ha
+  una sottocartella per intervento con **tutte** le sue foto: chat di cantiere e
+  rapportini. La scheda **Service** del fascicolo elenca in *Conversazioni* sia
+  le chat libere della macchina sia quelle degli interventi (etichetta col
+  codice `INT-…` oppure "libera").
+  **Perché mancavano**: la chat nasce con la macchina dell'intervento, ma se il
+  fascicolo veniva collegato **dopo** (INT-2499/2500/2503-2505) chat e foto
+  restavano legate al solo intervento, e la scheda Foto — che cercava
+  `Photo.machineId` — non mostrava niente. Tre correzioni:
+  `PATCH /api/interventi/[id]` propaga macchina e cliente a chat e foto già
+  scambiate; una chat aperta su un intervento eredita macchina e cliente; le
+  foto della chat ripiegano su `intervento.machineId`. Il loader
+  (`machineDetailLoader`) prende **comunque** foto e chat anche **per
+  intervento** (`OR interventoId IN …`), quindi lo storico si vede senza
+  dipendere dal collegamento diretto. Allineamento dei dati vecchi:
+  `npm run service:backfill-chat-machine` (`--dry` per provare).
 - **Eliminazione foto** (icona cestino sulla card in *Foto produzione*): la
   elimina l'autore della foto o chi ha `machine.edit`. Cancellazione **logica**
   (`Photo.deletedAt`/`deletedById`/`deletedByName`): riga e file su disco

@@ -18,6 +18,7 @@
     "operators:import": "tsx scripts/import-operators.ts",
     "service:enrich-customers": "tsx scripts/enrich-customers-erp.ts",
     "service:backfill-pos": "tsx prisma/backfill-pos.ts",
+    "service:backfill-chat-machine": "tsx scripts/backfill-chat-machine.ts",
     "service:backfill-tipi": "tsx prisma/backfill-tipi-intervento.ts",
     "brain:seed": "tsx scripts/brain-sync.ts seed",
     "brain:sync": "tsx scripts/brain-sync.ts sync",

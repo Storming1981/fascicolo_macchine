@@ -54,7 +54,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const conv = await prisma.conversation.findUnique({
     where: { id },
-    select: { id: true, interventoId: true, machineId: true, intervento: { select: { code: true } }, machine: { select: { code: true } } },
+    select: {
+      id: true,
+      interventoId: true,
+      machineId: true,
+      intervento: { select: { code: true, machineId: true } },
+      machine: { select: { code: true } },
+    },
   });
   if (!conv) return NextResponse.json({ error: "Conversazione non trovata" }, { status: 404 });
 
@@ -106,7 +112,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     await prisma.photo.create({
       data: {
         interventoId: conv.interventoId,
-        machineId: conv.machineId,
+        // il fascicolo puo' essere collegato al solo intervento (chat aperta prima)
+        machineId: conv.machineId ?? conv.intervento?.machineId ?? null,
         path: photoPath,
         category: "chat",
         caption: body || null,
