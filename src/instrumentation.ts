@@ -1,6 +1,7 @@
 /**
  * Hook di avvio del server Next.js.
  * - Avanzamento automatico interventi (pianificato → in corso al giorno previsto).
+ * - Invio automatico dei rapportini giornalieri all'ora impostata.
  * - Polling automatico delle timbrature se configurato:
  *     PRESENCE_SYNC_INTERVAL_MIN=5   (minuti; 0 o assente = disattivato)
  *   Richiede anche PRESENCE_FEED_URL/LOGIN_URL/USER/PASS.
@@ -9,7 +10,42 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
   startAutoProgress();
+  startRapportinoMail();
   startPresencePoller();
+}
+
+/**
+ * Ogni minuto controlla se è arrivata l'ora dell'invio automatico dei
+ * rapportini (configurata in Impostazioni). Il controllo è al minuto perché
+ * l'orario è scelto dall'utente: con un tick più lungo la mail partirebbe
+ * "verso" l'ora impostata invece che a quell'ora. Il giro vero parte una volta
+ * sola al giorno (lo stato sta in banca dati, quindi regge anche i riavvii).
+ */
+function startRapportinoMail() {
+  const g = globalThis as unknown as { __rapportinoMail?: boolean };
+  if (g.__rapportinoMail) return;
+  g.__rapportinoMail = true;
+
+  const run = async () => {
+    try {
+      // L'import sta DENTRO il ramo `=== "nodejs"` perché il bundle edge di
+      // instrumentation altrimenti si tira dietro il generatore PDF (fs, path,
+      // crypto) e la build segnala "node module in edge runtime". In questa
+      // forma il ramo viene eliminato a monte.
+      if (process.env.NEXT_RUNTIME !== "nodejs") return;
+      const { runRapportinoMailIfDue } = await import("./lib/rapportinoMail");
+      const r = await runRapportinoMailIfDue();
+      if (r)
+        console.log(
+          `[rapportini/mail] inviati ${r.sent} · rimandati ${r.skipped}` +
+            (r.errors.length ? ` · errori ${r.errors.length}: ${r.errors.join(" | ")}` : "")
+        );
+    } catch (e) {
+      console.error("[rapportini/mail]", e instanceof Error ? e.message : e);
+    }
+  };
+  setTimeout(run, 40_000); // primo controllo poco dopo l'avvio
+  setInterval(run, 60_000);
 }
 
 /**

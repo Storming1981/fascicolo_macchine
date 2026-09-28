@@ -11,6 +11,7 @@ import {
 } from "@/lib/permissions";
 import { NAV_ITEMS, type NavVisibility, type NavKey } from "@/lib/nav";
 import type { AppAccessMatrix, AppProfile } from "@/lib/appAccess";
+import type { RapportinoMailConfig, RapportinoMailState } from "@/lib/rapportinoMailConfig";
 import { fmtDateTime } from "@/lib/format";
 
 type PlantConfig = { name: string; models: string[] }[];
@@ -35,6 +36,9 @@ export default function SettingsClient({
   googleMe,
   googleCompany,
   currentUserEmail,
+  rapportinoMail,
+  rapportinoMailState,
+  rapportinoMailPending,
 }: {
   plantConfig: PlantConfig;
   modelUsage: { plantType: string; model: string; count: number }[];
@@ -47,9 +51,70 @@ export default function SettingsClient({
   googleMe: { email: string; connectedAt: string } | null;
   googleCompany: { email: string; connectedAt: string; connectedByName: string | null } | null;
   currentUserEmail: string;
+  rapportinoMail: RapportinoMailConfig;
+  rapportinoMailState: RapportinoMailState;
+  rapportinoMailPending: number;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"plant" | "perms" | "nav" | "erp" | "google">("plant");
+  const [tab, setTab] = useState<"plant" | "perms" | "nav" | "erp" | "google" | "mail">("plant");
+
+  /* ── Invio automatico rapportini ── */
+  const [mailCfg, setMailCfg] = useState<RapportinoMailConfig>(rapportinoMail);
+  const [mailTo, setMailTo] = useState(rapportinoMail.to.join(", "));
+  const [mailCc, setMailCc] = useState(rapportinoMail.cc.join(", "));
+  const [mailBusy, setMailBusy] = useState<"save" | "run" | null>(null);
+  const [mailState, setMailState] = useState<RapportinoMailState>(rapportinoMailState);
+  const [mailPending, setMailPending] = useState(rapportinoMailPending);
+
+  const mailPayload = () => ({
+    ...mailCfg,
+    to: mailTo.split(/[,;\s]+/).filter((s) => s.includes("@")),
+    cc: mailCc.split(/[,;\s]+/).filter((s) => s.includes("@")),
+  });
+
+  async function saveMail() {
+    setMailBusy("save");
+    const res = await fetch("/api/settings/rapportino-mail", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(mailPayload()),
+    });
+    const d = await res.json().catch(() => null);
+    setMailBusy(null);
+    if (res.ok) {
+      if (d?.config) {
+        setMailCfg(d.config);
+        setMailTo(d.config.to.join(", "));
+        setMailCc(d.config.cc.join(", "));
+      }
+      notify("Invio rapportini salvato");
+      router.refresh();
+    } else notify(d?.error ?? "Errore salvataggio", "err");
+  }
+
+  /** Esegue subito il giro di invio, senza aspettare l'orario. */
+  async function runMailNow() {
+    setMailBusy("run");
+    const res = await fetch("/api/settings/rapportino-mail", { method: "POST" });
+    const d = await res.json().catch(() => null);
+    setMailBusy(null);
+    if (!res.ok) {
+      notify(d?.error ?? "Invio non riuscito", "err");
+      return;
+    }
+    if (d?.state) setMailState(d.state);
+    if (d?.reason) {
+      notify(d.reason, "err");
+      return;
+    }
+    setMailPending(Math.max(0, mailPending - (d?.sent ?? 0)));
+    notify(
+      `Inviati ${d?.sent ?? 0} rapportini` +
+        (d?.skipped ? `, ${d.skipped} rimandati (timbrature aperte)` : "") +
+        (d?.errors?.length ? `, ${d.errors.length} errori` : "")
+    );
+    router.refresh();
+  }
   const [gBusy, setGBusy] = useState<"test" | "unlink-me" | "unlink-company" | null>(null);
   const [testTo, setTestTo] = useState(currentUserEmail);
   const [navm, setNavm] = useState<NavVisibility>(JSON.parse(JSON.stringify(navVisibility)));
@@ -286,6 +351,12 @@ export default function SettingsClient({
             <Icon name="clock" size={14} /> <span>Gestionale (ERP)</span>
           </button>
         )}
+        <button
+          className={"tab" + (tab === "mail" ? " active" : "")}
+          onClick={() => setTab("mail")}
+        >
+          <Icon name="doc" size={14} /> <span>Invio rapportini</span>
+        </button>
         <button
           className={"tab" + (tab === "google" ? " active" : "")}
           onClick={() => setTab("google")}
@@ -785,6 +856,167 @@ export default function SettingsClient({
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {tab === "mail" && (
+        <div className="tab-content">
+          <div className="card">
+            <div className="card-header">
+              <h3>Invio automatico dei rapportini giornalieri</h3>
+              <button className="btn-primary-sm" onClick={saveMail} disabled={mailBusy !== null}>
+                <Icon name="check" size={14} /> {mailBusy === "save" ? "Salvo…" : "Salva"}
+              </button>
+            </div>
+
+            <p className="muted small">
+              Ogni giorno all&apos;ora indicata, i rapportini <strong>chiusi e firmati</strong> non
+              ancora inviati partono via e-mail agli indirizzi qui sotto, uno per rapportino, con il
+              PDF in allegato. Il mittente è la <strong>casella Gmail aziendale</strong>.
+            </p>
+
+            {!googleConfigured && (
+              <div className="info-banner warn" style={{ marginTop: 10 }}>
+                <Icon name="clock" size={15} />
+                <span>
+                  Google non è configurato: senza casella aziendale collegata l&apos;invio non può
+                  partire. Vedi la scheda <strong>Account Google</strong>.
+                </span>
+              </div>
+            )}
+
+            <label className="att-check" style={{ marginTop: 12 }}>
+              <input
+                type="checkbox"
+                checked={mailCfg.enabled}
+                onChange={(e) => setMailCfg({ ...mailCfg, enabled: e.target.checked })}
+              />
+              <span>
+                <strong>Invio automatico attivo</strong> — se spento restano l&apos;invio manuale
+                dalla scheda intervento e il pulsante qui sotto
+              </span>
+            </label>
+
+            <div className="form-grid" style={{ marginTop: 12 }}>
+              <div className="field" style={{ maxWidth: 200 }}>
+                <span className="field-label">Orario di invio</span>
+                <input
+                  type="time"
+                  value={mailCfg.time}
+                  onChange={(e) => setMailCfg({ ...mailCfg, time: e.target.value })}
+                />
+                <div className="muted small">Ora italiana, tutti i giorni.</div>
+              </div>
+
+              <div className="field" style={{ maxWidth: 200 }}>
+                <span className="field-label">Recupero arretrati</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={mailCfg.maxDays}
+                  onChange={(e) => setMailCfg({ ...mailCfg, maxDays: Number(e.target.value) })}
+                />
+                <div className="muted small">
+                  Giorni indietro da considerare: copre i rapportini firmati in ritardo.
+                </div>
+              </div>
+            </div>
+
+            <div className="field" style={{ marginTop: 4 }}>
+              <span className="field-label">Destinatari (A)</span>
+              <input
+                value={mailTo}
+                onChange={(e) => setMailTo(e.target.value)}
+                placeholder="ufficio@zato.it, service@zato.it"
+              />
+              <div className="muted small">Più indirizzi separati da virgola.</div>
+            </div>
+
+            <div className="field">
+              <span className="field-label">Copia conoscenza (Cc)</span>
+              <input
+                value={mailCc}
+                onChange={(e) => setMailCc(e.target.value)}
+                placeholder="responsabile@zato.it"
+              />
+            </div>
+
+            <label className="att-check">
+              <input
+                type="checkbox"
+                checked={mailCfg.includeAttachments}
+                onChange={(e) => setMailCfg({ ...mailCfg, includeAttachments: e.target.checked })}
+              />
+              <span>Allega anche foto e file del rapportino, oltre al PDF</span>
+            </label>
+
+            <label className="att-check">
+              <input
+                type="checkbox"
+                checked={mailCfg.includeCustomer}
+                onChange={(e) => setMailCfg({ ...mailCfg, includeCustomer: e.target.checked })}
+              />
+              <span>
+                Aggiungi in Cc l&apos;indirizzo del <strong>cliente</strong> dell&apos;intervento,
+                quando presente in anagrafica
+              </span>
+            </label>
+
+            <div className="rap-pdf-actions" style={{ marginTop: 14 }}>
+              <button className="btn-ghost-sm" onClick={runMailNow} disabled={mailBusy !== null}>
+                <Icon name="upload" size={13} /> {mailBusy === "run" ? "Invio…" : "Invia adesso"}
+              </button>
+              <span className="muted small">
+                {mailPending > 0
+                  ? `${mailPending} rapportini chiusi in attesa di invio`
+                  : "Nessun rapportino in attesa"}
+              </span>
+            </div>
+
+            <p className="muted small" style={{ marginTop: 10 }}>
+              I rapportini con <strong>timbrature ancora aperte</strong> vengono rimandati al giro
+              successivo: le ore sarebbero parziali. Quelli già inviati (a mano o in automatico) non
+              partono una seconda volta. L&apos;invio automatico considera i rapportini{" "}
+              <strong>da quando è stato attivato in avanti</strong>, così accenderlo non fa partire
+              in blocco gli arretrati; per spedire anche quelli usa <em>Invia adesso</em>.
+            </p>
+
+            {mailState.lastRunAt && (
+              <div className="card no-pad" style={{ marginTop: 12 }}>
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <tbody>
+                      <tr>
+                        <td>Ultimo invio</td>
+                        <td style={{ fontWeight: 600 }}>{fmtDateTime(mailState.lastRunAt)}</td>
+                      </tr>
+                      <tr>
+                        <td>Rapportini inviati</td>
+                        <td style={{ fontWeight: 600 }}>{mailState.lastSent}</td>
+                      </tr>
+                      <tr>
+                        <td>Rimandati (timbrature aperte)</td>
+                        <td style={{ fontWeight: 600 }}>{mailState.lastSkipped}</td>
+                      </tr>
+                      {mailState.lastErrors.length > 0 && (
+                        <tr>
+                          <td style={{ color: "var(--danger, #b3261e)" }}>Errori</td>
+                          <td>
+                            {mailState.lastErrors.map((e, i) => (
+                              <div key={i} className="small">
+                                {e}
+                              </div>
+                            ))}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

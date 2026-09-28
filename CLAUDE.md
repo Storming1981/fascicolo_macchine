@@ -952,6 +952,31 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
 - **Fix layout desktop**: la shell usa `display:flex` (`.app` flex, `.sidebar`
   `flex:0 0 248px`, `.main` `flex:1 1 0; min-width:0`) invece di CSS grid `1fr`,
   che collassava in alcuni browser embedded. Robusto su desktop/tablet/mobile.
+- **Invio automatico dei rapportini giornalieri** (`src/lib/rapportinoMail.ts`,
+  configurazione in **Impostazioni → Invio rapportini**): ogni giorno all'ora
+  impostata parte **una mail per rapportino chiuso** non ancora inviato, col PDF
+  in allegato, a una lista di indirizzi (A + Cc) configurabile. Mittente: la
+  **casella Gmail aziendale** (`sendGmailAs("")` — l'automazione non ha un utente
+  che preme il bottone). Traccia su `Rapportino.sentAt/sentTo`, gli stessi campi
+  dell'invio manuale, quindi un rapportino non parte due volte.
+  - Config in `Setting.rapportinoMail`, esito dell'ultimo giro in
+    `Setting.rapportinoMailState` (`lastRunDay` evita il doppio invio e **sta in
+    banca dati**: un riavvio del container a metà pomeriggio non rifà il giro).
+  - Tipi, default e normalizzazione stanno in `rapportinoMailConfig.ts`, modulo
+    **puro** come `permissions.ts`/`nav.ts`: la pagina Impostazioni è un
+    componente client e importarli dal motore `server-only` porta fs/crypto nel
+    bundle del client.
+  - Lo scheduler è in `instrumentation.ts` (tick al minuto: l'orario lo sceglie
+    l'utente, con un tick più lungo la mail partirebbe "verso" quell'ora).
+    **L'import dinamico del motore sta dentro il ramo `NEXT_RUNTIME === "nodejs"`**:
+    fuori di lì il bundle edge di instrumentation si tira dietro il generatore
+    PDF e la build segnala `node-module-in-edge-runtime`.
+  - **I rapportini con timbrature aperte si rimandano** al giro successivo (ore
+    parziali), come per l'invio manuale.
+  - **Accendere l'invio non spedisce l'arretrato**: `activatedAt` lo registra il
+    server e il giro automatico parte da lì in avanti. Per spedire anche
+    l'arretrato c'è *Invia adesso*, che mostra quanti sono.
+  - API: `GET|PUT|POST /api/settings/rapportino-mail` (permesso `settings.manage`).
 - **Riepilogo intervento in un PDF solo** (`src/lib/riepilogoPdf.ts` +
   `riepilogoRender.ts`): tutte le giornate una dopo l'altra (ore per operatore
   con tipologia, attività e problematiche), totale per operatore e **una sola

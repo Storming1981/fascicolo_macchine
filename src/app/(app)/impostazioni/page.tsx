@@ -4,6 +4,11 @@ import { prisma } from "@/lib/db";
 import { getPlantConfig, getPermissions, getNavVisibility, getAppAccess } from "@/lib/settings";
 import { can } from "@/lib/permissions";
 import { isGoogleConfigured, getUserGoogleInfo, getCompanyGoogleInfo } from "@/lib/google";
+import {
+  getRapportinoMailConfig,
+  getRapportinoMailState,
+  pendingRapportini,
+} from "@/lib/rapportinoMail";
 import SettingsClient from "./SettingsClient";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +28,12 @@ export default async function SettingsPage() {
     // rinominati o tolti dalla configurazione.
     prisma.machine.groupBy({ by: ["plantType", "model"], _count: { _all: true } }),
   ]);
+  // invio automatico dei rapportini: config, esito ultimo giro e quanti aspettano
+  const rapportinoMail = await getRapportinoMailConfig();
+  const [rapportinoMailState, pending] = await Promise.all([
+    getRapportinoMailState(),
+    pendingRapportini(rapportinoMail),
+  ]);
   const modelUsage = usage
     .filter((u) => u.plantType)
     .map((u) => ({ plantType: u.plantType as string, model: u.model, count: u._count._all }));
@@ -41,6 +52,9 @@ export default async function SettingsPage() {
       googleMe={googleMe}
       googleCompany={googleCompany}
       currentUserEmail={user.email}
+      rapportinoMail={rapportinoMail}
+      rapportinoMailState={rapportinoMailState}
+      rapportinoMailPending={pending.length}
     />
   );
 }
