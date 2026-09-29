@@ -1317,3 +1317,8 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .tdocs-course:last-child { border-bottom: 0; }
 .tdocs-course-name { font-weight: 500; }
 .tdocs-sync { margin-top: 8px; }
+/* il titolo dell'attestato va letto per intero, anche sul telefono */
+.tdocs-files li { flex-wrap: nowrap; align-items: flex-start; }
+.tdocs-files li > a { flex: 1; min-width: 0; white-space: normal; overflow: visible; overflow-wrap: anywhere; line-height: 1.35; }
+.tdocs-files li > span:empty { display: none; }
+.tdocs-files li > .muted { flex: 0 0 auto; white-space: nowrap; }

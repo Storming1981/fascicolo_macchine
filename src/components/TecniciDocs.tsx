@@ -146,7 +146,7 @@ function PersonFolders({ t }: { t: TecnicoDocsDto }) {
       </div>
 
       {current.docs.length > 0 ? (
-        <ul className="doc-list">
+        <ul className="doc-list tdocs-files">
           {current.docs.map((d) => (
             <li key={d.id} className="doc-row">
               <Icon name="doc" size={16} color="var(--muted)" />
