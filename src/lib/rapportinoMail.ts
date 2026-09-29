@@ -5,6 +5,7 @@ import { readUploadBytes } from "./uploads";
 import { isGoogleConfigured, sendGmailAs, type MailAttachment } from "./google";
 import { isFeedConfigured, fetchOpenSessionsForCommessa } from "./presenceFeed";
 import { fmtDate, fmtHM } from "./format";
+import { syncInterventoOre } from "./rapportinoOre";
 import {
   mergeRapportinoMail,
   mergeRapportinoMailState,
@@ -25,6 +26,9 @@ export type { RapportinoMailConfig, RapportinoMailState };
  * Perché non basta l'invio manuale: il rapportino si firma in cantiere, ma chi
  * lo deve leggere in sede aspetta che qualcuno si ricordi di spedirlo.
  */
+
+/** Autore delle revisioni scritte dall'automazione (nessun utente dietro). */
+const SYSTEM_ACTOR = { id: null as string | null, name: "Invio automatico rapportini" };
 
 const CONFIG_KEY = "rapportinoMail";
 const STATE_KEY = "rapportinoMailState";
@@ -145,6 +149,22 @@ function mailFor(r: Pending, cfg: RapportinoMailConfig) {
 
 /** Invia un singolo rapportino e ne traccia l'esito su sentAt/sentTo. */
 async function sendOne(r: Pending, cfg: RapportinoMailConfig): Promise<string> {
+  // Le ore salvate sul rapportino sono quelle del momento della FIRMA, cioè
+  // parziali: il tecnico firma mentre è ancora timbrato. Prima di generare il
+  // PDF si rilegge il timbratore per quella giornata — è il motivo per cui il
+  // rapportino si spedisce il giorno dopo, e senza questo passaggio partirebbe
+  // con le ore incomplete senza che nessuno se ne accorga.
+  try {
+    await syncInterventoOre(
+      r.intervento.id,
+      { id: SYSTEM_ACTOR.id, name: SYSTEM_ACTOR.name },
+      { onlyRapportinoId: r.id }
+    );
+  } catch {
+    // timbratore irraggiungibile: si spedisce con le ore che si hanno,
+    // meglio del rapportino che non parte affatto
+  }
+
   const out = await renderRapportinoPdf(r.id);
   if (!out) throw new Error("PDF non generato");
 

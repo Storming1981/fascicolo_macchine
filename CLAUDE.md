@@ -971,8 +971,22 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
     **L'import dinamico del motore sta dentro il ramo `NEXT_RUNTIME === "nodejs"`**:
     fuori di lì il bundle edge di instrumentation si tira dietro il generatore
     PDF e la build segnala `node-module-in-edge-runtime`.
-  - **I rapportini con timbrature aperte si rimandano** al giro successivo (ore
-    parziali), come per l'invio manuale.
+  - **Prima di spedire, le ore si rileggono dal timbratore** e il PDF si
+    rigenera (`syncInterventoOre(..., {onlyRapportinoId})` in
+    `src/lib/rapportinoOre.ts`, la stessa logica del pulsante *Sincronizza ore*,
+    estratta da `api/interventi/[id]/sync-ore`). Senza, partirebbero le ore
+    salvate al momento della **firma**, che sono parziali perché il tecnico
+    firma mentre è ancora timbrato — cioè proprio ciò che si vuole evitare
+    inviando il giorno dopo. La revisione la firma un attore di sistema
+    (`editedById` null, nome "Invio automatico rapportini"). Timbratore
+    irraggiungibile: si spedisce con le ore che si hanno, meglio del rapportino
+    che non parte.
+  - **I rapportini con timbrature ancora aperte si rimandano** al giro
+    successivo (ore parziali), come per l'invio manuale.
+  - **`maxDays` conta le giornate INCLUSO oggi**: 1 = solo oggi, 2 = ieri e
+    oggi. Per l'invio del mattino dopo (il caso tipico: ore complete) servono
+    almeno **2**, altrimenti il rapportino del giorno prima non parte mai. La
+    UI lo dice e avvisa se il valore è 1.
   - **Accendere l'invio non spedisce l'arretrato**: `activatedAt` lo registra il
     server e il giro automatico parte da lì in avanti. Per spedire anche
     l'arretrato c'è *Invia adesso*, che mostra quanti sono.

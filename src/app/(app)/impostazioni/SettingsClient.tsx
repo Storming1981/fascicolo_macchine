@@ -874,6 +874,13 @@ export default function SettingsClient({
               ancora inviati partono via e-mail agli indirizzi qui sotto, uno per rapportino, con il
               PDF in allegato. Il mittente è la <strong>casella Gmail aziendale</strong>.
             </p>
+            <p className="muted small">
+              Prima di spedire, le <strong>ore vengono rilette dal timbratore</strong> e il PDF
+              rigenerato: il tecnico firma mentre è ancora timbrato, quindi le ore salvate in quel
+              momento sono parziali. Per questo conviene inviare il <strong>mattino dopo</strong>{" "}
+              (es. orario 09:00 e 2 giornate da considerare), quando tutte le uscite sono
+              registrate.
+            </p>
 
             {!googleConfigured && (
               <div className="info-banner warn" style={{ marginTop: 10 }}>
@@ -909,7 +916,7 @@ export default function SettingsClient({
               </div>
 
               <div className="field" style={{ maxWidth: 200 }}>
-                <span className="field-label">Recupero arretrati</span>
+                <span className="field-label">Giornate da considerare</span>
                 <input
                   type="number"
                   min={1}
@@ -918,7 +925,17 @@ export default function SettingsClient({
                   onChange={(e) => setMailCfg({ ...mailCfg, maxDays: Number(e.target.value) })}
                 />
                 <div className="muted small">
-                  Giorni indietro da considerare: copre i rapportini firmati in ritardo.
+                  Contate <strong>incluso oggi</strong>: <strong>1</strong> = solo la giornata di
+                  oggi, <strong>2</strong> = ieri e oggi, <strong>7</strong> = ultima settimana.
+                  {mailCfg.maxDays === 1 && (
+                    <>
+                      {" "}
+                      <span style={{ color: "#b45309" }}>
+                        Con 1, spedendo al mattino <strong>non</strong> partono i rapportini del
+                        giorno prima: metti almeno 2.
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
