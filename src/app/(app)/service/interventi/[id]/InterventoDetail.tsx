@@ -8,6 +8,7 @@ import { fmtDate, fmtDateTime, fmtDayShort, fmtHM } from "@/lib/format";
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import PosCard from "@/components/PosCard";
+import TecniciDocs from "@/components/TecniciDocs";
 import {
   CHECKLIST_DEFS,
   CHECKLIST_TYPES,
@@ -1957,8 +1958,8 @@ function RapportinoDay({
 }
 
 /* ── Card documenti dell'intervento ──────────────────────────
-   Allegati caricati a mano + (in prospettiva) i documenti dei tecnici
-   partecipanti letti dal loro fascicolo TeamSystem via API. */
+   Allegati caricati a mano + i documenti dei tecnici della squadra letti dal
+   loro fascicolo TeamSystem (TecniciDocs). */
 const DOC_CATEGORIES: { key: string; label: string }[] = [
   { key: "allegato", label: "Allegato generico" },
   { key: "sicurezza", label: "Sicurezza" },
@@ -1983,7 +1984,6 @@ function DocumentiCard({
   const [err, setErr] = useState<string | null>(null);
 
   const uploaded = documents.filter((d) => d.source !== "TEAMSYSTEM");
-  const fromTs = documents.filter((d) => d.source === "TEAMSYSTEM");
   const fmtSize = (n: number | null) =>
     n == null ? "" : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 
@@ -2065,21 +2065,7 @@ function DocumentiCard({
       )}
 
       {/* Documenti dei tecnici dal fascicolo TeamSystem */}
-      <div className="field" style={{ marginTop: 14 }}>
-        <span className="field-label">Documenti dei tecnici (fascicolo TeamSystem)</span>
-        {fromTs.length > 0 ? (
-          <ul className="doc-list">
-            {fromTs.map((d) => (
-              <DocRow key={d.id} d={d} deletable={false} />
-            ))}
-          </ul>
-        ) : (
-          <div className="muted small">
-            Integrazione non ancora configurata: qui compariranno automaticamente i documenti
-            (idoneità, formazione, DPI) dei tecnici partecipanti letti dal fascicolo TeamSystem.
-          </div>
-        )}
-      </div>
+      <TecniciDocs interventoId={interventoId} />
     </section>
   );
 }

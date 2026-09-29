@@ -890,6 +890,52 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     `POST /api/notifications` (`{ids}` o `{all:true}` per segnare lette).
     Prova a secco senza inviare nulla: `npm run notif:test [INT-2491]`.
 
+### Documenti dei tecnici dal fascicolo TeamSystem HR
+
+Nella card **Documenti** di ogni intervento (desktop e Campo, stesso
+componente `src/components/TecniciDocs.tsx`) c'è la squadra — capo cantiere in
+testa — e per ciascuno le sue cartelle: **Corsi e attestati** (file + storico
+corsi della formazione), **Idoneità alla mansione**, DPI, Nomine, **Coperture
+assicurative**. Si carica dopo la scheda: TeamSystem risponde in 4-5 s.
+
+- **API TeamSystem HR** (`src/lib/teamsystemHr.ts`, stesso connettore della
+  nota spese nell'app produzione): OAuth2 client credentials, scope
+  `tshrapi.bi`, header `x-tghr-api-customer` (02D00). Le API «BI»
+  (`anagrafica`, `formazione`) sono **asincrone**: `getItems` risponde
+  `code 202 "still ongoing"` e va ripetuta. I documenti si leggono con header
+  `fiscal-code`: `documents/mine/getLatestFiles` (**max 30 file**, 31+ → 400) e
+  `downloadFile/{uuid}`. Esplorare: `scripts/teamsystem-esplora.mjs` dell'app
+  produzione (con `MSYS_NO_PATHCONV=1` da Git Bash).
+- **Privacy: whitelist per cartella** (`classifyTsFile` in `src/lib/tecniciDocs.ts`).
+  Il fascicolo contiene anche cedolini, CU, dichiarazioni fiscali, comunicazioni
+  e la documentazione sanitaria: passano solo ATTESTATI/formazione, DPI,
+  nomine, assicurazioni (CHUBB) e, dall'area SALUTE E SICUREZZA, **solo il
+  certificato di idoneità**. Una cartella nuova non compare finché non la si
+  aggiunge lì. Il download passa da `GET /api/teamsystem/docs/[docId]` solo per
+  documenti già in archivio (quindi già filtrati), in streaming: le
+  credenziali non escono dal server.
+- **Archivio `TsEmployeeDoc`** (solo metadati): i cedolini occupano metà dei 30
+  file, quindi un attestato di un anno fa uscirebbe dalla finestra. Ogni
+  lettura accumula ciò che ha visto. Rilettura al massimo ogni 10 minuti per
+  persona (`User.tsDocsSyncedAt`), *Aggiorna* la forza.
+- **Aggancio utente ↔ dipendente** (`User.tsPersonId` / `tsFiscalCode` /
+  `tsLinkMode`): prima per **nome** (stesse parole in qualunque ordine), poi
+  per **matricola** = `ID_PAYROLL` con un nome quasi uguale. Il nome vince
+  perché la matricola del timbratore non è sempre giusta (Terraroli: 122 da
+  noi, 121 in TeamSystem; il 122 è un'altra persona), e `ID_PAYROLL` si ripete
+  fra ZATO SpA e ZATO North America (i dipendenti USA hanno CF `XXXXXX…` e
+  sono esclusi). Avviene da solo all'apertura della card;
+  `npm run teamsystem:link [-- --relink]` stampa chi è agganciato a chi.
+  Un collegamento `manual` non viene mai toccato.
+- **Chi vede cosa**: la card la vede chi vede l'intervento (viewAll o in
+  squadra); un documento lo apre l'interessato, chi ha `intervento.viewAll`, o
+  chi è in squadra con lui su almeno un intervento (`canSeeTechDocs`).
+- API: `GET /api/interventi/[id]/tecnici-docs[?refresh=1]` ·
+  `GET /api/teamsystem/docs/[docId]`. Env: `TEAMSYSTEM_HR_URL`,
+  `TEAMSYSTEM_HR_CLIENT_ID`, `TEAMSYSTEM_HR_CLIENT_SECRET`,
+  `TEAMSYSTEM_HR_CUSTOMER` — anche sul `.env` della VPS: l'API è in cloud, non
+  serve il sync-agent.
+
 ### Pianificazione a turni di presenza
 
 **Il problema.** "Quando si lavora" era una proprietà dell'**intervento**: una

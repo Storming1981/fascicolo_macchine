@@ -327,6 +327,43 @@ Il service worker e' `public/sw.js`, servito da `/sw.js` in ambito `/`: il proxy
 non deve riscriverlo ne' metterlo in cache lunga, o i dispositivi resterebbero
 al worker vecchio dopo un aggiornamento.
 
+## 8-quater. Documenti dei tecnici da TeamSystem HR (prima attivazione)
+
+La card *Documenti* degli interventi mostra attestati, idoneità e coperture dei
+tecnici letti da TeamSystem HR. L'API è in cloud (`api-ext.teamsystemhr.com`):
+la VPS la chiama direttamente, **non serve il sync-agent**. Schema nuovo
+(`User.ts*`, tabella `TsEmployeeDoc`), quindi `db push`.
+
+```bash
+cd /srv/machines-zato-app
+git pull
+docker compose build app tools
+docker compose run --rm tools npx prisma db push
+```
+
+Le credenziali (le stesse del `.env` di sviluppo) in `.env.production`:
+
+```bash
+nano .env.production
+#   TEAMSYSTEM_HR_URL=https://api-ext.teamsystemhr.com
+#   TEAMSYSTEM_HR_CLIENT_ID=...
+#   TEAMSYSTEM_HR_CLIENT_SECRET=...
+#   TEAMSYSTEM_HR_CUSTOMER=02D00
+docker compose up -d      # il container rilegge l'env solo se ricreato
+```
+
+Aggancio utenti ↔ dipendenti (avviene anche da solo all'apertura della card,
+ma così si vede subito chi resta fuori):
+
+```bash
+docker compose run --rm tools npm run teamsystem:link
+# atteso: ✓ per ogni tecnico, ✗ per admin e per chi non è in forza su TeamSystem
+```
+
+I "non trovati" si sistemano in *Persone* (nome o matricola diversi
+dall'anagrafica TeamSystem). Senza credenziali l'app parte identica: la card
+mostra "TeamSystem HR non configurato".
+
 ---
 
 ## 9. Backup (consigliato: cron giornaliero)

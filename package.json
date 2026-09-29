@@ -29,7 +29,8 @@
     "push:test": "tsx scripts/test-push.ts",
     "notif:flusso": "tsx scripts/test-flusso.ts",
     "service:backfill-ack": "tsx scripts/backfill-ack.ts",
-    "service:backfill-turni": "tsx scripts/backfill-turni.ts"
+    "service:backfill-turni": "tsx scripts/backfill-turni.ts",
+    "teamsystem:link": "tsx scripts/teamsystem-link.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

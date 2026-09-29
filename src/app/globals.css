@@ -1293,3 +1293,27 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
   font-family: Inter, sans-serif; line-height: 1; vertical-align: middle;
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Documenti dei tecnici (fascicolo TeamSystem) ── */
+.tdocs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.tdocs-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.tdocs-person + .tdocs-person { border-top: 1px solid var(--border); }
+.tdocs-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: var(--surface); border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; flex-wrap: wrap; }
+.tdocs-row:hover, .tdocs-person.open .tdocs-row { background: var(--hover); }
+.tdocs-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 700; display: grid; place-items: center; flex: 0 0 28px; }
+.tdocs-name { font-weight: 600; font-size: 13.5px; color: var(--navy); flex: 1; min-width: 140px; }
+.tdocs-summary { display: flex; gap: 6px; flex-wrap: wrap; }
+.tdocs-badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--bg-3, #eef1f5); color: var(--text-2); white-space: nowrap; }
+.tdocs-badge.ok { background: rgba(21, 169, 124, .12); color: var(--green); }
+.tdocs-badge.warn { background: rgba(245, 166, 35, .15); color: #b26b00; }
+.tdocs-body { padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+.tdocs-folders { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.tdocs-folder { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font: inherit; font-size: 12.5px; color: var(--text-2); cursor: pointer; }
+.tdocs-folder:hover { border-color: var(--accent); }
+.tdocs-folder.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.tdocs-folder.empty { opacity: .6; }
+.tdocs-courses { display: flex; flex-direction: column; }
+.tdocs-course { display: flex; justify-content: space-between; gap: 8px; padding: 7px 2px; border-bottom: 1px solid var(--border); font-size: 13px; flex-wrap: wrap; }
+.tdocs-course:last-child { border-bottom: 0; }
+.tdocs-course-name { font-weight: 500; }
+.tdocs-sync { margin-top: 8px; }

@@ -93,6 +93,12 @@ model User {
   posValidator   Boolean  @default(false) // puo' validare il P.O.S. degli interventi (responsabile sicurezza)
   appAccess      String?  // override guscio: "desktop" | "field" (null = default ruolo)
   customerId     String?  // per gli utenti CLIENTE: azienda cliente di appartenenza
+  /// Collegamento al dipendente su TeamSystem HR (fascicolo documenti).
+  /// ID_PERSON e codice fiscale: il CF e' la chiave delle API documenti.
+  tsPersonId     String?  @unique
+  tsFiscalCode   String?
+  tsLinkMode     String?  // auto | manual
+  tsDocsSyncedAt DateTime? // ultima lettura del fascicolo documenti
   createdAt      DateTime @default(now())
 
   customer       Customer?    @relation("CustomerUsers", fields: [customerId], references: [id], onDelete: Cascade)
@@ -111,6 +117,7 @@ model User {
   pushSubs       PushSubscription[] @relation("UserPushSubs")
   interventoAcks InterventoAck[]    @relation("UserInterventoAcks")
   turni          InterventoTurno[] @relation("UserTurni")
+  tsDocs         TsEmployeeDoc[]   @relation("UserTsDocs")
 }
 
 /// Token OAuth Google PERSONALE di un utente, per inviare le email dalla propria
@@ -1153,4 +1160,27 @@ model InterventoTurno {
 
   @@index([userId, start])
   @@index([interventoId])
+}
+
+/// Documento del fascicolo dipendente su TeamSystem HR (solo metadati: il file
+/// si scarica al volo). L'API restituisce solo gli ULTIMI 30 file della persona
+/// e i cedolini ne occupano meta': qui si accumula tutto cio' che si e' visto,
+/// cosi' un attestato non sparisce quando arrivano cedolini piu' recenti.
+/// Entrano SOLO le cartelle ammesse (tecniciDocs.ts): mai cedolini o CU.
+model TsEmployeeDoc {
+  id          String   @id @default(cuid())
+  userId      String
+  uuid        String   @unique // uuidDocumento TeamSystem
+  category    String   // attestati | idoneita | dpi | nomine | assicurazione
+  title       String
+  fileName    String
+  folderPath  String
+  docType     String?
+  uploadedAt  DateTime?
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  user User @relation("UserTsDocs", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
