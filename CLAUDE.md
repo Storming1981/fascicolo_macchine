@@ -962,6 +962,14 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
   - Config in `Setting.rapportinoMail`, esito dell'ultimo giro in
     `Setting.rapportinoMailState` (`lastRunDay` evita il doppio invio e **sta in
     banca dati**: un riavvio del container a metà pomeriggio non rifà il giro).
+    **`lastRunDay` lo scrive solo il giro automatico**: un *Invia adesso* non
+    deve consumarlo, altrimenti chi prova la funzione al mattino spegne senza
+    saperlo l'invio automatico di quella giornata (successo al primo uso vero:
+    prova alle 10:02, invio delle 10:35 mai partito e nessuna riga nei log).
+  - Lo scheduler **logga una riga all'avvio** (attivo a che ora / disattivato):
+    senza, un invio che non parte non lascia traccia e non si distingue
+    "spento" da "rotto". I motivi di mancata esecuzione (Gmail non collegata…)
+    si loggano **al cambio**, non a ogni tick.
   - Tipi, default e normalizzazione stanno in `rapportinoMailConfig.ts`, modulo
     **puro** come `permissions.ts`/`nav.ts`: la pagina Impostazioni è un
     componente client e importarli dal motore `server-only` porta fs/crypto nel

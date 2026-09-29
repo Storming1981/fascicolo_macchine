@@ -244,8 +244,12 @@ export async function runRapportinoMail(opts: { force?: boolean } = {}): Promise
   }
 
   const now = new Date();
+  // `lastRunDay` è il segnaposto del GIRO AUTOMATICO ("oggi l'ho già fatto").
+  // Un *Invia adesso* non deve consumarlo, altrimenti chi prova la funzione al
+  // mattino spegne senza saperlo l'invio automatico di quella giornata.
+  const prev = await getRapportinoMailState();
   await saveState({
-    lastRunDay: isoDay(now),
+    lastRunDay: opts.force ? prev.lastRunDay : isoDay(now),
     lastRunAt: now.toISOString(),
     lastSent: sent,
     lastSkipped: skipped,

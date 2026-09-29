@@ -26,6 +26,8 @@ function startRapportinoMail() {
   if (g.__rapportinoMail) return;
   g.__rapportinoMail = true;
 
+  let announced = false;
+  let lastReason: string | null = null;
   const run = async () => {
     try {
       // L'import sta DENTRO il ramo `=== "nodejs"` perché il bundle edge di
@@ -33,13 +35,41 @@ function startRapportinoMail() {
       // crypto) e la build segnala "node module in edge runtime". In questa
       // forma il ramo viene eliminato a monte.
       if (process.env.NEXT_RUNTIME !== "nodejs") return;
-      const { runRapportinoMailIfDue } = await import("./lib/rapportinoMail");
-      const r = await runRapportinoMailIfDue();
-      if (r)
+      const { runRapportinoMailIfDue, getRapportinoMailConfig, getRapportinoMailState } = await import(
+        "./lib/rapportinoMail"
+      );
+
+      // Una riga all'avvio dice se lo scheduler è acceso e a che ora punta:
+      // senza, un invio che non parte non lascia traccia nei log e non si
+      // distingue "spento" da "rotto".
+      if (!announced) {
+        announced = true;
+        const cfg = await getRapportinoMailConfig();
+        const st = await getRapportinoMailState();
         console.log(
-          `[rapportini/mail] inviati ${r.sent} · rimandati ${r.skipped}` +
-            (r.errors.length ? ` · errori ${r.errors.length}: ${r.errors.join(" | ")}` : "")
+          cfg.enabled
+            ? `[rapportini/mail] attivo: invio alle ${cfg.time} a ${cfg.to.length} destinatari · ultimo giro automatico: ${st.lastRunDay ?? "mai"}`
+            : "[rapportini/mail] invio automatico disattivato"
         );
+      }
+
+      const r = await runRapportinoMailIfDue();
+      if (!r) return;
+      if (r.reason) {
+        // Configurazione incompleta (es. Gmail non collegata): il giro non
+        // segna la giornata come fatta, quindi riprova ogni minuto. Si logga
+        // solo al cambio di motivo, altrimenti riempie i log di righe uguali.
+        if (r.reason !== lastReason) {
+          lastReason = r.reason;
+          console.log(`[rapportini/mail] non eseguito: ${r.reason}`);
+        }
+        return;
+      }
+      lastReason = null;
+      console.log(
+        `[rapportini/mail] inviati ${r.sent} · rimandati ${r.skipped}` +
+          (r.errors.length ? ` · errori ${r.errors.length}: ${r.errors.join(" | ")}` : "")
+      );
     } catch (e) {
       console.error("[rapportini/mail]", e instanceof Error ? e.message : e);
     }
