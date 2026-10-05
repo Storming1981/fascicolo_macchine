@@ -35,7 +35,10 @@ export default function MachinesList({
 }) {
   const router = useRouter();
   const [q, setQ] = useState(initialQuery);
-  const [filter, setFilter] = useState<string>("all");
+  // L elenco si apre sulle macchine IN PRODUZIONE: e il quadro che serve ogni
+  // giorno (a che punto siamo). Arrivando da una ricerca si parte da "tutte",
+  // altrimenti una macchina gia spedita non si troverebbe.
+  const [filter, setFilter] = useState<string>(initialQuery ? "all" : "PRODUCTION");
 
   const filtered = useMemo(
     () =>
