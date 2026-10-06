@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "./db";
 import { readUploadAsDataUrl, sha256 } from "./uploads";
 import { generateRapportinoPdf } from "./rapportinoPdf";
+import { sessionHours, endLabel, type TimbraturaRow } from "./timbrature";
 
 export type OperatorHours = { name: string; matricola?: string | null; hours: number };
 
@@ -26,16 +27,6 @@ const isoDay = (d: Date) => {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 };
 
-type Timbratura = { name: string; start: string; end: string; type: string | null };
-const toMin = (hhmm: string): number | null => {
-  const m = String(hhmm).match(/^(\d{1,2}):(\d{2})$/);
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-};
-const sessionHours = (start: string, end: string): number => {
-  const s = toMin(start);
-  const e = toMin(end);
-  return s != null && e != null && e > s ? Math.round(((e - s) / 60) * 100) / 100 : 0;
-};
 
 /**
  * Raggruppa le timbrature per operatore (con sessioni entrata/uscita + subtotale).
@@ -45,19 +36,23 @@ export function operatorsForPdf(
   timbrature: unknown,
   hoursByOperator: unknown
 ): { name: string; sessions: { start: string; end: string; hours: number; type: string | null }[]; total: number }[] {
-  const rows: Timbratura[] = Array.isArray(timbrature)
+  const rows: (TimbraturaRow & { name: string })[] = Array.isArray(timbrature)
     ? (timbrature as Record<string, unknown>[]).map((t) => ({
         name: String(t?.name ?? "").trim() || "—",
         start: String(t?.start ?? ""),
         end: String(t?.end ?? ""),
         type: t?.type != null ? String(t.type) : null,
+        hours: t?.hours != null ? Number(t.hours) : null,
+        endOffset: t?.endOffset != null ? Number(t.endOffset) : null,
       }))
     : [];
   if (rows.length) {
     const map = new Map<string, { start: string; end: string; hours: number; type: string | null }[]>();
     for (const t of rows) {
       const arr = map.get(t.name) ?? [];
-      arr.push({ start: t.start, end: t.end, hours: sessionHours(t.start, t.end), type: t.type });
+      // `endLabel` aggiunge "+1g" quando l'uscita cade il giorno dopo: senza,
+      // una riga 23:00 → 06:00 sul PDF sembrerebbe un errore di battitura.
+      arr.push({ start: t.start, end: endLabel(t), hours: sessionHours(t), type: t.type ?? null });
       map.set(t.name, arr);
     }
     return [...map.entries()].map(([name, sessions]) => ({

@@ -100,10 +100,13 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   timbrate), `productionStart` e le `MachineMilestone` inizio/fine produzione
   (`source=GESTIONALE`); i campi assenti nel gestionale non vengono toccati.
   Nuovi campi su `Machine`: `erpDescription`, `erpHours`, `erpSyncedAt`.
-- **UI**: card **"Dati gestionale (ERP)"** nella scheda Anagrafica (auto-refresh
-  al cambio job, una riga per commessa Vendita/Corpo/Container, colonna Ore,
-  bottone *Applica date*) + scheda **"Gestionale (ERP)"** in Impostazioni con
-  *Sincronizza tutti i fascicoli*. CLI dev: `npm run erp:sync`.
+- **UI**: i dati gestionale del fascicolo stanno nella card **"Analisi ore"**
+  della scheda Anagrafica (commesse Vendita/Corpo/Container con descrizione,
+  cliente, apertura, timbrature e ore, tendine degli ordini di produzione,
+  *Applica date*) — vedi *Analisi ore del fascicolo* in Note operative. La
+  vecchia card "Dati gestionale (ERP)" non esiste più: ripeteva le stesse ore.
+  In Impostazioni resta la scheda **"Gestionale (ERP)"** con *Sincronizza tutti
+  i fascicoli*. CLI dev: `npm run erp:sync`.
 - Driver: `mssql` (pool singleton in `src/lib/erp.ts`, riuso in dev via globalThis).
 - **Stato**: sync batch eseguito → 170/188 fascicoli aggiornati, 50 con date di
   produzione+ore. Non esiste ancora un sync **schedulato** (per la pubblicazione
@@ -1058,12 +1061,27 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
   `src/lib/pdfCommon.ts`. **Il piede della carta intestata è alto 143 pt**: il
   blocco firma spesso finisce su una pagina sua, che infatti ripete il
   riferimento dell'intervento.
-- **Analisi ore del fascicolo** (card *Analisi ore* in Anagrafica, sotto i dati
-  ERP): **produzione** dal gestionale (`avlavp`, come la card ERP: diretta in
-  locale, snapshot del sync-agent sulla VPS) + **cantiere** dal timbratore
-  (lavoro / viaggio), con dettaglio per commessa, per mese e per operatore.
+- **Analisi ore del fascicolo** — **una card sola** per ore e gestionale, in
+  Anagrafica: **produzione** dal gestionale (`avlavp`: diretta in locale,
+  snapshot del sync-agent sulla VPS) + **cantiere** dal timbratore (lavoro /
+  viaggio), con dettaglio per commessa, per mese e per operatore.
   `src/lib/hoursAnalysis.ts` → `GET|POST /api/machines/[id]/hours` (POST
-  rilegge dal timbratore gli ultimi 14 giorni) → `HoursAnalysisCard.tsx`.
+  rilegge dal timbratore gli ultimi 14 giorni; senza timbratore configurato
+  ricalcola e basta, perché è il pulsante *Aggiorna* della card) →
+  `HoursAnalysisCard.tsx`.
+  - **Ha inglobato la card "Dati gestionale (ERP)"**: le due ripetevano le
+    stesse ore. Dentro ci sono anche le cose che faceva solo lei — tabella delle
+    commesse (descrizione, cliente, apertura, n. timbrature), **tendine degli
+    ordini di produzione** per gli impianti nuovi sotto la commessa generica
+    999999999, articoli per ordine e *Applica date*. `production.commesse` /
+    `production.orders` / `production.hasProduction` arrivano dalla stessa API
+    delle ore, quindi la card fa **una chiamata sola**.
+  - **Fascicolo appena creato**: sulla VPS il gestionale non è raggiungibile e i
+    dati arrivano col sync-agent (una o due volte al giorno). Finché non passa,
+    la card dice che il fascicolo è nuovo e che i dati arriveranno col prossimo
+    sync, invece di mostrare un vuoto che sembra un guasto — successo davvero su
+    M-2025-0024, creato alle 08:46 e popolato alle 09:00 (1992 h di produzione):
+    sembrava che le ore non arrivassero, erano solo 14 minuti di attesa.
   - **Copia locale delle timbrature** (`Stamping`): il filtro `search[order_name]`
     del timbratore trova il codice **esatto o il nome** della commessa, **non il
     prefisso** (`1260354` non trova `126035401`), e la tabella è paginata a 25
@@ -1084,6 +1102,31 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
   - Reparti del timbratore: UTE, PRO, APV. Anche gli operatori PRO timbrano lì
     solo le **trasferte**: le ore di officina restano quelle del gestionale,
     quindi le due fonti si sommano senza doppioni.
+- **Turni a cavallo della mezzanotte** (`src/lib/timbrature.ts`): un viaggio
+  intercontinentale comincia un giorno e finisce il successivo. Il timbratore lo
+  sa (calcola la durata dalle date complete e indicizza `byDay` sul giorno di
+  **entrata**), ma la riga del rapportino teneva solo "HH:MM": INT-2507 del
+  04-10 mostrava `11:43 → 14:05` = **2h 22m** per riga mentre il totale di
+  giornata, che viene dall'aggregato, diceva **26h 22m**. Ora la riga porta
+  anche `hours` (durata reale del timbratore) ed `endOffset` (giorni fra entrata
+  e uscita), scritti da `syncInterventoOre`.
+  - **La regola di calcolo sta in un posto solo** (`sessionHours`): scheda
+    intervento, PDF del rapportino e PDF del riepilogo la condividono — erano
+    tre copie di "fine meno inizio" e sarebbero divergute.
+  - Il **salvataggio** della giornata (`POST …/rapportino`) ricalcola il totale
+    con la stessa funzione e **conserva** i due campi: senza, bastava modificare
+    la descrizione e il totale tornava a 2h 22m.
+  - **Lo storico si recupera da solo**: dove `endOffset` manca e l'uscita è
+    "prima" dell'entrata (23:00 → 06:00) si assume il giorno dopo, quindi niente
+    migrazione. Fa eccezione il caso >24h come INT-2507 (14:05 > 11:43 sembra
+    una giornata normale): lì serve un *Sincronizza ore*, che riscrive la riga.
+  - A video e nel PDF l'uscita porta **"+1g"**, altrimenti una riga 23:00 →
+    06:00 sembra un errore di battitura. La giornata di competenza resta quella
+    di entrata: le ore non si spezzano fra due rapportini.
+  - La revisione sul rapportino firmato si scrive **solo se cambia il totale**:
+    l'arricchimento tecnico delle righe non interessa a chi legge, e senza
+    questo la prima sincronizzazione avrebbe lasciato una revisione su ogni
+    rapportino chiuso.
 - **Tipologia timbratura nel rapportino** (Lavoro / Viaggio): il timbratore la
   espone nella colonna **12** della tabella `/stampings` (`StampingRow.tipologia`,
   13 = "tipologia di lavoro", non usata). Viaggia con le sessioni

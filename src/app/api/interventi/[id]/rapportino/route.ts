@@ -4,16 +4,13 @@ import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { saveFile, saveDataUrl, saveBytes, sha256 } from "@/lib/uploads";
 import { renderRapportinoPdf } from "@/lib/rapportinoRender";
+import { sessionHours, type TimbraturaRow } from "@/lib/timbrature";
 import { fmtDate } from "@/lib/format";
 
 type RicambioLine = { code: string; desc: string; qty: string; note: string };
 type OperatorLine = { name: string; matricola: string | null; hours: number };
-type TimbraturaLine = {
+type TimbraturaLine = TimbraturaRow & {
   name: string;
-  start: string;
-  end: string;
-  /** Tipologia dal timbratore: "Lavoro" | "Viaggio" (sola lettura). */
-  type?: string | null;
   orig?: { name: string; start: string; end: string };
 };
 
@@ -81,6 +78,13 @@ function parseTimbrature(raw: string): TimbraturaLine[] {
           end: HHMM.test(String(r.end ?? "")) ? String(r.end) : "",
         };
         if (r.type != null && String(r.type).trim()) row.type = String(r.type).trim().slice(0, 40);
+        // Durata reale e scarto di giorni arrivano dal timbratore e vanno
+        // conservati: un turno che finisce il giorno dopo (viaggio
+        // intercontinentale) senza di loro tornerebbe a valere due ore.
+        const h = Number(r.hours);
+        if (Number.isFinite(h) && h > 0) row.hours = Math.round(h * 100) / 100;
+        const off = Number(r.endOffset);
+        if (Number.isFinite(off) && off > 0) row.endOffset = Math.round(off);
         // preserva la timbratura originale del timbratore (per evidenziare le modifiche)
         const o = r.orig;
         if (o && (o.name != null || o.start != null || o.end != null))
@@ -93,19 +97,15 @@ function parseTimbrature(raw: string): TimbraturaLine[] {
   }
 }
 
-const toMin = (hhmm: string): number | null => {
-  const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-};
-
 /** Da timbrature calcola totale e aggregato per operatore. */
 function hoursFromTimbrature(rows: TimbraturaLine[]): { total: number; byOperator: OperatorLine[] } {
   const byName = new Map<string, number>();
   let total = 0;
   for (const r of rows) {
-    const s = toMin(r.start);
-    const e = toMin(r.end);
-    const h = s != null && e != null && e > s ? Math.round(((e - s) / 60) * 100) / 100 : 0;
+    // sessionHours tiene conto dei turni a cavallo della mezzanotte: con il
+    // calcolo "fine meno inizio" un rientro alle 14:05 del giorno dopo
+    // risulterebbe di due ore invece di ventisei.
+    const h = sessionHours(r);
     total += h;
     const key = r.name || "—";
     byName.set(key, Math.round(((byName.get(key) ?? 0) + h) * 100) / 100);

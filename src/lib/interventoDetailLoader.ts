@@ -154,6 +154,10 @@ export async function loadInterventoDetail(id: string) {
           name: string;
           start: string;
           end: string;
+          type?: string | null;
+          /** durata reale dal timbratore e giorni fra entrata e uscita */
+          hours?: number | null;
+          endOffset?: number | null;
           orig?: { name: string; start: string; end: string };
         }[]) ?? [],
       attachments: r.attachments.map((a) => ({

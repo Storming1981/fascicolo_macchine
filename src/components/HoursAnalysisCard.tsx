@@ -5,9 +5,13 @@ import { fmtDate, fmtDateTime, fmtHM } from "@/lib/format";
 import type { HoursAnalysis, SiteLink } from "@/lib/hoursAnalysis";
 
 /**
- * Analisi ore del fascicolo: produzione (gestionale) + cantiere (timbratore).
- * Le due fonti non si sovrappongono: il gestionale timbra le lavorazioni in
- * officina, il timbratore le trasferte e i lavori dal cliente.
+ * Ore e dati gestionale di un fascicolo, in una card sola: produzione
+ * (commesse e ordini del gestionale, avanzamenti `avlavp`) + cantiere
+ * (timbrature del timbratore esterno, lavoro e viaggio).
+ *
+ * Prima erano due card ("Dati gestionale (ERP)" e "Analisi ore") che ripetevano
+ * le stesse ore in due posti: qui restano le commesse, la scelta dell'ordine di
+ * produzione e «Applica date», che la card gestionale aveva di suo.
  */
 
 const LINK_LABEL: Record<SiteLink, string> = {
@@ -27,6 +31,9 @@ const SOURCE_LABEL: Record<NonNullable<HoursAnalysis["production"]["source"]>, s
   snapshot: "gestionale (ultimo sync)",
   saved: "ore salvate sul fascicolo",
 };
+
+const GENERIC_COMMESSA = "999999999"; // commessa generica impianti nuovi
+const isGeneric = (v: string | null | undefined) => !!v && String(v).trim() === GENERIC_COMMESSA;
 
 const MONTHS = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
 const fmtMonth = (m: string) => `${MONTHS[Number(m.slice(5)) - 1]} ${m.slice(2, 4)}`;
@@ -51,18 +58,41 @@ function fillMonths(src: Month[]): Month[] {
   return out;
 }
 
-export default function HoursAnalysisCard({ machineId, jobsKey }: { machineId: string; jobsKey: string }) {
+export type HoursMachine = {
+  id: string;
+  job: string | null;
+  jobBody: string | null;
+  jobContainer: string | null;
+  erpBodyOrder: string | null;
+  erpContainerOrder: string | null;
+  erpStandOrder: string | null;
+  erpBladesOrder: string | null;
+  erpSyncedAt: string | null;
+};
+
+export default function HoursAnalysisCard({
+  machine,
+  canEdit,
+  onDone,
+  notify,
+}: {
+  machine: HoursMachine;
+  canEdit: boolean;
+  onDone: () => void;
+  notify: (m: string, k?: "ok" | "err") => void;
+}) {
   const [data, setData] = useState<HoursAnalysis | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
   const [err, setErr] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [showOps, setShowOps] = useState(false);
 
   async function load(method: "GET" | "POST" = "GET") {
     if (method === "POST") setRefreshing(true);
     else setState("loading");
     try {
-      const res = await fetch(`/api/machines/${machineId}/hours`, { method });
+      const res = await fetch(`/api/machines/${machine.id}/hours`, { method });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Errore lettura ore");
       setData(d);
@@ -76,10 +106,33 @@ export default function HoursAnalysisCard({ machineId, jobsKey }: { machineId: s
     }
   }
 
+  // si ricarica al cambio job e alla scelta di un ordine di produzione
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [machineId, jobsKey]);
+  }, [
+    machine.id,
+    machine.job,
+    machine.jobBody,
+    machine.jobContainer,
+    machine.erpBodyOrder,
+    machine.erpContainerOrder,
+    machine.erpStandOrder,
+    machine.erpBladesOrder,
+  ]);
+
+  async function applyDates() {
+    setApplying(true);
+    const res = await fetch(`/api/machines/${machine.id}/erp-sync`, { method: "POST" });
+    setApplying(false);
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) {
+      notify("Date di produzione importate dal gestionale");
+      onDone();
+    } else {
+      notify(d.error || "Errore importazione", "err");
+    }
+  }
 
   const p = data?.production;
   const s = data?.site;
@@ -90,15 +143,32 @@ export default function HoursAnalysisCard({ machineId, jobsKey }: { machineId: s
   const months = fillMonths(s?.months ?? []);
   const monthMax = Math.max(1, ...months.map((m) => m.work + m.travel + m.other));
 
+  // Fascicolo appena creato e gestionale ancora muto: non è un errore, è il
+  // sync-agent che non è ancora passato. Senza avviso sembra un dato mancante.
+  const createdAt = data?.machineCreatedAt ? new Date(data.machineCreatedAt) : null;
+  const waitingFirstSync =
+    !!p &&
+    p.source !== "erp" &&
+    p.commesse.length === 0 &&
+    p.total === 0 &&
+    !machine.erpSyncedAt &&
+    !!createdAt &&
+    Date.now() - createdAt.getTime() < 3 * 86400_000;
+
   return (
     <section className="card">
       <div className="card-header">
         <h3>Analisi ore</h3>
-        {data?.feedConfigured && (
+        <div style={{ display: "flex", gap: 6 }}>
           <button className="btn-ghost-sm" onClick={() => load("POST")} disabled={refreshing || state === "loading"}>
-            <Icon name="clock" size={13} /> {refreshing ? "Lettura timbratore…" : "Aggiorna dal timbratore"}
+            <Icon name="clock" size={13} /> {refreshing ? "Aggiorno…" : "Aggiorna"}
           </button>
-        )}
+          {canEdit && p?.hasProduction && (
+            <button className="btn-primary-sm" disabled={applying} onClick={applyDates}>
+              <Icon name="check" size={13} /> Applica date
+            </button>
+          )}
+        </div>
       </div>
 
       {state === "loading" && <p className="muted small">Calcolo ore…</p>}
@@ -111,6 +181,17 @@ export default function HoursAnalysisCard({ machineId, jobsKey }: { machineId: s
               {err}
             </p>
           )}
+
+          {waitingFirstSync && (
+            <div className="info-banner" style={{ marginBottom: 12 }}>
+              <Icon name="clock" size={15} />
+              <span>
+                Fascicolo creato il {fmtDateTime(data.machineCreatedAt)}: i dati del gestionale (ore di
+                produzione e date) arrivano col prossimo passaggio del sync-agent.
+              </span>
+            </div>
+          )}
+
           <div className="hours-kpis">
             <div className="hours-kpi">
               <div className="hours-kpi-label">Totale</div>
@@ -155,24 +236,41 @@ export default function HoursAnalysisCard({ machineId, jobsKey }: { machineId: s
             </div>
           )}
 
-          {/* Produzione: da dove vengono le ore del gestionale */}
-          <div className="hours-sub">Produzione · {p.source ? SOURCE_LABEL[p.source] : "nessun dato dal gestionale"}</div>
-          {p.parts.length > 0 ? (
+          {/* Produzione: le commesse del fascicolo come le vede il gestionale */}
+          <div className="hours-sub">
+            Produzione · {p.source ? SOURCE_LABEL[p.source] : "nessun dato dal gestionale"}
+            {p.source === "snapshot" && machine.erpSyncedAt && ` · ${fmtDateTime(machine.erpSyncedAt)}`}
+          </div>
+          {p.commesse.length > 0 ? (
             <div className="table-wrap">
               <table className="erp-jobs hours-table">
                 <thead>
                   <tr>
-                    <th>Parte</th>
-                    <th>Commessa / Ordine</th>
+                    <th>Commessa</th>
+                    <th>Ruolo</th>
+                    <th>Descrizione</th>
+                    <th>Cliente</th>
+                    <th>Aperta</th>
+                    <th style={{ textAlign: "right" }}>Timbr.</th>
                     <th style={{ textAlign: "right" }}>Ore</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {p.parts.map((x) => (
-                    <tr key={x.label + x.code}>
-                      <td>{x.label}</td>
-                      <td className="mono">{x.code}</td>
-                      <td className="mono" style={{ textAlign: "right" }}>{h(x.hours)}</td>
+                  {p.commesse.map((c) => (
+                    <tr key={c.job} style={c.found ? undefined : { opacity: 0.55 }}>
+                      <td className="mono">{c.job}</td>
+                      <td>{c.role}</td>
+                      <td>
+                        {c.found ? c.description || "—" : <span className="muted">non trovata nel gestionale</span>}
+                      </td>
+                      <td>{c.customer || "—"}</td>
+                      <td className="mono">{c.openedAt ? fmtDate(c.openedAt) : "—"}</td>
+                      <td className="mono" style={{ textAlign: "right" }}>
+                        {c.found ? c.progressRows || 0 : "—"}
+                      </td>
+                      <td className="mono" style={{ textAlign: "right", fontWeight: 600 }}>
+                        {c.found ? h(c.hours) : "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -180,9 +278,63 @@ export default function HoursAnalysisCard({ machineId, jobsKey }: { machineId: s
             </div>
           ) : (
             <p className="muted small" style={{ margin: "4px 0 0" }}>
-              {p.total > 0 ? "Dettaglio per commessa non disponibile." : "Nessuna ora di produzione registrata."}
+              {p.total > 0
+                ? `Ore salvate sul fascicolo: ${h(p.total)} (dettaglio per commessa non disponibile).`
+                : waitingFirstSync
+                  ? "In attesa del primo passaggio del sync-agent."
+                  : "Nessun dato dal gestionale per i job di questo fascicolo."}
             </p>
           )}
+
+          {/* Ordini di produzione: per gli impianti nuovi la commessa è la
+              generica 999999999 e le ore stanno sull'ORDINE, non sulla commessa */}
+          {(isGeneric(machine.jobBody) || isGeneric(machine.jobContainer)) && (
+            <div style={{ marginTop: 12 }}>
+              <div className="muted small" style={{ fontWeight: 600, marginBottom: 6 }}>
+                Ordini di produzione (impianto nuovo, commessa {GENERIC_COMMESSA})
+              </div>
+              {isGeneric(machine.jobBody) && (
+                <OrderPicker machineId={machine.id} role="Corpo" field="erpBodyOrder" currentKey={machine.erpBodyOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
+              )}
+              {isGeneric(machine.jobContainer) && (
+                <OrderPicker machineId={machine.id} role="Container" field="erpContainerOrder" currentKey={machine.erpContainerOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
+              )}
+              <OrderPicker machineId={machine.id} role="Cavalletto" field="erpStandOrder" currentKey={machine.erpStandOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
+              <OrderPicker machineId={machine.id} role="Lame" field="erpBladesOrder" currentKey={machine.erpBladesOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
+            </div>
+          )}
+
+          {/* Articoli degli ordini selezionati */}
+          {p.orders.map((o) => (
+            <div key={o.role + o.key} style={{ marginTop: 12 }}>
+              <div className="muted small" style={{ fontWeight: 600 }}>
+                Articoli ordine {o.role} — {o.tipork}/{o.anno}/{o.num} · {h(o.hours)} ·{" "}
+                {o.start ? fmtDate(o.start) : "—"} → {o.end ? fmtDate(o.end) : "—"}
+              </div>
+              <div className="table-wrap">
+                <table className="erp-jobs hours-table">
+                  <thead>
+                    <tr>
+                      <th>Articolo</th>
+                      <th>Descrizione</th>
+                      <th style={{ textAlign: "right" }}>Timbr.</th>
+                      <th style={{ textAlign: "right" }}>Ore</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {o.articles.map((a) => (
+                      <tr key={(a.code || "") + (a.desc || "")}>
+                        <td className="mono">{a.code || "—"}</td>
+                        <td>{a.desc || "—"}</td>
+                        <td className="mono" style={{ textAlign: "right" }}>{a.rows}</td>
+                        <td className="mono" style={{ textAlign: "right" }}>{h(a.hours)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
 
           {/* Cantiere: commesse del timbratore agganciate al fascicolo */}
           <div className="hours-sub">Cantiere · timbratore</div>
@@ -296,13 +448,103 @@ export default function HoursAnalysisCard({ machineId, jobsKey }: { machineId: s
           )}
 
           <p className="muted small" style={{ marginTop: 10 }}>
-            Produzione = ore di lavorazione del gestionale (<span className="mono">avlavp</span>). Cantiere = timbrature
-            del timbratore sul job, sulle commesse job + 2 cifre, sugli interventi di service del fascicolo e sulle
-            commesse che citano il job nel nome.
+            Produzione = ore di lavorazione del gestionale (<span className="mono">avlavp</span>): inizio e fine sono
+            la prima e l&apos;ultima timbratura, e <em>Applica date</em> le riporta sulle date di stato del diario.
+            Cantiere = timbrature del timbratore sul job, sulle commesse job + 2 cifre, sugli interventi di service
+            del fascicolo e sulle commesse che citano il job nel nome.
             {data.syncedAt && ` Timbrature aggiornate al ${fmtDateTime(data.syncedAt)}.`}
           </p>
         </>
       )}
     </section>
+  );
+}
+
+/* ── Selettore ordine di produzione di una commessa ─────── */
+
+type ErpOrderOption = {
+  key: string;
+  tipork: string;
+  anno: number;
+  num: number;
+  mainArticleCode: string | null;
+  mainArticleDesc: string | null;
+  hours: number;
+};
+
+function OrderPicker({
+  machineId,
+  role,
+  field,
+  currentKey,
+  canEdit,
+  onDone,
+  notify,
+}: {
+  machineId: string;
+  role: string;
+  field: "erpBodyOrder" | "erpContainerOrder" | "erpStandOrder" | "erpBladesOrder";
+  currentKey: string | null;
+  canEdit: boolean;
+  onDone: () => void;
+  notify: (m: string, k?: "ok" | "err") => void;
+}) {
+  const [orders, setOrders] = useState<ErpOrderOption[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch(`/api/erp/commessa/${GENERIC_COMMESSA}/orders`)
+      .then((r) => (r.ok ? r.json() : { orders: [] }))
+      .then((d) => {
+        if (alive) setOrders(d.orders ?? []);
+      })
+      .catch(() => alive && setOrders([]))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function select(key: string) {
+    setSaving(true);
+    const res = await fetch(`/api/machines/${machineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: key }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      notify(key ? `Ordine ${role} selezionato` : `Ordine ${role} rimosso`);
+      onDone();
+    } else {
+      notify("Errore salvataggio ordine", "err");
+    }
+  }
+
+  return (
+    <div className="erp-order-row">
+      <label className="muted small" style={{ minWidth: 90 }}>
+        Ordine {role}
+      </label>
+      <select
+        className="input"
+        disabled={!canEdit || saving || loading}
+        value={currentKey ?? ""}
+        onChange={(e) => select(e.target.value)}
+      >
+        <option value="">
+          {loading ? "Caricamento…" : `— nessun ordine (${(orders ?? []).length} disponibili)`}
+        </option>
+        {(orders ?? []).map((o) => (
+          <option key={o.key} value={o.key}>
+            {o.tipork}/{o.anno}/{o.num} · {o.mainArticleDesc || o.mainArticleCode || "?"} ·{" "}
+            {o.hours.toLocaleString("it-IT", { maximumFractionDigits: 1 })} h
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }

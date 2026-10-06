@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import { fmtDate, fmtDateTime, fmtDayShort, fmtHM } from "@/lib/format";
+import { sessionHours, endsOnAnotherDay, type TimbraturaRow } from "@/lib/timbrature";
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import PosCard from "@/components/PosCard";
@@ -42,7 +43,7 @@ type Revision = {
   } | null;
 };
 type OperatorHours = { name: string; matricola?: string | null; hours: number };
-type Timbratura = { name: string; start: string; end: string; type?: string | null };
+type Timbratura = TimbraturaRow & { name: string };
 // riga in tabella: uid stabile + `orig` = valore originale del timbratore (per evidenziare le modifiche)
 type SessionRow = Timbratura & { uid: string; orig?: Timbratura };
 type StoredTimbratura = Timbratura & { orig?: Timbratura };
@@ -1167,15 +1168,7 @@ function RapportinoDay({
   // sessioni timbrate quel giorno (dal timbratore) per il precompilamento
   const sessGiorno = sessionsByDay[date];
   // ore di una sessione da "HH:MM"
-  const rowHours = (s: Timbratura): number => {
-    const m = (v: string) => {
-      const p = v.match(/^(\d{1,2}):(\d{2})$/);
-      return p ? Number(p[1]) * 60 + Number(p[2]) : null;
-    };
-    const a = m(s.start);
-    const b = m(s.end);
-    return a != null && b != null && b > a ? Math.round(((b - a) / 60) * 100) / 100 : 0;
-  };
+  const rowHours = (s: Timbratura): number => sessionHours(s);
   const totOperators = Math.round(sessions.reduce((n, s) => n + rowHours(s), 0) * 100) / 100;
 
   // Costruisce le righe dalle sessioni del timbratore, memorizzando l'originale in `orig`.
@@ -1444,7 +1437,20 @@ function RapportinoDay({
                     <tr key={s.uid}>
                       <td>{s.name || "—"}</td>
                       <td className="mono">{s.start || "—"}</td>
-                      <td className="mono">{s.end || "—"}</td>
+                      <td className="mono">
+                        {s.end ? (
+                          <>
+                            {s.end}
+                            {endsOnAnotherDay(s) && (
+                              <span className="timb-type viaggio" style={{ marginLeft: 6 }} title="Uscita del giorno successivo">
+                                +{Math.max(1, Math.round(Number(s.endOffset) || 1))}g
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td>
                         {s.type ? (
                           <span className={"timb-type" + (/viagg/i.test(s.type) ? " viaggio" : "")}>{s.type}</span>

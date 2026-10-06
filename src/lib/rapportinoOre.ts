@@ -20,6 +20,16 @@ export const isoDay = (d: Date) => {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 };
 
+/** Giorni di calendario fra due istanti ISO (0 = stessa giornata). */
+const dayGap = (startIso: string | null, endIso: string | null): number => {
+  if (!startIso || !endIso) return 0;
+  const a = new Date(startIso);
+  const b = new Date(endIso);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return 0;
+  const diff = Date.parse(isoDay(b)) - Date.parse(isoDay(a));
+  return diff > 0 ? Math.round(diff / 86400000) : 0;
+};
+
 /** ISO → "HH:MM" in ora locale del server. */
 const hhmm = (iso: string | null): string => {
   if (!iso) return "";
@@ -94,7 +104,21 @@ export async function syncInterventoOre(
         const name = s.tech ?? "—";
         const start = hhmm(s.start);
         const end = hhmm(s.end);
-        return { name, start, end, type: s.type, orig: { name, start, end } };
+        // Un turno può finire il giorno dopo (viaggio intercontinentale): "HH:MM"
+        // da solo perderebbe il giorno e la riga mostrerebbe 2 ore invece di 26.
+        // Si tengono la durata del timbratore e lo scarto di giorni.
+        const endOffset = s.end ? dayGap(s.start, s.end) : 0;
+        return {
+          name,
+          start,
+          end,
+          type: s.type,
+          // sessione ancora aperta: nessuna durata (il timbratore conta fino ad
+          // "adesso", scriverla farebbe crescere le ore a ogni sincronizzazione)
+          hours: s.end ? s.hours : null,
+          endOffset,
+          orig: { name, start, end },
+        };
       })
       .sort((a, b) => a.name.localeCompare(b.name) || a.start.localeCompare(b.start));
 
@@ -114,7 +138,11 @@ export async function syncInterventoOre(
 
     if (total === 0 && timbrature.length === 0) cleared++;
 
-    if (r.closed) {
+    // La revisione traccia i cambi di ORE. Un arricchimento tecnico della riga
+    // (durata e scarto di giorni aggiunti ai turni già esistenti) non cambia
+    // nulla per chi legge: senza questo, la prima sincronizzazione dopo il
+    // rilascio scriverebbe una revisione su ogni rapportino chiuso.
+    if (r.closed && !sameTotal) {
       // modifica di un rapportino firmato → logga lo stato precedente
       await prisma.rapportinoRevision.create({
         data: {

@@ -38,6 +38,33 @@ export type SiteCommessa = {
   open: number;
 };
 
+/** Una commessa del gestionale fra quelle del fascicolo (vendita / corpo / container). */
+export type ErpCommessa = {
+  job: string;
+  role: string;
+  found: boolean;
+  description: string | null;
+  customer: string | null;
+  openedAt: string | null;
+  closedAt: string | null;
+  isClosed: boolean;
+  progressRows: number;
+  hours: number;
+};
+
+/** Ordine di produzione selezionato per una parte (impianti nuovi, commessa generica). */
+export type ErpOrder = {
+  role: string;
+  key: string;
+  tipork: string;
+  anno: number;
+  num: number;
+  hours: number;
+  start: string | null;
+  end: string | null;
+  articles: { code: string | null; desc: string | null; hours: number; rows: number }[];
+};
+
 export type HoursAnalysis = {
   production: {
     total: number;
@@ -46,6 +73,12 @@ export type HoursAnalysis = {
     start: string | null;
     end: string | null;
     parts: { label: string; code: string; hours: number }[];
+    /** Commesse del fascicolo come le vede il gestionale (anche quelle non trovate). */
+    commesse: ErpCommessa[];
+    /** Ordini di produzione selezionati, con i loro articoli. */
+    orders: ErpOrder[];
+    /** Almeno una fonte ha avanzamenti tracciati → le date si possono applicare. */
+    hasProduction: boolean;
     error?: string;
   };
   site: {
@@ -60,6 +93,8 @@ export type HoursAnalysis = {
     last: string | null;
   };
   total: number;
+  /** Creazione del fascicolo: un fascicolo appena creato aspetta il sync-agent. */
+  machineCreatedAt: string | null;
   /** Ultimo aggiornamento della copia locale delle timbrature. */
   syncedAt: string | null;
   /** Il timbratore è configurato su questo server. */
@@ -99,18 +134,46 @@ async function productionHours(machine: {
       .filter(Boolean)
       .join(" / ") || "Commessa";
 
+  const iso = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString() : null);
+
+  type SrcJob = {
+    job: string;
+    found: boolean;
+    hours: number;
+    description: string | null;
+    customer: string | null;
+    openedAt: Date | string | null;
+    closedAt: Date | string | null;
+    isClosed: boolean;
+    progressRows: number;
+  };
+  type SrcOrder = {
+    role: string;
+    data: {
+      key: string;
+      found: boolean;
+      tipork: string;
+      anno: number;
+      num: number;
+      hours: number;
+      start: Date | string | null;
+      end: Date | string | null;
+      articles: { code: string | null; desc: string | null; hours: number; rows: number }[];
+    };
+  };
   type Src = {
-    jobs: { job: string; found: boolean; hours: number }[];
-    orders: { role: string; data: { found: boolean; tipork: string; anno: number; num: number; hours: number } }[];
+    jobs: SrcJob[];
+    orders: SrcOrder[];
     totalHours: number;
     productionStart: Date | string | null;
     productionEnd: Date | string | null;
+    hasProduction: boolean;
   };
   const shape = (d: Src, source: "erp" | "snapshot"): HoursAnalysis["production"] => ({
     total: r1(d.totalHours),
     source,
-    start: d.productionStart ? new Date(d.productionStart).toISOString() : null,
-    end: d.productionEnd ? new Date(d.productionEnd).toISOString() : null,
+    start: iso(d.productionStart),
+    end: iso(d.productionEnd),
     parts: [
       ...d.jobs
         .filter((j) => j.found && j.hours > 0)
@@ -123,6 +186,32 @@ async function productionHours(machine: {
           hours: r1(o.data.hours),
         })),
     ],
+    commesse: d.jobs.map((j) => ({
+      job: j.job,
+      role: roleOf(j.job),
+      found: j.found,
+      description: j.description,
+      customer: j.customer,
+      openedAt: iso(j.openedAt),
+      closedAt: iso(j.closedAt),
+      isClosed: j.isClosed,
+      progressRows: j.progressRows,
+      hours: r1(j.hours),
+    })),
+    orders: d.orders
+      .filter((o) => o.data.found)
+      .map((o) => ({
+        role: o.role,
+        key: o.data.key,
+        tipork: o.data.tipork,
+        anno: o.data.anno,
+        num: o.data.num,
+        hours: r1(o.data.hours),
+        start: iso(o.data.start),
+        end: iso(o.data.end),
+        articles: o.data.articles.map((a) => ({ ...a, hours: r1(a.hours) })),
+      })),
+    hasProduction: d.hasProduction,
   });
 
   let error: string | undefined;
@@ -150,6 +239,9 @@ async function productionHours(machine: {
     start: machine.productionStart?.toISOString() ?? null,
     end: null,
     parts: [],
+    commesse: [],
+    orders: [],
+    hasProduction: false,
     error,
   };
 }
@@ -168,6 +260,7 @@ export async function machineHoursAnalysis(machineId: string): Promise<HoursAnal
       erpBladesOrder: true,
       erpHours: true,
       productionStart: true,
+      createdAt: true,
       interventi: { where: { commessa: { not: null } }, select: { code: true, commessa: true } },
     },
   });
@@ -311,6 +404,7 @@ export async function machineHoursAnalysis(machineId: string): Promise<HoursAnal
     production,
     site,
     total: r1(production.total + site.total),
+    machineCreatedAt: machine.createdAt.toISOString(),
     syncedAt: synced._max.syncedAt?.toISOString() ?? null,
     feedConfigured: Boolean(process.env.PRESENCE_FEED_URL),
   };
