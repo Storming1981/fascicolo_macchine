@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import { fmtDate, fmtDateTime, fmtDayMonth, fmtDayShort, fmtHM } from "@/lib/format";
+import { fmtDate, fmtDateLong, fmtDateTime, fmtDayMonth, fmtDayShort, fmtHM } from "@/lib/format";
 import { sessionHours, offsetOf, daysSpanned, shiftDays, type TimbraturaRow } from "@/lib/timbrature";
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
@@ -1402,10 +1402,29 @@ function RapportinoDay({
             </div>
           )}
 
+          {/* Turno oltre la mezzanotte: va detto a parole, l'intervallo
+              nell'intestazione da solo passa inosservato. */}
+          {span > 0 && (
+            <div className="info-banner" style={{ marginBottom: 12 }}>
+              <Icon name="clock" size={15} />
+              <span>
+                Giornata <strong>a cavallo della mezzanotte</strong>: il lavoro comincia il{" "}
+                {fmtDateLong(giornoBase)} e prosegue fino al{" "}
+                <strong>{fmtDateLong(shiftDays(giornoBase, span))}</strong>. Le ore restano tutte su
+                questa giornata, come le registra il timbratore.
+              </span>
+            </div>
+          )}
+
           {!readOnly && (
             <div className="field" style={{ maxWidth: 260 }}>
               <span className="field-label">Data giornata</span>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              {span > 0 && (
+                <div className="muted small">
+                  Fine: {fmtDateLong(shiftDays(giornoBase, span))} (turno oltre la mezzanotte).
+                </div>
+              )}
             </div>
           )}
 
@@ -1496,6 +1515,13 @@ function RapportinoDay({
             )}
             <div className="muted small" style={{ marginTop: 6 }}>
               Totale giornata: <strong>{fmtHM(rapportino?.hoursWorked ?? totOperators)}</strong>
+              {span > 0 && (
+                <>
+                  {" "}
+                  · su <strong>{span + 1} giorni</strong> ({fmtDayShort(giornoBase)} →{" "}
+                  {fmtDayShort(shiftDays(giornoBase, span))})
+                </>
+              )}
               {!readOnly && " · dati letti dal timbratore (non modificabili)"}
             </div>
           </div>
