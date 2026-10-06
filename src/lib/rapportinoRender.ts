@@ -3,7 +3,16 @@ import { prisma } from "./db";
 import { readUploadAsDataUrl, sha256 } from "./uploads";
 import { fmtDayMonth } from "./format";
 import { generateRapportinoPdf } from "./rapportinoPdf";
-import { sessionHours, endLabel, offsetOf, withDay, daysSpanned, shiftDays, type TimbraturaRow } from "./timbrature";
+import {
+  sessionHours,
+  endLabel,
+  offsetOf,
+  withDay,
+  daysSpanned,
+  shiftDays,
+  reconcileWithAggregate,
+  type TimbraturaRow,
+} from "./timbrature";
 
 export type OperatorHours = { name: string; matricola?: string | null; hours: number };
 
@@ -49,9 +58,12 @@ export function operatorsForPdf(
         endOffset: t?.endOffset != null ? Number(t.endOffset) : null,
       }))
     : [];
-  if (rows.length) {
+  // Righe salvate prima che il timbratore scrivesse durata e scarto di giorni:
+  // si ricavano dall'aggregato per operatore (vedi reconcileWithAggregate).
+  const righe = reconcileWithAggregate(rows, parseHoursByOperator(hoursByOperator));
+  if (righe.length) {
     const map = new Map<string, { start: string; end: string; hours: number; type: string | null }[]>();
-    for (const t of rows) {
+    for (const t of righe) {
       const arr = map.get(t.name) ?? [];
       // Turno oltre la mezzanotte: con la data del rapportino si scrivono le
       // date intere ("04-10 11:43" → "05-10 14:05"), altrimenti resta il
@@ -98,7 +110,12 @@ export async function renderRapportinoPdf(
   // Giornata che sfora la mezzanotte: l'intestazione mostra l'intervallo
   // ("domenica 04-10 → lunedì 05-10"), altrimenti chi legge non sa che il
   // lavoro è proseguito nel giorno dopo.
-  const span = daysSpanned(Array.isArray(r.timbrature) ? (r.timbrature as TimbraturaRow[]) : []);
+  const span = daysSpanned(
+    reconcileWithAggregate(
+      (Array.isArray(r.timbrature) ? (r.timbrature as (TimbraturaRow & { name: string })[]) : []),
+      parseHoursByOperator(r.hoursByOperator)
+    )
+  );
   const dateEnd = span > 0 ? shiftDays(r.date, span) : null;
   const totalHours =
     r.hoursWorked ?? Math.round(operators.reduce((n, o) => n + o.total, 0) * 100) / 100;

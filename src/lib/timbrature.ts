@@ -68,6 +68,56 @@ export function endsOnAnotherDay(row: Pick<TimbraturaRow, "start" | "end" | "end
   return a != null && b != null && b <= a;
 }
 
+/**
+ * Recupera i turni oltre la mezzanotte salvati **prima** che la riga portasse
+ * `hours`/`endOffset`, confrontandola con l'aggregato per operatore.
+ *
+ * Il rapportino conserva due cose: le righe entrata/uscita e il totale per
+ * operatore, che arriva dall'aggregato del timbratore ed è sempre giusto. Se
+ * per un operatore l'aggregato dice 26,37 h e la sua unica riga ne vale 2,37,
+ * la differenza è di 24 ore esatte: quella riga finisce il giorno dopo. Così la
+ * giornata torna leggibile senza aspettare una risincronizzazione, e i
+ * rapportini chiusi mesi fa si sistemano da soli.
+ *
+ * Si applica solo quando l'operatore ha **una sola** riga con orari validi:
+ * con più turni la differenza non è attribuibile a uno in particolare, e
+ * tirare a indovinare sarebbe peggio del dato incompleto.
+ */
+export function reconcileWithAggregate<T extends TimbraturaRow & { name: string }>(
+  rows: T[],
+  byOperator: { name: string; hours: number }[] | null | undefined
+): T[] {
+  if (!Array.isArray(rows) || rows.length === 0 || !Array.isArray(byOperator) || byOperator.length === 0) return rows;
+
+  const totali = new Map<string, number>();
+  for (const o of byOperator) {
+    const h = Number(o?.hours);
+    if (o?.name && Number.isFinite(h)) totali.set(o.name, h);
+  }
+
+  return rows.map((r) => {
+    // già completa: il timbratore ha scritto durata o scarto di giorni
+    if (Number(r.hours) > 0 || Number(r.endOffset) > 0) return r;
+    if (!r.start || !r.end) return r;
+
+    const stesse = rows.filter((x) => x.name === r.name && x.start && x.end);
+    if (stesse.length !== 1) return r;
+
+    const atteso = totali.get(r.name);
+    if (atteso == null) return r;
+
+    // Differenza PURA fra gli orari, anche negativa (23:00 → 06:00 = -17 h):
+    // usare le ore già corrette darebbe un giorno in meno sui turni oltre le 24.
+    const a = toMin(r.start);
+    const b = toMin(r.end);
+    if (a == null || b == null) return r;
+    const diff = atteso - (b - a) / 60;
+    if (diff < 12) return r; // scarto troppo piccolo per essere un giorno intero
+
+    return { ...r, hours: Math.round(atteso * 100) / 100, endOffset: Math.max(1, Math.round(diff / 24)) };
+  });
+}
+
 /** Giorni fra entrata e uscita di una riga (0 se la giornata è una sola). */
 export function offsetOf(row: Pick<TimbraturaRow, "start" | "end" | "endOffset">): number {
   const off = Number(row?.endOffset);

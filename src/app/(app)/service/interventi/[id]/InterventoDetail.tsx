@@ -5,7 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import { fmtDate, fmtDateLong, fmtDateTime, fmtDayMonth, fmtDayShort, fmtHM } from "@/lib/format";
-import { sessionHours, offsetOf, daysSpanned, shiftDays, type TimbraturaRow } from "@/lib/timbrature";
+import {
+  sessionHours,
+  offsetOf,
+  daysSpanned,
+  shiftDays,
+  reconcileWithAggregate,
+  type TimbraturaRow,
+} from "@/lib/timbrature";
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import PosCard from "@/components/PosCard";
@@ -1132,7 +1139,10 @@ function RapportinoDay({
   const uidRef = useRef(0);
   const nextUid = () => `s${uidRef.current++}`;
   const initialSessions: SessionRow[] = rapportino?.timbrature?.length
-    ? rapportino.timbrature.map((t) => ({
+    ? reconcileWithAggregate(
+        rapportino.timbrature.map((t) => ({ ...t, name: t.name })),
+        rapportino.hoursByOperator
+      ).map((t) => ({
         uid: nextUid(),
         name: t.name,
         start: t.start,
@@ -1205,9 +1215,25 @@ function RapportinoDay({
   // arrivano aggiornate nei dati, ma lo stato locale era stato inizializzato al
   // primo render e restava indietro (tipologia vuota finché non si ricaricava).
   useEffect(() => {
-    const stored = rapportino?.timbrature;
+    const stored = rapportino?.timbrature
+      ? reconcileWithAggregate(
+          rapportino.timbrature.map((t) => ({ ...t, name: t.name })),
+          rapportino.hoursByOperator
+        )
+      : null;
     if (!stored?.length) return;
-    setSessions(stored.map((t) => ({ uid: nextUid(), name: t.name, start: t.start, end: t.end, type: t.type, orig: t.orig })));
+    setSessions(
+      stored.map((t) => ({
+        uid: nextUid(),
+        name: t.name,
+        start: t.start,
+        end: t.end,
+        type: t.type,
+        hours: t.hours ?? null,
+        endOffset: t.endOffset ?? null,
+        orig: t.orig,
+      }))
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rapportino?.id, JSON.stringify(rapportino?.timbrature ?? null)]);
 

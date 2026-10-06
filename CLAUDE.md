@@ -1122,10 +1122,16 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
     "fine meno inizio" e le 26h 22m sono tornate 2h 22m. Corretto anche il
     client, ma la difesa vera è lato server: la UI non può modificare quelle
     righe, quindi non deve poterle sovrascrivere.
-  - **Lo storico si recupera da solo**: dove `endOffset` manca e l'uscita è
-    "prima" dell'entrata (23:00 → 06:00) si assume il giorno dopo, quindi niente
-    migrazione. Fa eccezione il caso >24h come INT-2507 (14:05 > 11:43 sembra
-    una giornata normale): lì serve un *Sincronizza ore*, che riscrive la riga.
+  - **Lo storico si recupera da solo, in due modi.** Dove `endOffset` manca e
+    l'uscita è "prima" dell'entrata (23:00 → 06:00) si assume il giorno dopo.
+    Il caso >24h (14:05 > 11:43 sembra una giornata normale) si risolve invece
+    confrontando la riga con l'**aggregato per operatore**, che è sempre giusto
+    perché arriva dal timbratore: se l'aggregato dice 26,37 h e l'unica riga
+    dell'operatore ne vale 2,37, la differenza è un giorno esatto
+    (`reconcileWithAggregate`, applicato da scheda, PDF e riepilogo). Si astiene
+    quando l'operatore ha più turni quel giorno: la differenza non sarebbe
+    attribuibile a uno in particolare. Così niente migrazione e nessuna
+    dipendenza dall'ordine deploy → *Sincronizza ore*.
   - **La giornata mostra l'intervallo di date**: intestazione "domenica
     04-10-2026 → lunedì 05-10-2026" (scheda, PDF rapportino e PDF riepilogo) e
     righe con la data intera ("04-10 11:43" → "05-10 14:05"). La **competenza
