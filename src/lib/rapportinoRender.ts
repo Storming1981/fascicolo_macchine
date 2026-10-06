@@ -1,8 +1,9 @@
 import "server-only";
 import { prisma } from "./db";
 import { readUploadAsDataUrl, sha256 } from "./uploads";
+import { fmtDayMonth } from "./format";
 import { generateRapportinoPdf } from "./rapportinoPdf";
-import { sessionHours, endLabel, type TimbraturaRow } from "./timbrature";
+import { sessionHours, endLabel, offsetOf, withDay, daysSpanned, shiftDays, type TimbraturaRow } from "./timbrature";
 
 export type OperatorHours = { name: string; matricola?: string | null; hours: number };
 
@@ -34,7 +35,9 @@ const isoDay = (d: Date) => {
  */
 export function operatorsForPdf(
   timbrature: unknown,
-  hoursByOperator: unknown
+  hoursByOperator: unknown,
+  /** Giorno del rapportino: serve a datare le righe che sforano la mezzanotte. */
+  date?: Date
 ): { name: string; sessions: { start: string; end: string; hours: number; type: string | null }[]; total: number }[] {
   const rows: (TimbraturaRow & { name: string })[] = Array.isArray(timbrature)
     ? (timbrature as Record<string, unknown>[]).map((t) => ({
@@ -50,9 +53,13 @@ export function operatorsForPdf(
     const map = new Map<string, { start: string; end: string; hours: number; type: string | null }[]>();
     for (const t of rows) {
       const arr = map.get(t.name) ?? [];
-      // `endLabel` aggiunge "+1g" quando l'uscita cade il giorno dopo: senza,
-      // una riga 23:00 → 06:00 sul PDF sembrerebbe un errore di battitura.
-      arr.push({ start: t.start, end: endLabel(t), hours: sessionHours(t), type: t.type ?? null });
+      // Turno oltre la mezzanotte: con la data del rapportino si scrivono le
+      // date intere ("04-10 11:43" → "05-10 14:05"), altrimenti resta il
+      // suffisso "+1g" — senza, una riga 23:00 → 06:00 sembra un refuso.
+      const off = offsetOf(t);
+      const start = date && off > 0 ? withDay(t.start, date, 0, fmtDayMonth) : t.start;
+      const end = date && off > 0 ? withDay(t.end, date, off, fmtDayMonth) : endLabel(t);
+      arr.push({ start, end, hours: sessionHours(t), type: t.type ?? null });
       map.set(t.name, arr);
     }
     return [...map.entries()].map(([name, sessions]) => ({
@@ -87,7 +94,12 @@ export async function renderRapportinoPdf(
   if (!r) return null;
   const it = r.intervento;
 
-  const operators = operatorsForPdf(r.timbrature, r.hoursByOperator);
+  const operators = operatorsForPdf(r.timbrature, r.hoursByOperator, r.date);
+  // Giornata che sfora la mezzanotte: l'intestazione mostra l'intervallo
+  // ("domenica 04-10 → lunedì 05-10"), altrimenti chi legge non sa che il
+  // lavoro è proseguito nel giorno dopo.
+  const span = daysSpanned(Array.isArray(r.timbrature) ? (r.timbrature as TimbraturaRow[]) : []);
+  const dateEnd = span > 0 ? shiftDays(r.date, span) : null;
   const totalHours =
     r.hoursWorked ?? Math.round(operators.reduce((n, o) => n + o.total, 0) * 100) / 100;
 
@@ -130,6 +142,7 @@ export async function renderRapportinoPdf(
     commessa: it.commessa ?? null,
     plantHours: r.plantHours,
     date: r.date,
+    dateEnd,
     operators,
     totalHours,
     workDescription: r.workDescription,

@@ -3,6 +3,7 @@ import { prisma } from "./db";
 import { sha256 } from "./uploads";
 import { isTravel } from "./pdfCommon";
 import { operatorsForPdf } from "./rapportinoRender";
+import { daysSpanned, shiftDays, type TimbraturaRow } from "./timbrature";
 import { generateRiepilogoPdf, type RiepilogoDay } from "./riepilogoPdf";
 
 const isoDay = (d: Date) => {
@@ -31,9 +32,11 @@ export async function renderRiepilogoPdf(
   if (!it || it.rapportini.length === 0) return null;
 
   const days: RiepilogoDay[] = it.rapportini.map((r) => {
-    const operators = operatorsForPdf(r.timbrature, r.hoursByOperator);
+    const operators = operatorsForPdf(r.timbrature, r.hoursByOperator, r.date);
+    const span = daysSpanned(Array.isArray(r.timbrature) ? (r.timbrature as TimbraturaRow[]) : []);
     return {
       date: r.date,
+      dateEnd: span > 0 ? shiftDays(r.date, span) : null,
       closed: r.closed,
       operators,
       totalHours: r.hoursWorked ?? Math.round(operators.reduce((n, o) => n + o.total, 0) * 100) / 100,

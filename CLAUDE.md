@@ -1120,9 +1120,16 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
     "prima" dell'entrata (23:00 → 06:00) si assume il giorno dopo, quindi niente
     migrazione. Fa eccezione il caso >24h come INT-2507 (14:05 > 11:43 sembra
     una giornata normale): lì serve un *Sincronizza ore*, che riscrive la riga.
-  - A video e nel PDF l'uscita porta **"+1g"**, altrimenti una riga 23:00 →
-    06:00 sembra un errore di battitura. La giornata di competenza resta quella
-    di entrata: le ore non si spezzano fra due rapportini.
+  - **La giornata mostra l'intervallo di date**: intestazione "domenica
+    04-10-2026 → lunedì 05-10-2026" (scheda, PDF rapportino e PDF riepilogo) e
+    righe con la data intera ("04-10 11:43" → "05-10 14:05"). La **competenza
+    resta al giorno di entrata** — un solo rapportino, una sola firma, ore che
+    corrispondono una a una alle timbrature — ma chi legge vede che il lavoro è
+    proseguito il giorno dopo, che era il punto sollevato dal committente.
+    Dove manca la data di riferimento resta il suffisso **"+1g"** (`endLabel`).
+    Scartata l'alternativa di spezzare il turno a mezzanotte in due rapportini:
+    due documenti da firmare per un viaggio solo e ore non più riconciliabili
+    col gestionale.
   - La revisione sul rapportino firmato si scrive **solo se cambia il totale**:
     l'arricchimento tecnico delle righe non interessa a chi legge, e senza
     questo la prima sincronizzazione avrebbe lasciato una revisione su ogni

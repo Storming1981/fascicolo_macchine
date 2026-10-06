@@ -4,8 +4,8 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import { fmtDate, fmtDateTime, fmtDayShort, fmtHM } from "@/lib/format";
-import { sessionHours, endsOnAnotherDay, type TimbraturaRow } from "@/lib/timbrature";
+import { fmtDate, fmtDateTime, fmtDayMonth, fmtDayShort, fmtHM } from "@/lib/format";
+import { sessionHours, offsetOf, daysSpanned, shiftDays, type TimbraturaRow } from "@/lib/timbrature";
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import PosCard from "@/components/PosCard";
@@ -1350,7 +1350,15 @@ function RapportinoDay({
     }
   }
 
-  const dateLabel = fmtDayShort(date + "T00:00:00");
+  // Giornata che prosegue oltre la mezzanotte (viaggio lungo): l'intestazione
+  // mostra l'intervallo, altrimenti non si vede che si è lavorato anche il
+  // giorno dopo.
+  const giornoBase = new Date(date + "T00:00:00");
+  const span = daysSpanned(sessions);
+  const dateLabel =
+    span > 0
+      ? `${fmtDayShort(giornoBase)} → ${fmtDayShort(shiftDays(giornoBase, span))}`
+      : fmtDayShort(giornoBase);
   const revisions = rapportino?.revisions ?? [];
   // vecchi rapportini: nessuna sessione ma ore aggregate per operatore
   const roLegacyOps = rapportino?.hoursByOperator ?? [];
@@ -1426,8 +1434,8 @@ function RapportinoDay({
                 <thead>
                   <tr>
                     <th>Operatore</th>
-                    <th style={{ width: 84 }}>Entrata</th>
-                    <th style={{ width: 84 }}>Uscita</th>
+                    <th style={{ width: 104 }}>Entrata</th>
+                    <th style={{ width: 104 }}>Uscita</th>
                     <th style={{ width: 92 }}>Tipologia</th>
                     <th style={{ width: 60 }}>Ore</th>
                   </tr>
@@ -1436,20 +1444,15 @@ function RapportinoDay({
                   {sessions.map((s) => (
                     <tr key={s.uid}>
                       <td>{s.name || "—"}</td>
-                      <td className="mono">{s.start || "—"}</td>
                       <td className="mono">
-                        {s.end ? (
-                          <>
-                            {s.end}
-                            {endsOnAnotherDay(s) && (
-                              <span className="timb-type viaggio" style={{ marginLeft: 6 }} title="Uscita del giorno successivo">
-                                +{Math.max(1, Math.round(Number(s.endOffset) || 1))}g
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          "—"
-                        )}
+                        {s.start ? (offsetOf(s) > 0 ? `${fmtDayMonth(giornoBase)} ${s.start}` : s.start) : "—"}
+                      </td>
+                      <td className="mono">
+                        {s.end
+                          ? offsetOf(s) > 0
+                            ? `${fmtDayMonth(shiftDays(giornoBase, offsetOf(s)))} ${s.end}`
+                            : s.end
+                          : "—"}
                       </td>
                       <td>
                         {s.type ? (

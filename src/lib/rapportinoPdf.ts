@@ -53,6 +53,8 @@ export type RapportinoPdfInput = {
   commessa?: string | null; // commessa cantiere · timbratore
   plantHours?: number | null; // ore operative impianto (contaore macchina)
   date: Date;
+  /** Fine della giornata quando il turno sfora la mezzanotte (viaggi lunghi). */
+  dateEnd?: Date | null;
   operators: { name: string; sessions: { start: string; end: string; hours: number; type?: string | null }[]; total: number }[];
   totalHours: number;
   workDescription: string | null;
@@ -182,10 +184,12 @@ export async function generateRapportinoPdf(input: RapportinoPdfInput): Promise<
   // Data giornata + stato
   ensure(16);
   page.drawText(san("Data giornata:"), { x: M, y: y - 10, size: 9.5, font: bold, color: NAVY });
-  page.drawText(
-    san(fmtDateLong(input.date)),
-    { x: M + 90, y: y - 10, size: 9.5, font, color: INK }
-  );
+  // Con un turno oltre la mezzanotte la giornata copre due date: scriverne una
+  // sola nasconderebbe al cliente che si è lavorato anche il giorno dopo.
+  const giornata = input.dateEnd
+    ? `${fmtDateLong(input.date)} -> ${fmtDateLong(input.dateEnd)}`
+    : fmtDateLong(input.date);
+  page.drawText(san(giornata), { x: M + 90, y: y - 10, size: 9.5, font, color: INK });
   page.drawText(input.closed ? san("CHIUSO") : san("BOZZA"), {
     x: W - M - 60,
     y: y - 10,

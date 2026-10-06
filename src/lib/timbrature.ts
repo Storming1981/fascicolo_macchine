@@ -68,15 +68,48 @@ export function endsOnAnotherDay(row: Pick<TimbraturaRow, "start" | "end" | "end
   return a != null && b != null && b <= a;
 }
 
+/** Giorni fra entrata e uscita di una riga (0 se la giornata è una sola). */
+export function offsetOf(row: Pick<TimbraturaRow, "start" | "end" | "endOffset">): number {
+  const off = Number(row?.endOffset);
+  if (Number.isFinite(off) && off > 0) return Math.round(off);
+  return endsOnAnotherDay(row) ? 1 : 0;
+}
+
+/**
+ * Quanti giorni oltre la data del rapportino arriva la giornata di lavoro:
+ * è lo scarto massimo fra le sue righe. 0 = la giornata finisce in giornata.
+ */
+export function daysSpanned(rows: Pick<TimbraturaRow, "start" | "end" | "endOffset">[]): number {
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+  return rows.reduce((max, r) => Math.max(max, offsetOf(r)), 0);
+}
+
+/** La data del rapportino spostata di `offset` giorni (per le righe oltre la mezzanotte). */
+export function shiftDays(date: Date, offset: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + offset);
+  return d;
+}
+
 /**
  * Uscita da mostrare: "14:05" oppure "14:05 +1g" quando cade il giorno dopo.
  * Senza il suffisso una riga 23:00 → 06:00 sembra un errore di battitura.
+ * Dove c'è spazio per la data intera si usa `withDay`, che è più chiaro.
  */
 export function endLabel(row: Pick<TimbraturaRow, "start" | "end" | "endOffset">): string {
   const end = (row?.end ?? "").trim();
   if (!end) return "";
-  if (!endsOnAnotherDay(row)) return end;
-  const off = Number(row?.endOffset);
-  const days = Number.isFinite(off) && off > 0 ? Math.round(off) : 1;
-  return `${end} +${days}g`;
+  const days = offsetOf(row);
+  return days > 0 ? `${end} +${days}g` : end;
+}
+
+/**
+ * Ora con la data davanti ("05-10 14:05") quando il turno attraversa la
+ * mezzanotte: nel rapportino di un viaggio intercontinentale leggere solo
+ * "14:05" non dice in che giorno si è atterrati.
+ */
+export function withDay(time: string, date: Date, offset: number, fmt: (d: Date) => string): string {
+  const t = (time ?? "").trim();
+  if (!t || offset === 0) return t;
+  return `${fmt(shiftDays(date, offset))} ${t}`;
 }

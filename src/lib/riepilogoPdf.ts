@@ -12,6 +12,8 @@ import { A4, GREY, INK, LINE, MARGIN as M, NAVY, TRAVEL, ZEBRA, isTravel, loadLe
 
 export type RiepilogoDay = {
   date: Date;
+  /** Fine della giornata quando un turno sfora la mezzanotte. */
+  dateEnd?: Date | null;
   closed: boolean;
   operators: { name: string; sessions: { start: string; end: string; hours: number; type?: string | null }[]; total: number }[];
   totalHours: number;
@@ -161,7 +163,8 @@ export async function generateRiepilogoPdf(input: RiepilogoPdfInput): Promise<Ui
     // la testata della giornata non resta orfana in fondo alla pagina
     ensure(rowH * 3 + 26);
     y -= 6;
-    page.drawText(san(fmtDay(day.date)), { x: M, y: y - 11, size: 11, font: bold, color: NAVY });
+    const titolo = day.dateEnd ? `${fmtDay(day.date)} -> ${fmtDay(day.dateEnd)}` : fmtDay(day.date);
+    page.drawText(san(titolo), { x: M, y: y - 11, size: 11, font: bold, color: NAVY });
     page.drawText(day.closed ? "CHIUSO" : "BOZZA", {
       x: W - M - 46,
       y: y - 11,
