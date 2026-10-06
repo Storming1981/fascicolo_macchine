@@ -268,6 +268,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const now = new Date();
   const date = dateStr ? new Date(dateStr) : existing?.date ?? now;
 
+  // Le timbrature sono SOLA LETTURA: le scrive solo la sincronizzazione col
+  // timbratore (`syncInterventoOre`). Su un rapportino che esiste già si tengono
+  // quelle salvate e si ignora quanto arriva dal client: un client che non
+  // rimanda tutti i campi — è successo con `hours`/`endOffset` — distruggerebbe
+  // il dato del timbratore, e un turno da 26h tornerebbe a valere 2h.
+  const timbratureFinali = existing
+    ? ((existing.timbrature as typeof timbrature | null) ?? [])
+    : timbrature;
+  if (existing && timbratureFinali.length) {
+    const agg = hoursFromTimbrature(timbratureFinali);
+    operators = agg.byOperator;
+    hoursWorked = agg.total;
+  }
+
   const fields = {
     date,
     workDescription,
@@ -276,7 +290,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     hoursWorked: hoursWorked != null && !Number.isNaN(hoursWorked) ? hoursWorked : null,
     plantHours,
     hoursByOperator: operators,
-    timbrature,
+    timbrature: timbratureFinali,
     techName,
     techSignature: techSigPath,
     techSignedAt: techSigPath ? existing?.techSignedAt ?? now : null,

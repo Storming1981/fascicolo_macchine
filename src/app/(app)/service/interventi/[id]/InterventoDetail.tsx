@@ -1132,7 +1132,18 @@ function RapportinoDay({
   const uidRef = useRef(0);
   const nextUid = () => `s${uidRef.current++}`;
   const initialSessions: SessionRow[] = rapportino?.timbrature?.length
-    ? rapportino.timbrature.map((t) => ({ uid: nextUid(), name: t.name, start: t.start, end: t.end, type: t.type, orig: t.orig }))
+    ? rapportino.timbrature.map((t) => ({
+        uid: nextUid(),
+        name: t.name,
+        start: t.start,
+        end: t.end,
+        type: t.type,
+        // durata reale e scarto di giorni: senza, un turno oltre la mezzanotte
+        // tornerebbe a valere "fine meno inizio" appena si apre la giornata
+        hours: t.hours ?? null,
+        endOffset: t.endOffset ?? null,
+        orig: t.orig,
+      }))
     : rapportino?.hoursByOperator?.length // vecchi rapportini: una riga per operatore senza orari
       ? rapportino.hoursByOperator.map((o) => ({ uid: nextUid(), name: o.name, start: "", end: "" }))
       : [];
@@ -1240,7 +1251,15 @@ function RapportinoDay({
       "timbrature",
       JSON.stringify(
         sessions
-          .map((s) => ({ name: s.name.trim(), start: s.start.trim(), end: s.end.trim(), type: s.type, orig: s.orig }))
+          .map((s) => ({
+            name: s.name.trim(),
+            start: s.start.trim(),
+            end: s.end.trim(),
+            type: s.type,
+            hours: s.hours ?? null,
+            endOffset: s.endOffset ?? null,
+            orig: s.orig,
+          }))
           .filter((s) => s.name || s.start || s.end)
       ) // (l'uid resta lato client; `orig` = timbratura originale del timbratore)
     );

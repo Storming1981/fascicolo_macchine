@@ -1113,9 +1113,15 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
   - **La regola di calcolo sta in un posto solo** (`sessionHours`): scheda
     intervento, PDF del rapportino e PDF del riepilogo la condividono — erano
     tre copie di "fine meno inizio" e sarebbero divergute.
-  - Il **salvataggio** della giornata (`POST …/rapportino`) ricalcola il totale
-    con la stessa funzione e **conserva** i due campi: senza, bastava modificare
-    la descrizione e il totale tornava a 2h 22m.
+  - **Le timbrature di un rapportino esistente non si riscrivono dal client.**
+    `POST …/rapportino` tiene quelle già salvate e ignora il payload: le scrive
+    solo `syncInterventoOre`. Senza questa difesa bastava che il client non
+    rimandasse un campo per distruggere il dato del timbratore — è successo in
+    produzione su INT-2507: `initialSessions` e il payload di `save()` non
+    copiavano `hours`/`endOffset`, un salvataggio della giornata ha ricalcolato
+    "fine meno inizio" e le 26h 22m sono tornate 2h 22m. Corretto anche il
+    client, ma la difesa vera è lato server: la UI non può modificare quelle
+    righe, quindi non deve poterle sovrascrivere.
   - **Lo storico si recupera da solo**: dove `endOffset` manca e l'uscita è
     "prima" dell'entrata (23:00 → 06:00) si assume il giorno dopo, quindi niente
     migrazione. Fa eccezione il caso >24h come INT-2507 (14:05 > 11:43 sembra
