@@ -66,6 +66,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
     const answers = sanitizeAnswers(body.answers, items);
     const empty = Object.keys(answers).length === 0;
+    // la versione software la scrive solo chi compila la check list
+    const softwareVersion =
+      typeof body.softwareVersion === "string" ? body.softwareVersion.trim().slice(0, 80) || null : undefined;
 
     if (action === "submit") {
       if (!allAnswered(answers, items))
@@ -92,6 +95,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const data = {
         status: "PENDING_APPROVAL" as const,
         answers: answers as Prisma.InputJsonValue,
+        ...(softwareVersion !== undefined ? { softwareVersion } : {}),
         compilerId: user.id,
         compilerName: user.name,
         compiledAt: new Date(),
@@ -127,10 +131,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const saved = existing
       ? await prisma.collaudo.update({
           where: { machineId: id },
-          data: { status: nextStatus, answers: answersJson },
+          data: { status: nextStatus, answers: answersJson, ...(softwareVersion !== undefined ? { softwareVersion } : {}) },
         })
       : await prisma.collaudo.create({
-          data: { machineId: id, status: nextStatus, answers: answersJson },
+          data: { machineId: id, status: nextStatus, answers: answersJson, ...(softwareVersion !== undefined ? { softwareVersion } : {}) },
         });
     return NextResponse.json({ ok: true, status: saved.status });
   }

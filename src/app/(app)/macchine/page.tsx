@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { userCaps } from "@/lib/caps";
+import { progressForMachines } from "@/lib/progressService";
 import MachinesList from "./MachinesList";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ export default async function MachinesPage({
   const { q } = await searchParams;
   const caps = await userCaps("machine.create", "machine.import");
   const machines = await prisma.machine.findMany({ orderBy: [{ year: "desc" }, { createdAt: "desc" }] });
+  const progress = await progressForMachines(machines);
   const data = machines.map((m) => ({
     id: m.id,
     code: m.code,
@@ -23,7 +25,7 @@ export default async function MachinesPage({
     countryCode: m.countryCode,
     year: m.year,
     status: m.status,
-    progress: m.progress,
+    progress: progress.get(m.id)?.percent ?? 0,
     tiranteGiunto: m.tiranteGiunto,
     filtroMaggiorato: m.filtroMaggiorato,
   }));

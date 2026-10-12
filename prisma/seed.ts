@@ -263,7 +263,6 @@ async function main() {
         countryCode: m.countryCode,
         site: m.site,
         status: m.status,
-        progress: m.progress,
         productionStart: new Date(m.productionStart),
         deliveryDate: new Date(m.deliveryDate),
         pressureSettings: m.pressure,

@@ -6,6 +6,7 @@ import { userCaps } from "./caps";
 import { getPlantConfig } from "./settings";
 import { COMPONENT_GROUPS } from "./components";
 import { resolveMilestones } from "./milestoneAuto";
+import { progressForMachine } from "./progressService";
 
 /**
  * Carica tutte le props della scheda fascicolo macchina. Condiviso tra guscio
@@ -90,6 +91,8 @@ export async function loadMachineDetailProps(code: string) {
   );
 
   const milestones = await resolveMilestones({ id: machine.id, job: machine.job }, machine.milestones);
+  // avanzamento: stessa funzione di elenco e dashboard, cosi' il numero coincide
+  const progress = await progressForMachine(machine);
 
   // Cestino foto: eliminate (logicamente), ripristinabili dalla scheda Foto.
   const trashedPhotos = await prisma.photo.findMany({
@@ -149,7 +152,7 @@ export async function loadMachineDetailProps(code: string) {
     countryCode: machine.countryCode,
     site: machine.site,
     status: machine.status,
-    progress: machine.progress,
+    progress,
     productionStart: machine.productionStart?.toISOString() ?? null,
     deliveryDate: machine.deliveryDate?.toISOString() ?? null,
     pressureSettings: machine.pressureSettings,
@@ -232,6 +235,7 @@ export async function loadMachineDetailProps(code: string) {
       ? {
           status: machine.collaudo.status,
           answers: (machine.collaudo.answers as Record<string, { value: string | null; note?: string }>) || {},
+          softwareVersion: machine.collaudo.softwareVersion,
           compilerName: machine.collaudo.compilerName,
           compiledAt: machine.collaudo.compiledAt?.toISOString() || null,
           compilerSignature: machine.collaudo.compilerSignature,

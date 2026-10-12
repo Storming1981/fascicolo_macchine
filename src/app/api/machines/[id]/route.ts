@@ -73,7 +73,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const data: Record<string, unknown> = {};
 
   if (b.status && VALID.includes(b.status)) data.status = b.status;
-  if (typeof b.progress === "number") data.progress = Math.max(0, Math.min(100, b.progress));
   if (typeof b.notes === "string") data.notes = b.notes;
   if (typeof b.job === "string" && b.job.trim()) data.job = b.job.trim();
   for (const k of TEXT_FIELDS) {

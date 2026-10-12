@@ -652,7 +652,28 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   richiedono la password attuale), **firma personale**. Nome, e-mail e ruolo
   restano all'amministratore. `GET|PATCH /api/users/me`. Prima il collegamento
   Gmail personale era raggiungibile solo da Impostazioni (`settings.manage`).
-- **Stato/avanzamento** modificabili dal dettaglio (slider + select), evento a diario.
+- **Avanzamento: calcolato, non più un cursore** (`src/lib/machineProgress.ts`
+  puro + `src/lib/progressService.ts` per le query). Lo slider diceva solo
+  quanto qualcuno si era ricordato di spostarlo: in produzione era fermo a 0 o a
+  un numero vecchio su tutta la flotta, quindi la barra in elenco e in dashboard
+  non significava niente. Ora è la somma pesata di passaggi che il fascicolo
+  registra già da sé — apertura 5, inizio produzione 15, schede di allestimento
+  20 (firmate; mezzo punto se solo avviate), fine produzione 15, check list
+  compilata 10, collaudo approvato 10, spedita 15, installata 10 — rinormalizzati
+  sulle voci che valgono per quella tipologia (senza schede il 20 sparisce).
+  - **Lo stato della macchina implica i passaggi precedenti**: un fascicolo
+    marcato *Spedita* ha per forza finito produzione e collaudo anche se non
+    sono mai stati registrati qui. Senza questa regola i 187 fascicoli importati
+    dal file MATRICOLE, in esercizio da anni, sarebbero rimasti a metà barra. I
+    passaggi dedotti così sono marcati «da stato» nell'elenco dei passaggi.
+  - **Un solo punto di calcolo** (`progressForMachines`, quattro query per N
+    fascicoli): elenco, dashboard e scheda mostrano lo stesso numero. Il campo
+    `Machine.progress` **non esiste più** (eliminato con lo slider e col
+    `PATCH` che lo scriveva): un numero scritto a mano che nessuno aggiornava è
+    peggio di nessun numero.
+  - Nella scheda la percentuale si apre e mostra **i passaggi fatti e quelli che
+    mancano**: l'unica cosa utile da offrire su un dato che non si modifica.
+- **Stato macchina** modificabile dal dettaglio (select), evento a diario.
 - **Nuovo intervento**: fase, tipo (sostituzione/ispezione/riparazione/nota),
   matricole, foto, firma PIN o a penna su canvas → diario + firma + aggiorna seriale.
 - **Nuova macchina**: wizard 4 step (identificazione, cliente, targa, componenti).
@@ -744,6 +765,12 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   con firma approvatore. API: `/api/machines/[id]/collaudo` (save/submit/approve)
   + `/api/users/me` per la firma personale. Vincolo: il compilatore non può
   approvare il proprio verbale.
+  - **Versione software installata** (`Collaudo.softwareVersion`): campo in
+    testa alla check list, scritto da chi compila (permesso
+    `machine.intervention`, come il resto del verbale) e **in sola lettura**
+    nell'Anagrafica del fascicolo. Sta sul collaudo, non sulla macchina, perché
+    è la versione a quel collaudo: così resta agganciata a chi l'ha verificata e
+    quando, invece di diventare un campo anagrafico che chiunque sovrascrive.
 
 - **Notifiche di cantiere** (`Notification`, `src/lib/notifications.ts`,
   `src/lib/interventoNotify.ts`, `src/lib/notifyMail.ts`): quando si assegna il

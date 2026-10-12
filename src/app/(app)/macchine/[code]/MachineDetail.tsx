@@ -50,7 +50,9 @@ type Machine = {
   erpDescription: string | null; erpHours: number | null; erpSyncedAt: string | null;
   plantType: string | null;
   model: string; year: number; customer: string; customerId: string | null; country: string; countryCode: string;
-  site: string | null; status: MachineStatus; progress: number;
+  site: string | null; status: MachineStatus;
+  /** Avanzamento calcolato dai fatti del fascicolo (src/lib/machineProgress.ts). */
+  progress: { percent: number; steps: { key: string; label: string; weight: number; done: number; implied: boolean }[] };
   productionStart: string | null; deliveryDate: string | null; pressureSettings: string | null;
   plateWeight: string | null; platePower: string | null; plateVoltage: string | null; notes: string | null;
   tiranteGiunto: boolean;
@@ -78,6 +80,7 @@ type Machine = {
   collaudo: {
     status: "DRAFT" | "IN_PROGRESS" | "PENDING_APPROVAL" | "APPROVED";
     answers: Record<string, { value: string | null; note?: string }>;
+    softwareVersion: string | null;
     compilerName: string | null;
     compiledAt: string | null;
     compilerSignature: string | null;
@@ -170,19 +173,12 @@ export default function MachineDetail({
           {caps.edit ? (
             <StatusControl machine={machine} onDone={refresh} notify={notify} />
           ) : (
-            <>
-              <span className="badge">
-                <span className="badge-dot" style={{ background: meta.color }} />
-                {meta.label}
-              </span>
-              <div className="detail-progress">
-                <span className="mono small muted">Avanzamento {machine.progress}%</span>
-                <div className="detail-progress-bar">
-                  <span style={{ width: machine.progress + "%", background: meta.color }} />
-                </div>
-              </div>
-            </>
+            <span className="badge">
+              <span className="badge-dot" style={{ background: meta.color }} />
+              {meta.label}
+            </span>
           )}
+          <ProgressBlock progress={machine.progress} color={meta.color} />
         </div>
         <div className="detail-actions">
           {caps.intervention && (
@@ -330,9 +326,8 @@ function StatusControl({
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const meta = STATUS_META[machine.status];
 
-  async function update(patch: { status?: string; progress?: number }) {
+  async function update(patch: { status?: string }) {
     setBusy(true);
     const res = await fetch(`/api/machines/${machine.id}`, {
       method: "PATCH",
@@ -361,24 +356,46 @@ function StatusControl({
           </option>
         ))}
       </select>
-      <div className="detail-progress">
-        <span className="mono small muted">Avanzamento {machine.progress}%</span>
-        <div className="detail-progress-bar">
-          <span style={{ width: machine.progress + "%", background: meta.color }} />
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={5}
-          defaultValue={machine.progress}
-          disabled={busy}
-          onMouseUp={(e) => update({ progress: Number((e.target as HTMLInputElement).value) })}
-          onTouchEnd={(e) => update({ progress: Number((e.target as HTMLInputElement).value) })}
-          style={{ width: 190 }}
-        />
-      </div>
     </>
+  );
+}
+
+/**
+ * Avanzamento del fascicolo: barra + elenco dei passaggi che lo compongono.
+ * Non si sposta a mano — prima era un cursore che diceva solo quanto qualcuno
+ * si era ricordato di muoverlo — quindi l'unica cosa utile da offrire è
+ * **perché** è a quel punto: il clic apre i passaggi fatti e quelli che mancano.
+ */
+function ProgressBlock({
+  progress,
+  color,
+}: {
+  progress: Machine["progress"];
+  color: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="detail-progress">
+      <button className="progress-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="mono small muted">Avanzamento {progress.percent}%</span>
+        <Icon name={open ? "chev-down" : "chev-right"} size={13} />
+      </button>
+      <div className="detail-progress-bar">
+        <span style={{ width: progress.percent + "%", background: color }} />
+      </div>
+      {open && (
+        <div className="progress-steps">
+          {progress.steps.map((s) => (
+            <div key={s.key} className={"progress-step" + (s.done >= 1 ? " done" : s.done > 0 ? " partial" : "")}>
+              <Icon name={s.done >= 1 ? "check" : "clock"} size={12} />
+              <span>{s.label}</span>
+              {s.implied && <em title="Dato per fatto dallo stato del fascicolo">da stato</em>}
+              <span className="mono">{s.weight}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -678,6 +695,15 @@ function TabAnagrafica({
                   machine.jobContainer || "—"
                 )}
               </dd>
+            </div>
+            <div>
+              <dt>
+                Versione software
+                <span className="muted small" style={{ display: "block", fontWeight: 400 }}>
+                  Dalla check list di collaudo
+                </span>
+              </dt>
+              <dd className="mono">{machine.collaudo?.softwareVersion || "—"}</dd>
             </div>
             <div>
               <dt>Anno</dt>
@@ -3127,6 +3153,7 @@ function CollaudoModal({
   });
 
   const [remarks, setRemarks] = useState("");
+  const [software, setSoftware] = useState(c?.softwareVersion ?? "");
   const [busy, setBusy] = useState(false);
   const [useSavedSig, setUseSavedSig] = useState(currentUser.hasSignature);
   const [saveSignature, setSaveSignature] = useState(!currentUser.hasSignature);
@@ -3150,7 +3177,7 @@ function CollaudoModal({
     const res = await fetch(`/api/machines/${machine.id}/collaudo`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save", answers }),
+      body: JSON.stringify({ action: "save", answers, softwareVersion: software }),
     });
     setBusy(false);
     if (res.ok) onSaved("Bozza check list salvata");
@@ -3177,6 +3204,7 @@ function CollaudoModal({
       body: JSON.stringify({
         action: "submit",
         answers,
+        softwareVersion: software,
         compilerSignature: signatureData,
         saveSignature: !!signatureData && saveSignature,
       }),
@@ -3257,6 +3285,27 @@ function CollaudoModal({
             }}
           >
             {cl.title} — {cl.code} ({total} voci)
+          </div>
+
+          {/* Versione software installata: la registra chi collauda, si legge
+              dall'anagrafica del fascicolo. */}
+          <div className="sw-version">
+            <label htmlFor="sw-version">
+              Versione software installata
+              <span className="muted small">Resta nel fascicolo come dato di collaudo</span>
+            </label>
+            {readonly ? (
+              <span className="mono">{c?.softwareVersion || "—"}</span>
+            ) : (
+              <input
+                id="sw-version"
+                className="input mono"
+                value={software}
+                maxLength={80}
+                placeholder="es. 4.2.1"
+                onChange={(e) => setSoftware(e.target.value)}
+              />
+            )}
           </div>
 
           {items.map((it, idx) => {

@@ -25,7 +25,6 @@ export type CreateMachineInput = {
   countryCode: string;
   site?: string | null;
   status?: MachineStatus;
-  progress?: number;
   productionStart?: Date | null;
   deliveryDate?: Date | null;
   pressureSettings?: string | null;
@@ -96,7 +95,6 @@ export async function createMachine(input: CreateMachineInput, authorName = "Sis
       countryCode: input.countryCode,
       site: input.site || null,
       status: input.status || "PRODUCTION",
-      progress: input.progress ?? 0,
       productionStart: input.productionStart || new Date(),
       deliveryDate: input.deliveryDate || null,
       pressureSettings: input.pressureSettings || null,

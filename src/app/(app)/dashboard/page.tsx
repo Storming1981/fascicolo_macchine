@@ -4,12 +4,14 @@ import { STATUS_META, STATUS_ORDER, PHASE_META } from "@/lib/domain";
 import Icon, { Flag } from "@/components/Icon";
 import { fmtDate } from "@/lib/format";
 import { userCaps } from "@/lib/caps";
+import { progressForMachines } from "@/lib/progressService";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const { "machine.create": canCreate } = await userCaps("machine.create");
   const machines = await prisma.machine.findMany({ orderBy: { createdAt: "desc" } });
+  const progress = await progressForMachines(machines);
   const recent = await prisma.diaryEvent.findMany({
     orderBy: { createdAt: "desc" },
     take: 8,
@@ -87,7 +89,7 @@ export default async function DashboardPage() {
                           <span className="muted small">{m.country}</span>
                         </div>
                         <div className="pipe-progress">
-                          <span style={{ width: m.progress + "%", background: meta.color }} />
+                          <span style={{ width: (progress.get(m.id)?.percent ?? 0) + "%", background: meta.color }} />
                         </div>
                       </Link>
                     ))}

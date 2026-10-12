@@ -149,7 +149,6 @@ model Machine {
   countryCode     String        @default("IT")
   site            String?
   status          MachineStatus @default(PRODUCTION)
-  progress        Int           @default(0)
   productionStart DateTime?
   deliveryDate    DateTime?
   pressureSettings String?
@@ -197,6 +196,7 @@ model Collaudo {
   machineId         String         @unique
   status            CollaudoStatus @default(DRAFT)
   answers           Json           @default("{}") // { "1": {value:"SI"|"NO"|"NA", note:""}, ... }
+  softwareVersion   String? // versione software installata, registrata al collaudo
   compilerId        String?
   compilerName      String?
   compiledAt        DateTime?
