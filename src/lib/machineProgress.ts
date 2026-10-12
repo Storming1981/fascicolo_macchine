@@ -6,7 +6,8 @@
 // pesata di passaggi che il fascicolo registra già da solo (date di stato dal
 // gestionale, schede di allestimento, check list di collaudo).
 //
-// Regola importante: **lo stato della macchina implica i passaggi precedenti.**
+// Regola importante: **lo stato della macchina implica il passaggio e i
+// precedenti**: marcare "Spedita" vuol dire che la spedizione c'e' stata.
 // Un fascicolo marcato "Spedita" ha per forza finito produzione e collaudo,
 // anche se quei passaggi non sono mai stati registrati nell'app — è il caso dei
 // 187 fascicoli importati dal file MATRICOLE, che altrimenti resterebbero a
@@ -54,7 +55,7 @@ export function progressSteps(f: ProgressFacts): ProgressStep[] {
     ...(f.sheets.expected
       ? [{ key: "sheets", label: "Schede di allestimento", weight: 20, raw: sheetsDone, implied: "SHIPPED" as MachineStatusLike }]
       : []),
-    { key: "production_end", label: "Produzione conclusa", weight: 15, raw: has("production_end") ? 1 : 0, implied: "SHIPPED" },
+    { key: "production_end", label: "Produzione conclusa", weight: 15, raw: has("production_end") ? 1 : 0, implied: "TESTING" },
     {
       key: "collaudo",
       label: "Check list di collaudo compilata",
@@ -63,8 +64,8 @@ export function progressSteps(f: ProgressFacts): ProgressStep[] {
       implied: "SHIPPED",
     },
     { key: "collaudo_ok", label: "Collaudo approvato", weight: 10, raw: f.collaudo === "APPROVED" || has("testing") ? 1 : 0, implied: "SHIPPED" },
-    { key: "shipped", label: "Spedita", weight: 15, raw: has("shipped") ? 1 : 0, implied: "INSTALLED" },
-    { key: "installed", label: "Installata", weight: 10, raw: has("installed") ? 1 : 0, implied: "MAINTENANCE" },
+    { key: "shipped", label: "Spedita", weight: 15, raw: has("shipped") ? 1 : 0, implied: "SHIPPED" },
+    { key: "installed", label: "Installata", weight: 10, raw: has("installed") ? 1 : 0, implied: "INSTALLED" },
   ];
 
   return steps.map((s) => {
