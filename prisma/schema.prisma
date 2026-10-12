@@ -154,6 +154,7 @@ model Machine {
   deliveryDate    DateTime?
   pressureSettings String?
   tiranteGiunto   Boolean       @default(false) // kit tirante giunto montato (solo BLUE DEVIL)
+  filtroMaggiorato Boolean      @default(false) // centrale idraulica con filtro maggiorato
   plateWeight     String?
   platePower      String?
   plateVoltage    String?

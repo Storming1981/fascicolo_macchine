@@ -7,6 +7,7 @@ import {
   MATRICOLA_LABEL,
   sheetCtx,
   sheetDef,
+  serialLimit,
   visibleRows,
   type SheetHeader,
   type SheetKind,
@@ -218,16 +219,22 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
 
     for (const row of rows) {
       const v = input.values[row.key] ?? {};
-      const serials = row.serials
+      const all = row.serials
         ? input.components.find((c) => c.groupId === row.serials)?.serials ?? []
         : row.serialField || row.serialList
         ? [v.serial ?? ""]
         : [];
+      // stesso taglio della scheda a video: gli slot oltre il numero dichiarato
+      // (es. un solo motore elettrico) non si stampano se sono vuoti
+      const lim = serialLimit(row, input.values);
+      const serials = lim === null ? all : all.filter((s, i) => i < lim || !!s.trim());
+      // riga senza specifica (lotto albero): la colonna resta vuota
+      const spec = row.noSpec ? "" : v.spec ?? "";
       const subRows = Math.max(1, serials.length);
       const specW = row.wide ? COLS[1] + COLS[2] : COLS[1];
       const textLines = Math.max(
         wrap(row.label, font, FS, COLS[0] - 8).length,
-        wrap(v.spec ?? "", font, FS, specW - 8).length,
+        wrap(spec, font, FS, specW - 8).length,
         wrap(v.note ?? "", font, FS, COLS[3] - 8).length
       );
       const h = Math.max(subRows * LINE_H, textLines * (FS + 2) + 2.5);
@@ -240,7 +247,7 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
       box(COLX[0], y, COLS[0], h);
       cellText(row.label, COLX[0], COLS[0], y, h);
       box(COLX[1], y, specW, h);
-      cellText(v.spec ?? "", COLX[1], specW, y, h, { align: "center" });
+      cellText(spec, COLX[1], specW, y, h, { align: "center" });
       if (!row.wide) {
         const sh = h / subRows;
         for (let i = 0; i < subRows; i++) {

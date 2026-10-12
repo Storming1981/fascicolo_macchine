@@ -41,6 +41,16 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     excel: { serialCols: [] },
   },
   {
+    // Non presente nel file MATRICOLE: nasce con la scheda M5.16 (lotto albero
+    // letto dalla foto come le matricole dei riduttori).
+    id: "shaft",
+    label: "Albero",
+    en: "SHAFT",
+    icon: "rotor",
+    slots: ["Albero"],
+    excel: { serialCols: [] },
+  },
+  {
     id: "hyd_pumps",
     label: "Pompe idrauliche",
     en: "HIDRAULIC PUMPS",
@@ -48,6 +58,31 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     slots: ["Pompa #1", "Pompa #2"],
     extra: [{ key: "valves", label: "Valvole (bar)" }],
     excel: { brandCol: "Q", serialCols: ["R", "S"], extraCols: { valves: "T+U" } },
+  },
+  {
+    // Blocchi pompe LINDE / MAGNUM: due per container.
+    id: "pump_blocks",
+    label: "Blocchi pompe",
+    en: "PUMP BLOCKS",
+    icon: "pump",
+    slots: ["Blocco #1", "Blocco #2"],
+    excel: { serialCols: [] },
+  },
+  {
+    id: "fill_pump",
+    label: "Pompa di riempimento",
+    en: "FILLING PUMP",
+    icon: "drop",
+    slots: ["Motore", "Pompa"],
+    excel: { serialCols: [] },
+  },
+  {
+    id: "speed_valve",
+    label: "Valvola regolazione velocità",
+    en: "SPEED CONTROL VALVE",
+    icon: "oil",
+    slots: ["Valvola"],
+    excel: { serialCols: [] },
   },
   {
     id: "boost_pumps",
@@ -128,6 +163,14 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     icon: "fan",
     slots: ["Dissipatore #1", "Dissipatore #2"],
     excel: { brandCol: "AS", serialCols: ["AT", "AU"] },
+  },
+  {
+    id: "radiator_block",
+    label: "Blocco radiatori",
+    en: "RADIATOR BLOCK",
+    icon: "fan",
+    slots: ["Blocco"],
+    excel: { serialCols: [] },
   },
   {
     id: "remote",

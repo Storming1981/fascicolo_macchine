@@ -11,6 +11,8 @@
 //
 // Modulo condiviso client/server: niente import server-only.
 
+import type { KitFlag } from "./kits";
+
 export type SheetKind = "TRITURATORE" | "CONTAINER" | "MULINO" | "CESOIA";
 export const SHEET_KINDS: SheetKind[] = ["TRITURATORE", "CONTAINER", "MULINO", "CESOIA"];
 
@@ -36,6 +38,16 @@ export type SheetRow = {
   serialList?: string[];
   /** Specifica su tutta la larghezza (specifica + matricola), come nel modulo cartaceo. */
   wide?: boolean;
+  /** La riga non ha specifica: conta solo la matricola (es. lotto albero da foto). */
+  noSpec?: boolean;
+  /**
+   * Spunta di dotazione della macchina (campo su `Machine`, non sulla scheda):
+   * sta qui perche' e' una caratteristica del componente di questa riga, e
+   * compare nell'elenco macchine per tenerne lo storico.
+   */
+  kitFlag?: KitFlag;
+  /** Quante matricole mostrare: il numero scritto in un'altra riga (es. nr. motori). */
+  limitBy?: string;
   when?: (ctx: SheetCtx) => boolean;
 };
 
@@ -113,17 +125,16 @@ export const SHEET_TRITURATORE: SheetDef = {
       title: "ALLESTIMENTO CORPO MACCHINA",
       icon: "gear",
       rows: [
-        { key: "targhetta_ce", label: "Targhetta CE Macchina", suggest: ["ZATO"], list: "targhetta_ce", serialField: true },
         { key: "riduttori", label: "Costruttore riduttori", bind: { group: "gearboxes", field: "brand" }, serials: "gearboxes", suggest: ["DINAMIC OIL"] },
         { key: "motori_idraulici", label: "Motori idraulici", bind: { group: "hyd_motors", field: "brand" }, serials: "hyd_motors", suggest: ["LINDE"] },
         { key: "blocchi_motore", label: "Blocchi motore", bind: { group: "motor_blocks", field: "brand" }, serials: "motor_blocks", suggest: ["MAGNUM"] },
-        { key: "giunti_sicurezza", label: "Giunti sicurezza", input: "yesno" },
+        { key: "giunti_sicurezza", label: "Giunti sicurezza", input: "yesno", kitFlag: "tiranteGiunto" },
         { key: "lame", label: "Lame", bind: { group: "blades", field: "extra", extraKey: "type" }, suggest: ["PLATINUM"] },
         { key: "costruttore_lame", label: "Costruttori lame", bind: { group: "blades", field: "brand" }, suggest: ["CO.DI.TRA"] },
         { key: "lotto_lame", label: "Lotto lame", bind: { group: "blades", field: "extra", extraKey: "lot" }, free: true },
         { key: "lav_portalame", label: "Lav portalame - distanziali - alberi", suggest: ["DGS"], list: "lavorazioni" },
         { key: "montaggio_albero", label: "Montaggio albero", suggest: ["DGS"], list: "lavorazioni" },
-        { key: "lotto_albero", label: "Lotto albero", free: true },
+        { key: "lotto_albero", label: "Lotto albero", serials: "shaft", noSpec: true },
         { key: "lav_cassa", label: "Lav cassa", suggest: ["OFFICINE FN"], list: "lavorazioni" },
         { key: "corazzine", label: "Corazzine inferiori", input: "yesno" },
         { key: "materiale_ghiere", label: "Materiale ghiere", suggest: ["C45"] },
@@ -171,21 +182,26 @@ export const SHEET_CONTAINER: SheetDef = {
         { key: "potenza_motori", label: "Potenza motori (kW)", free: true },
         { key: "tensione_motori", label: "Tensione motore (V)", suggest: ["400", "690"], list: "tensione", when: isElectric },
         { key: "frequenza_motori", label: "Frequenza (Hz)", suggest: ["50", "60"], list: "frequenza", when: isElectric },
-        { key: "marca_motori", label: "Marca motori", bind: { group: "electric_motor", field: "brand" }, serials: "electric_motor", suggest: ["SIMOTOP"], when: isElectric },
+        { key: "marca_motori", label: "Marca motori", bind: { group: "electric_motor", field: "brand" }, serials: "electric_motor", suggest: ["SIMOTOP"], limitBy: "nr_motori", when: isElectric },
+        { key: "tipologia_motore", label: "Tipologia motore", suggest: ["355M B35 4P IE4"], when: isElectric },
         { key: "motore_diesel", label: "Motore diesel", bind: { group: "diesel", field: "brand" }, serials: "diesel", when: isDiesel },
         { key: "costruttore_container", label: "Costruttori Container", bind: { group: "container", field: "brand" }, serials: "container", suggest: ["ECOFER"] },
         { key: "coibentazione", label: "Coibentazione Container", input: "yesno" },
         { key: "condizionatore", label: "Costruttore Condizionatore", bind: { group: "cooling", field: "brand" }, serials: "cooling" },
         { key: "tensione_condizionatore", label: "Tensione Condizionatore (V)", suggest: ["400", "230"], list: "tensione" },
         { key: "frequenza_condizionatore", label: "Frequenza Condizionatore (Hz)", suggest: ["50", "60"], list: "frequenza" },
-        { key: "centrale_idraulica", label: "Centrale Idraulica", bind: { group: "hyd_unit", field: "brand" }, serials: "hyd_unit", suggest: ["MAGNUM"] },
+        { key: "centrale_idraulica", label: "Centrale Idraulica", bind: { group: "hyd_unit", field: "brand" }, serials: "hyd_unit", suggest: ["MAGNUM"], kitFlag: "filtroMaggiorato" },
         { key: "pompe", label: "Pompe idrauliche (Pompa 1 / Pompa 2)", bind: { group: "hyd_pumps", field: "brand" }, serials: "hyd_pumps", suggest: ["LINDE"] },
+        { key: "blocchi_pompe", label: "Blocchi pompe", bind: { group: "pump_blocks", field: "brand" }, serials: "pump_blocks", suggest: ["LINDE", "MAGNUM"] },
         { key: "valvola_max", label: "Valvola Max", bind: { group: "hyd_pumps", field: "extra", extraKey: "valves" }, free: true },
+        { key: "valvola_velocita", label: "Valvola regolazione velocità", bind: { group: "speed_valve", field: "brand" }, serials: "speed_valve" },
         { key: "taglio_pressione", label: "Valore taglio di pressione", free: true },
+        { key: "pompa_riempimento", label: "Pompa di riempimento (motore / pompa)", bind: { group: "fill_pump", field: "brand" }, serials: "fill_pump" },
         { key: "pompe_sovralimentazione", label: "Pompe sovralimentaz. e raffreddamento", bind: { group: "boost_pumps", field: "brand" }, serials: "boost_pumps", suggest: ["B & C"] },
         { key: "pompa_grasso", label: "Pompa Grasso", bind: { group: "grease", field: "brand" }, serials: "grease", suggest: ["CIAPONI"] },
         { key: "nr_radiatori", label: "Nr. Radiatori", free: true },
         { key: "radiatori", label: "Radiatori", bind: { group: "dissipators", field: "brand" }, serials: "dissipators", suggest: ["SESINO"] },
+        { key: "blocco_radiatori", label: "Blocco radiatori", bind: { group: "radiator_block", field: "brand" }, serials: "radiator_block" },
         { key: "installazione_radiatori", label: "Tipo installazione Radiatori", suggest: ["A TETTO", "LATERALE"] },
         { key: "radiatore_marino", label: "Radiatore modello marino", input: "yesno" },
         { key: "colore_container", label: "Colore container", suggest: COLORS, list: "colori" },
@@ -418,6 +434,26 @@ export function visibleRows(section: SheetSection, ctx: SheetCtx): SheetRow[] {
   return section.rows.filter((r) => !r.when || r.when(ctx));
 }
 
+/**
+ * Righe che contano per l'avanzamento: quelle senza specifica (la matricola la
+ * si legge dalla foto) non si possono "compilare", quindi terrebbero la scheda
+ * eternamente incompleta.
+ */
+export function scoredRows(rows: SheetRow[]): SheetRow[] {
+  return rows.filter((r) => !r.noSpec);
+}
+
+/**
+ * Quante matricole mostrare per la riga: il numero scritto in un'altra riga
+ * (es. "Nr. Motori Elettrici" = 1 → un solo slot). null = tutte. Gli slot gia'
+ * compilati si mostrano comunque: un dato non sparisce perche' cambia un conteggio.
+ */
+export function serialLimit(row: SheetRow, values: SheetValues): number | null {
+  if (!row.limitBy) return null;
+  const n = parseInt((values[row.limitBy]?.spec ?? "").replace(/[^0-9]/g, ""), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export function allRows(def: SheetDef): SheetRow[] {
   return def.sections.flatMap((s) => s.rows);
 }
@@ -506,7 +542,7 @@ export function resolveValues(
   const out: SheetValues = {};
   for (const row of allRows(sheetDef(kind))) {
     const s = stored[row.key] ?? {};
-    let spec = s.spec ?? "";
+    let spec = row.noSpec ? "" : s.spec ?? "";
     if (row.bind) {
       const c = comps.find((x) => x.groupId === row.bind!.group);
       if (row.bind.field === "brand") spec = c?.brand ?? "";

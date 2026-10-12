@@ -551,12 +551,23 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   Matricole mostra l'ultima foto dello slot (clic = apre) con il conteggio
   delle altre; prima la foto finiva solo in Foto produzione perché il loader
   non passava `componentItemId`.
-- **Kit tirante giunto** (solo `BLUE DEVIL`, `hasTiranteGiunto()` in
-  `plant.ts`): spunta in testa a Componenti & Matricole, campo
-  `Machine.tiranteGiunto`, `POST /api/machines/[id]/kit` (permesso
-  `machine.intervention` o `machine.edit`, 400 sulle altre tipologie), ogni
-  cambio annotato a diario. Colonna *Tirante giunto* nell'elenco macchine
-  (casella in sola lettura, "—" per le non BLUE DEVIL).
+- **Spunte di dotazione** (`src/lib/kits.ts`, `KITS`): caratteristiche della
+  macchina che non sono né una matricola né una specifica, ma che devono
+  restare consultabili su tutta la flotta — oggi **Tirante giunto**
+  (`Machine.tiranteGiunto`) e **Centrale con filtro maggiorato**
+  (`Machine.filtroMaggiorato`), entrambe solo BLUE DEVIL.
+  - **Stanno sulla riga del componente che le riguarda** nella scheda di
+    allestimento (tirante giunto → *Giunti sicurezza* della M5.16, filtro
+    maggiorato → *Centrale idraulica* della M5.17), non in un riquadro a parte
+    in testa alla scheda: chi monta il componente è chi sa se il kit c'è, e il
+    riquadro in cima lo vedeva anche chi stava compilando tutt'altro.
+  - Si salvano **da sole** (`POST /api/machines/[id]/kit`, permesso
+    `machine.intervention` o `machine.edit`, 400 se il kit non è previsto per
+    quella tipologia), non col salvataggio della scheda: sono un campo della
+    macchina, non un valore della scheda. Ogni cambio va a diario.
+  - **Una colonna per kit nell'elenco macchine** (casella in sola lettura, "—"
+    per le tipologie che non lo prevedono): è lo storico che serve al
+    committente. Aggiungerne uno tocca solo `KITS` + il campo su `Machine`.
 - **Schede di allestimento per tipologia impianto** — dove ci sono, sono
   l'**unica** vista di Componenti & Matricole (l'elenco per gruppo resta per le
   tipologie senza scheda). Mappatura in `sheetKindsFor()`:
@@ -592,6 +603,28 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   Firma compilatore (penna o firma personale) → evento a diario; se la scheda
   firmata viene modificata la firma decade. PDF rigenerato dai dati correnti
   (`src/lib/allestimentoPdf.ts`, una pagina A4 come il modulo).
+  - **Lotto albero: si legge dalla foto**, come le matricole dei riduttori. Non
+    è più una voce scritta a mano nella scheda ma la matricola dello slot del
+    gruppo **`shaft`** (Albero), quindi ha fotocamera, OCR e foto per slot senza
+    scrivere niente di nuovo. La riga è `noSpec: true`: non ha specifica, e le
+    righe senza specifica **non contano nell'avanzamento** (`scoredRows`),
+    altrimenti la scheda resterebbe eternamente incompleta. Il lotto già scritto
+    a mano **si sposta sullo slot** alla creazione del gruppo (`moveShaftLot`):
+    senza, sparirebbe dalla scheda di ogni fascicolo già compilato.
+  - **Via *Targhetta CE Macchina*** dall'allestimento corpo: ripeteva la
+    *Targhetta CE impianto* del cavalletto.
+  - **Le matricole dei motori seguono il numero dichiarato** (`limitBy`):
+    *Nr. Motori Elettrici* = 1 → un solo slot matricola, = 2 → due. Gli slot
+    oltre il conteggio restano visibili **se hanno già una matricola**: un dato
+    non sparisce perché qualcuno corregge un numero. Stessa regola nel PDF.
+  - Nuova voce **Tipologia motore** (descrittiva, es. `355M B35 4P IE4`), a
+    elenco con voci aggiungibili come le altre.
+  - Nuovi gruppi componente con matricola sul container: **Blocchi pompe**
+    (`pump_blocks`, due slot LINDE/MAGNUM), **Valvola regolazione velocità**
+    (`speed_valve`), **Blocco radiatori** (`radiator_block`) e **Pompa di
+    riempimento** (`fill_pump`, due slot: Motore e Pompa). Come `motor_blocks`
+    non stanno nel file MATRICOLE: li crea `ensureSheetComponents` sui fascicoli
+    esistenti alla prima apertura della scheda.
   **Elenchi con voci aggiungibili**: ogni specifica non libera (`free`) è una
   tendina che parte dai `suggest` e si arricchisce con le voci aggiunte dagli
   operatori, salvate in `Setting.allestimentoOptions` per elenco (`list`

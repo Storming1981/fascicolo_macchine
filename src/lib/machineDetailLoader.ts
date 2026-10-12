@@ -154,6 +154,7 @@ export async function loadMachineDetailProps(code: string) {
     deliveryDate: machine.deliveryDate?.toISOString() ?? null,
     pressureSettings: machine.pressureSettings,
     tiranteGiunto: machine.tiranteGiunto,
+    filtroMaggiorato: machine.filtroMaggiorato,
     plateWeight: machine.plateWeight,
     platePower: machine.platePower,
     plateVoltage: machine.plateVoltage,

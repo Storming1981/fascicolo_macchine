@@ -111,6 +111,7 @@ export async function ensureSheetComponents(machineId: string): Promise<number> 
           items: { create: g.slots.map((label, position) => ({ position, label })) },
         },
       });
+      if (gid === "shaft") await moveShaftLot(machineId);
       created++;
     } catch (e) {
       // richiesta concorrente che l'ha già creato
@@ -118,6 +119,29 @@ export async function ensureSheetComponents(machineId: string): Promise<number> 
     }
   }
   return created;
+}
+
+/**
+ * Il lotto albero era una voce scritta a mano nella scheda; ora e' la matricola
+ * dello slot "Albero", che si legge dalla foto. Alla creazione del gruppo il
+ * valore gia' inserito si sposta sullo slot, altrimenti sparirebbe dalla scheda
+ * di tutti i fascicoli gia' compilati.
+ */
+async function moveShaftLot(machineId: string) {
+  const rec = await prisma.allestimentoSheet.findUnique({
+    where: { machineId_kind: { machineId, kind: "TRITURATORE" } },
+    select: { values: true },
+  });
+  const v = readValues(rec?.values);
+  const lot = str(v.lotto_albero?.spec, 120);
+  if (!lot) return;
+  const comp = await prisma.component.findFirst({
+    where: { machineId, groupId: "shaft" },
+    select: { items: { orderBy: { position: "asc" }, select: { id: true, serial: true } } },
+  });
+  const slot = comp?.items[0];
+  if (!slot || (slot.serial ?? "").trim()) return;
+  await prisma.componentItem.update({ where: { id: slot.id }, data: { serial: lot } });
 }
 
 function readHeader(raw: unknown): SheetHeader {
@@ -202,7 +226,7 @@ export async function saveSheet(
 
   for (const row of allRows(def)) {
     const v = incoming[row.key] ?? {};
-    const spec = str(v.spec);
+    const spec = row.noSpec ? "" : str(v.spec);
     const note = str(v.note, 1000);
     const serial = row.serialField || row.serialList ? str(v.serial, 120) : "";
 

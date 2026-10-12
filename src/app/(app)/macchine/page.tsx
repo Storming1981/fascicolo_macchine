@@ -25,6 +25,7 @@ export default async function MachinesPage({
     status: m.status,
     progress: m.progress,
     tiranteGiunto: m.tiranteGiunto,
+    filtroMaggiorato: m.filtroMaggiorato,
   }));
   return (
     <MachinesList

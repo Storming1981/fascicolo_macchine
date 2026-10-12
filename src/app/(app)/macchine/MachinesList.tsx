@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon, { Flag } from "@/components/Icon";
 import { STATUS_META, STATUS_ORDER } from "@/lib/domain";
-import { hasTiranteGiunto } from "@/lib/plant";
+import { hasKit, KITS } from "@/lib/kits";
 import type { MachineStatus } from "@prisma/client";
 
 type M = {
@@ -20,6 +20,7 @@ type M = {
   status: MachineStatus;
   progress: number;
   tiranteGiunto: boolean;
+  filtroMaggiorato: boolean;
 };
 
 export default function MachinesList({
@@ -114,7 +115,11 @@ export default function MachinesList({
                 <th>Job</th>
                 <th>Tipologia</th>
                 <th>Modello</th>
-                <th title="Kit tirante giunto (solo BLUE DEVIL)">Tirante giunto</th>
+                {KITS.map((k) => (
+                  <th key={k.key} title={k.hint}>
+                    {k.column}
+                  </th>
+                ))}
                 <th>Cliente</th>
                 <th>Paese</th>
                 <th>Anno</th>
@@ -134,20 +139,22 @@ export default function MachinesList({
                   <td className="mono muted">{m.job}</td>
                   <td>{m.plantType || <span className="muted">—</span>}</td>
                   <td>{m.model}</td>
-                  <td style={{ textAlign: "center" }}>
-                    {hasTiranteGiunto(m.plantType) ? (
-                      <input
-                        type="checkbox"
-                        checked={m.tiranteGiunto}
-                        readOnly
-                        tabIndex={-1}
-                        aria-label={m.tiranteGiunto ? "Tirante giunto montato" : "Tirante giunto non montato"}
-                        style={{ pointerEvents: "none", accentColor: "var(--accent)", width: 15, height: 15 }}
-                      />
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
+                  {KITS.map((k) => (
+                    <td key={k.key} style={{ textAlign: "center" }}>
+                      {hasKit(k.key, m.plantType) ? (
+                        <input
+                          type="checkbox"
+                          checked={m[k.key]}
+                          readOnly
+                          tabIndex={-1}
+                          aria-label={`${k.label}: ${m[k.key] ? "sì" : "no"}`}
+                          style={{ pointerEvents: "none", accentColor: "var(--accent)", width: 15, height: 15 }}
+                        />
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  ))}
                   <td>{m.customer}</td>
                   <td>
                     <div className="country-cell">

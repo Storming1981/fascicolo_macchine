@@ -14,7 +14,7 @@ import {
   PRIORITY_META,
   COUNTRIES,
 } from "@/lib/domain";
-import { CUSTOM_MODEL, hasTiranteGiunto } from "@/lib/plant";
+import { CUSTOM_MODEL } from "@/lib/plant";
 import { hasAllestimentoSheets } from "@/lib/allestimento";
 import AllestimentoSheets from "@/components/AllestimentoSheets";
 import HoursAnalysisCard from "@/components/HoursAnalysisCard";
@@ -54,6 +54,7 @@ type Machine = {
   productionStart: string | null; deliveryDate: string | null; pressureSettings: string | null;
   plateWeight: string | null; platePower: string | null; plateVoltage: string | null; notes: string | null;
   tiranteGiunto: boolean;
+  filtroMaggiorato: boolean;
   components: Comp[];
   diary: Diary[];
   photos: {
@@ -1126,29 +1127,6 @@ function TabComponenti({
     );
   }
 
-  // Kit tirante giunto (solo BLUE DEVIL): spunta con aggiornamento immediato
-  const [tirante, setTirante] = useState(machine.tiranteGiunto);
-  const [kitBusy, setKitBusy] = useState(false);
-  useEffect(() => setTirante(machine.tiranteGiunto), [machine.tiranteGiunto]);
-  async function toggleTirante(v: boolean) {
-    setTirante(v);
-    setKitBusy(true);
-    const res = await fetch(`/api/machines/${machine.id}/kit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tiranteGiunto: v }),
-    });
-    setKitBusy(false);
-    if (res.ok) {
-      onDone();
-      notify(v ? "Tirante giunto: montato" : "Tirante giunto: non montato");
-    } else {
-      setTirante(!v);
-      const d = await res.json().catch(() => ({}));
-      notify(d.error || "Errore salvataggio kit", "err");
-    }
-  }
-
   return (
     <div className="tab-content">
       <div className="cmp-toolbar">
@@ -1167,28 +1145,6 @@ function TabComponenti({
         </div>
       </div>
 
-      {hasTiranteGiunto(machine.plantType) && (
-        <section className="card" style={{ marginBottom: 12, padding: "12px 16px" }}>
-          <label
-            style={{ display: "flex", alignItems: "center", gap: 12, cursor: canEdit ? "pointer" : "default" }}
-          >
-            <input
-              type="checkbox"
-              checked={tirante}
-              disabled={!canEdit || kitBusy}
-              onChange={(e) => toggleTirante(e.target.checked)}
-              style={{ width: 18, height: 18, accentColor: "var(--accent)" }}
-            />
-            <span>
-              <strong>Tirante giunto</strong>
-              <span className="muted small" style={{ display: "block" }}>
-                Spunta se questa macchina monta il kit tirante giunto.
-              </span>
-            </span>
-          </label>
-        </section>
-      )}
-
       <input
         ref={photoRef}
         type="file"
@@ -1205,6 +1161,7 @@ function TabComponenti({
           canSign={!!canSign}
           canManageOptions={!!canManageOptions}
           hasSavedSignature={!!hasSavedSignature}
+          kits={{ tiranteGiunto: machine.tiranteGiunto, filtroMaggiorato: machine.filtroMaggiorato }}
           renderSerial={(it) => (
             <SlotSerialCell machineId={machine.id} item={it} canEdit={!!canEdit} onDone={onDone} notify={notify} />
           )}

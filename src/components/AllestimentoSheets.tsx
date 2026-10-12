@@ -9,6 +9,8 @@ import {
   isListRow,
   listKey,
   listOptions,
+  scoredRows,
+  serialLimit,
   serialListKey,
   serialListOptions,
   sheetCommessa,
@@ -22,6 +24,7 @@ import {
   type SheetValues,
 } from "@/lib/allestimento";
 import { fmtDateTime } from "@/lib/format";
+import { kitDef, type KitFlag } from "@/lib/kits";
 
 type Item = { id: string; position: number; label: string; serial: string | null; note: string | null };
 type Comp = { id: string; groupId: string; items: Item[] };
@@ -58,6 +61,7 @@ export default function AllestimentoSheets({
   canSign,
   canManageOptions,
   hasSavedSignature,
+  kits,
   renderSerial,
   renderPhoto,
   onDone,
@@ -77,6 +81,8 @@ export default function AllestimentoSheets({
   canSign: boolean;
   canManageOptions: boolean;
   hasSavedSignature: boolean;
+  /** Spunte di dotazione della macchina (tirante giunto, filtro maggiorato). */
+  kits: Record<KitFlag, boolean>;
   renderSerial: (item: Item) => ReactNode;
   renderPhoto: (itemId: string, title: string) => ReactNode;
   onDone: () => void;
@@ -204,10 +210,11 @@ export default function AllestimentoSheets({
   const sections = def.sections
     .map((s) => {
       const rows = visibleRows(s, ctx);
-      return { s, rows, done: rows.filter((r) => filled(draft.values[r.key]?.spec)).length };
+      const scored = scoredRows(rows);
+      return { s, rows, scored, done: scored.filter((r) => filled(draft.values[r.key]?.spec)).length };
     })
     .filter((x) => x.rows.length);
-  const total = sections.reduce((a, x) => a + x.rows.length, 0);
+  const total = sections.reduce((a, x) => a + x.scored.length, 0);
   const done = sections.reduce((a, x) => a + x.done, 0);
   const pct = total ? Math.round((done / total) * 100) : 0;
 
@@ -215,12 +222,20 @@ export default function AllestimentoSheets({
     const d = drafts[k];
     if (!d) return 0;
     const c = sheetCtx(k, d.header, machine.model);
-    const rows = sheetDef(k).sections.flatMap((s) => visibleRows(s, c));
+    const rows = scoredRows(sheetDef(k).sections.flatMap((s) => visibleRows(s, c)));
     return rows.length ? Math.round((rows.filter((r) => filled(d.values[r.key]?.spec)).length / rows.length) * 100) : 0;
+  }
+
+  /** Riga compilata: la specifica, o la matricola per le righe che non ce l'hanno. */
+  function rowFilled(row: SheetRow) {
+    if (!row.noSpec) return filled(draft.values[row.key]?.spec);
+    return (compOf(row.serials ?? "")?.items ?? []).some((it) => !!(it.serial ?? "").trim());
   }
 
   function specControl(row: SheetRow) {
     const val = draft.values[row.key]?.spec ?? "";
+    if (row.noSpec)
+      return <span className="muted small al-nospec">Si legge dalla foto della targhetta →</span>;
     if (row.input === "yesno" || row.input === "yesnona") {
       const opts = row.input === "yesno" ? YES_NO : YES_NO_NA;
       return (
@@ -316,11 +331,15 @@ export default function AllestimentoSheets({
       );
     if (!row.serials) return note;
     const c = compOf(row.serials);
+    // slot oltre il numero dichiarato (es. un solo motore elettrico): nascosti
+    // se vuoti, mostrati se qualcuno ci ha gia' scritto una matricola
+    const lim = serialLimit(row, draft.values);
+    const items = lim === null ? c?.items ?? [] : (c?.items ?? []).filter((it, i) => i < lim || !!(it.serial ?? "").trim());
     return (
       <div className="al-side-stack">
         {c ? (
           <div className="al-serials">
-            {c.items.map((it) => (
+            {items.map((it) => (
               <div key={it.id} className={"al-serial" + (it.serial ? " ok" : "")}>
                 <span className="al-serial-label">{it.label}</span>
                 <div className="al-serial-cell">{renderSerial(it)}</div>
@@ -526,10 +545,11 @@ export default function AllestimentoSheets({
         ))}
       </nav>
 
-      {sections.map(({ s, rows, done: d }) => {
+      {sections.map((x) => {
+        const { s, rows, done: d } = x;
         const id = `${kind}.${s.key}`;
         const isOpen = !closed[id];
-        const complete = d === rows.length;
+        const complete = d === x.scored.length;
         return (
           <section key={s.key} id={`al-${kind}-${s.key}`} className={"al-sec" + (complete ? " complete" : "")}>
             <button className="al-sec-head" onClick={() => setClosed((c) => ({ ...c, [id]: isOpen }))} aria-expanded={isOpen}>
@@ -541,11 +561,11 @@ export default function AllestimentoSheets({
                 {s.subtitle && <span className="al-sec-sub">{s.subtitle}</span>}
               </span>
               <span className="al-sec-meter">
-                <span className="al-sec-meter-bar" style={{ width: `${rows.length ? (d / rows.length) * 100 : 0}%` }} />
+                <span className="al-sec-meter-bar" style={{ width: `${x.scored.length ? (d / x.scored.length) * 100 : 0}%` }} />
               </span>
               <span className={"al-count" + (complete ? " done" : "")}>
                 {complete && <Icon name="check" size={12} />}
-                {d}/{rows.length}
+                {d}/{x.scored.length}
               </span>
               <Icon name={isOpen ? "chev-down" : "chev-right"} size={16} />
             </button>
@@ -562,7 +582,7 @@ export default function AllestimentoSheets({
                     key={row.key}
                     className={
                       "al-row" +
-                      (filled(draft.values[row.key]?.spec) ? " filled" : "") +
+                      (rowFilled(row) ? " filled" : "") +
                       (row.serials ? " has-serials" : "")
                     }
                   >
@@ -577,7 +597,19 @@ export default function AllestimentoSheets({
                         )}
                       </span>
                     </div>
-                    <div className="al-row-spec">{specControl(row)}</div>
+                    <div className="al-row-spec">
+                      {specControl(row)}
+                      {row.kitFlag && (
+                        <KitFlagBox
+                          machineId={machine.id}
+                          flag={row.kitFlag}
+                          checked={!!kits[row.kitFlag]}
+                          disabled={disabled}
+                          onDone={onDone}
+                          notify={notify}
+                        />
+                      )}
+                    </div>
                     <div className="al-row-side">{sideControl(row)}</div>
                   </div>
                 ))}
@@ -1016,5 +1048,60 @@ function SignSheetModal({
         </div>
       </div>
     </div>
+  );
+}
+
+
+/**
+ * Spunta di dotazione (tirante giunto, filtro maggiorato): sta sulla riga del
+ * componente che la riguarda, ma si salva sulla macchina — per questo scrive
+ * subito, con la sua chiamata, invece di aspettare il salvataggio della scheda.
+ */
+function KitFlagBox({
+  machineId,
+  flag,
+  checked,
+  disabled,
+  onDone,
+  notify,
+}: {
+  machineId: string;
+  flag: KitFlag;
+  checked: boolean;
+  disabled: boolean;
+  onDone: () => void;
+  notify: (m: string, k?: "ok" | "err") => void;
+}) {
+  const def = kitDef(flag);
+  const label = def?.label ?? "Dotazione";
+  const [on, setOn] = useState(checked);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setOn(checked), [checked]);
+  if (!def) return null;
+
+  async function toggle(v: boolean) {
+    setOn(v);
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machineId}/kit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [flag]: v }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      onDone();
+      notify(v ? `${label}: sì` : `${label}: no`);
+    } else {
+      setOn(!v);
+      const d = await res.json().catch(() => ({}));
+      notify(d.error || "Errore salvataggio", "err");
+    }
+  }
+
+  return (
+    <label className={"al-kit" + (on ? " on" : "")} title={def.hint}>
+      <input type="checkbox" checked={on} disabled={disabled || busy} onChange={(e) => toggle(e.target.checked)} />
+      <span>{def.label}</span>
+    </label>
   );
 }
