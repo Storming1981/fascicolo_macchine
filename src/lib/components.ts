@@ -47,7 +47,7 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     label: "Albero",
     en: "SHAFT",
     icon: "rotor",
-    slots: ["Albero"],
+    slots: ["Albero #1", "Albero #2"], // gli alberi lavorati da DGS sono sempre due
     excel: { serialCols: [] },
   },
   {

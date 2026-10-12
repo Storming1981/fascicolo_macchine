@@ -611,6 +611,10 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     altrimenti la scheda resterebbe eternamente incompleta. Il lotto già scritto
     a mano **si sposta sullo slot** alla creazione del gruppo (`moveShaftLot`):
     senza, sparirebbe dalla scheda di ogni fascicolo già compilato.
+  - **Gli alberi sono due** (gruppo `shaft`, lavorati da DGS): la definizione di
+    un gruppo puo' crescere, quindi `ensureSheetSlots` aggiunge **in coda** gli
+    slot che mancano sui fascicoli gia' aperti (gli slot aggiunti a mano dagli
+    operatori non si toccano) e rinomina l'unico "Albero" in "Albero #1".
   - **Via *Targhetta CE Macchina*** dall'allestimento corpo: ripeteva la
     *Targhetta CE impianto* del cavalletto.
   - **Le matricole dei motori seguono il numero dichiarato** (`limitBy`):

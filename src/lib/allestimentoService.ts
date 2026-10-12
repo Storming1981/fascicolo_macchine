@@ -118,7 +118,34 @@ export async function ensureSheetComponents(machineId: string): Promise<number> 
       if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) throw e;
     }
   }
-  return created;
+  return created + (await ensureSheetSlots(machineId, groups));
+}
+
+/**
+ * Slot mancanti sui gruppi gia' presenti. La definizione di un gruppo puo'
+ * crescere (gli alberi sono due, non uno) e senza questo i fascicoli aperti
+ * prima resterebbero con gli slot di allora. Aggiunge solo in coda: gli slot
+ * aggiunti a mano da un operatore (API component-item) non si toccano.
+ */
+async function ensureSheetSlots(machineId: string, groupIds: string[]): Promise<number> {
+  const comps = await prisma.component.findMany({
+    where: { machineId, groupId: { in: groupIds } },
+    select: { id: true, groupId: true, items: { orderBy: { position: "asc" }, select: { id: true, position: true, label: true } } },
+  });
+  let added = 0;
+  for (const c of comps) {
+    const g = COMPONENT_GROUPS.find((x) => x.id === c.groupId);
+    if (!g) continue;
+    // lo slot unico dell'albero si chiamava "Albero": col secondo prende il numero
+    const unnamed = c.groupId === "shaft" ? c.items.find((i) => i.label === "Albero") : undefined;
+    if (unnamed) await prisma.componentItem.update({ where: { id: unnamed.id }, data: { label: g.slots[0] } });
+    if (c.items.length >= g.slots.length) continue;
+    const next = c.items.reduce((m, i) => Math.max(m, i.position), -1) + 1;
+    const missing = g.slots.slice(c.items.length).map((label, i) => ({ componentId: c.id, position: next + i, label }));
+    await prisma.componentItem.createMany({ data: missing });
+    added += missing.length;
+  }
+  return added;
 }
 
 /**
