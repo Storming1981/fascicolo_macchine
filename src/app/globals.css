@@ -322,6 +322,15 @@ img.user-avatar.small { object-fit: cover; }
 .hours-seg { height: 100%; min-width: 2px; }
 .hours-sub { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin: 16px 0 4px; }
 .hours-table td.mono { white-space: nowrap; }
+/* Intestazione cliccabile dell'ordine di produzione: apre le timbrature */
+.order-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 8px; padding: 5px 8px; margin: 0 -8px; cursor: pointer; font: inherit; }
+.order-head:hover:not(:disabled) { background: var(--hover); border-color: var(--border); }
+.order-head:disabled { cursor: default; }
+.order-head-cta { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+/* Barra proporzionale delle ore per operatore */
+.op-bar { margin-top: 5px; height: 4px; border-radius: 3px; background: var(--border); overflow: hidden; max-width: 180px; }
+.op-bar span { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.modal-wide { width: min(880px, 96vw); }
 .hours-link { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--bg); border: 1px solid var(--border); color: var(--text-2); white-space: nowrap; }
 .hours-link.descrizione { background: #fdf3e3; border-color: #f7dfb5; color: #b45309; }
 .hours-months { display: flex; align-items: flex-end; gap: 3px; height: 72px; padding-top: 4px; overflow-x: auto; }

@@ -33,6 +33,22 @@ type SnapArticle = {
   start: string | null;
   end: string | null;
 };
+type SnapOperator = {
+  name: string;
+  hours: number;
+  rows: number;
+  start: string | null;
+  end: string | null;
+  center: string | null;
+};
+type SnapEntry = {
+  operator: string | null;
+  center: string | null;
+  work: string | null;
+  start: string | null;
+  end: string | null;
+  hours: number;
+};
 type SnapOrderData = {
   key: string;
   found: boolean;
@@ -44,6 +60,8 @@ type SnapOrderData = {
   start: string | null;
   end: string | null;
   articles: SnapArticle[];
+  operators?: SnapOperator[];
+  entries?: SnapEntry[];
 };
 type Snapshot = { jobs?: SnapJob[]; orders?: { role: string; data: SnapOrderData }[] };
 
@@ -115,9 +133,14 @@ export async function computeErpFromSnapshot(id: string): Promise<ComputedErp | 
         start: row.start ? row.start.toISOString() : null,
         end: row.end ? row.end.toISOString() : null,
         articles: Array.isArray(row.articles) ? (row.articles as unknown as SnapArticle[]) : [],
+        operators: Array.isArray(row.operators) ? (row.operators as unknown as SnapOperator[]) : [],
+        entries: Array.isArray(row.entries) ? (row.entries as unknown as SnapEntry[]) : [],
       };
     } else {
-      data = { key: s.key, found: false, tipork: "", anno: 0, serie: "", num: 0, hours: 0, start: null, end: null, articles: [] };
+      data = {
+        key: s.key, found: false, tipork: "", anno: 0, serie: "", num: 0,
+        hours: 0, start: null, end: null, articles: [], operators: [], entries: [],
+      };
     }
     return { role: s.role, data };
   });

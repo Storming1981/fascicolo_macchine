@@ -1101,6 +1101,27 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
     999999999, articoli per ordine e *Applica date*. `production.commesse` /
     `production.orders` / `production.hasProduction` arrivano dalla stessa API
     delle ore, quindi la card fa **una chiamata sola**.
+  - **Un clic sull'ordine apre le sue timbrature** (`OrderTimbratureModal` in
+    `HoursAnalysisCard.tsx`): riquadro sopra la card, sfondo sfocato, tabella
+    **per operatore** (centro di lavoro, periodo, n. timbrature, ore con barra
+    proporzionale) più l'elenco cronologico delle singole timbrature. Risponde
+    alla domanda che la riga delle ore non risolveva: *di quelle 32 h, chi ha
+    fatto cosa*. Esempio H/2026/557: 5 operatori fra MONTAGGIO TRITURATORI e
+    VERNICIATURA, 13 timbrature.
+    - **Non carica niente al clic**: operatori e timbrature arrivano con la card
+      (`ErpOrder.operators` / `.entries` in `hoursAnalysis.ts`), perché sulla
+      VPS il gestionale non è raggiungibile e un fetch a clic fatto non
+      avrebbe nessuno a cui chiedere. Lato gestionale li calcola
+      `getOrderData` (`GROUP BY avlavp.lce_codcope` + TOP 300 righe per data),
+      lato sync-agent `getCommessaOrderTimbrature` li spinge per **tutti** gli
+      ordini della commessa insieme agli articoli (colonne `operators` /
+      `entries` su `ErpCommessaOrder`), con tetto di 300 timbrature per ordine.
+    - L'intestazione di un ordine **senza timbrature non è cliccabile**: il
+      lavoro non è partito e non c'è niente da distribuire.
+    - L'operatore è quello scritto sulla timbratura (`lce_descope`): a volte una
+      persona ("GIACOMINI MATTIA"), a volte una postazione
+      ("MATRICOLA 3 - MTG"). Si mostra come sta nel gestionale, senza provare a
+      ricondurlo a un utente dell'app.
   - **Fascicolo appena creato**: sulla VPS il gestionale non è raggiungibile e i
     dati arrivano col sync-agent (una o due volte al giorno). Finché non passa,
     la card dice che il fascicolo è nuovo e che i dati arriveranno col prossimo

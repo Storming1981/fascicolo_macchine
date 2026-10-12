@@ -60,6 +60,8 @@ export async function POST(req: Request) {
       rows: n(o.rows),
       articleCount: n(o.articleCount),
       articles: Array.isArray(o.articles) ? (o.articles as object[]) : undefined,
+      operators: Array.isArray(o.operators) ? (o.operators as object[]) : undefined,
+      entries: Array.isArray(o.entries) ? (o.entries as object[]) : undefined,
     }));
 
   // replace: cancella gli ordini della commessa e reinserisce

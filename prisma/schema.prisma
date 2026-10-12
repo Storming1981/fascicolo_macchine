@@ -391,6 +391,10 @@ model ErpCommessaOrder {
   // Articoli dell'ordine [{code, desc, hours, rows, start, end}]: senza, il
   // dettaglio compariva solo per gli ordini gia' selezionati al sync precedente.
   articles        Json?
+  // Chi ha timbrato e quando [{name, hours, rows, start, end, center}] + le
+  // singole timbrature: la VPS non puo' chiederle al gestionale a clic fatto.
+  operators       Json?
+  entries         Json?
   updatedAt       DateTime  @updatedAt
 
   @@unique([commessa, key])

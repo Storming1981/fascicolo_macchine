@@ -353,6 +353,81 @@ export interface ErpOrder {
   orderDate: Date | null;
 }
 
+/** Chi ha timbrato e le singole timbrature, per tutti gli ordini di una commessa. */
+export async function getCommessaOrderTimbrature(commessa: number): Promise<{
+  operators: Map<string, { name: string; hours: number; rows: number; start: Date | null; end: Date | null; center: string | null }[]>;
+  entries: Map<string, { operator: string | null; center: string | null; work: string | null; start: Date | null; end: Date | null; hours: number }[]>;
+}> {
+  const pool = await getPool();
+
+  const ops = await pool
+    .request()
+    .input('c', sql.Int, commessa)
+    .query<{
+      anno: number; serie: string | null; num: number;
+      nome: string | null; ore: number | null; n: number;
+      s: Date | null; e: Date | null; centro: string | null;
+    }>(`
+      SELECT lce_oranno AS anno, LTRIM(RTRIM(lce_orserie)) AS serie, lce_ornum AS num,
+             MAX(lce_descope) AS nome, SUM(lce_tempese) AS ore, COUNT(*) AS n,
+             MIN(lce_start) AS s, MAX(lce_stop) AS e, MAX(lce_descent) AS centro
+      FROM avlavp
+      WHERE lce_commeca = @c AND lce_ortipo = 'H'
+      GROUP BY lce_oranno, LTRIM(RTRIM(lce_orserie)), lce_ornum, lce_codcope
+      ORDER BY lce_oranno DESC, lce_ornum DESC, SUM(lce_tempese) DESC;
+    `);
+
+  const ent = await pool
+    .request()
+    .input('c', sql.Int, commessa)
+    .query<{
+      anno: number; serie: string | null; num: number;
+      nome: string | null; centro: string | null; lavoro: string | null;
+      s: Date | null; e: Date | null; ore: number | null;
+    }>(`
+      SELECT lce_oranno AS anno, LTRIM(RTRIM(lce_orserie)) AS serie, lce_ornum AS num,
+             lce_descope AS nome, lce_descent AS centro, lce_deslavo AS lavoro,
+             lce_start AS s, lce_stop AS e, lce_tempese AS ore
+      FROM avlavp
+      WHERE lce_commeca = @c AND lce_ortipo = 'H'
+      ORDER BY lce_oranno DESC, lce_ornum DESC, lce_start;
+    `);
+
+  const operators = new Map<string, { name: string; hours: number; rows: number; start: Date | null; end: Date | null; center: string | null }[]>();
+  for (const o of ops.recordset) {
+    const key = buildOrderKey('H', o.anno, (o.serie ?? '').trim(), o.num);
+    const list = operators.get(key) ?? [];
+    list.push({
+      name: o.nome?.trim() || '—',
+      hours: o.ore ?? 0,
+      rows: o.n ?? 0,
+      start: realDate(o.s),
+      end: realDate(o.e),
+      center: o.centro?.trim() || null,
+    });
+    operators.set(key, list);
+  }
+
+  const entries = new Map<string, { operator: string | null; center: string | null; work: string | null; start: Date | null; end: Date | null; hours: number }[]>();
+  for (const t of ent.recordset) {
+    const key = buildOrderKey('H', t.anno, (t.serie ?? '').trim(), t.num);
+    const list = entries.get(key) ?? [];
+    // tetto per ordine: il riquadro mostra l'andamento, non il libro mastro
+    if (list.length >= 300) continue;
+    list.push({
+      operator: t.nome?.trim() || null,
+      center: t.centro?.trim() || null,
+      work: t.lavoro?.trim() || null,
+      start: realDate(t.s),
+      end: realDate(t.e),
+      hours: t.ore ?? 0,
+    });
+    entries.set(key, list);
+  }
+
+  return { operators, entries };
+}
+
 /** Articoli lavorati per ordine, per tutti gli ordini di una commessa. */
 export async function getCommessaOrderArticles(
   commessa: number,

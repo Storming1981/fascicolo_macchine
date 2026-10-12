@@ -441,6 +441,26 @@ export type ErpOrderArticle = {
   end: Date | null;
 };
 
+/** Chi ha timbrato su un ordine (lce_codcope: a volte una persona, a volte una postazione). */
+export type ErpOrderOperator = {
+  name: string;
+  hours: number;
+  rows: number;
+  start: Date | null;
+  end: Date | null;
+  center: string | null;
+};
+
+/** Singola timbratura di avanzamento su un ordine. */
+export type ErpOrderEntry = {
+  operator: string | null;
+  center: string | null;
+  work: string | null;
+  start: Date | null;
+  end: Date | null;
+  hours: number;
+};
+
 export type ErpOrderData = {
   key: string;
   found: boolean;
@@ -452,6 +472,8 @@ export type ErpOrderData = {
   start: Date | null;
   end: Date | null;
   articles: ErpOrderArticle[];
+  operators: ErpOrderOperator[];
+  entries: ErpOrderEntry[];
 };
 
 /** Dati di produzione di uno specifico ordine (ore, date, articoli). */
@@ -478,7 +500,7 @@ export async function getOrderData(orderKey: string): Promise<ErpOrderData | nul
     return {
       key: orderKey, found: false,
       tipork: k.tipork, anno: k.anno, serie: k.serie, num: k.num,
-      hours: 0, start: null, end: null, articles: [],
+      hours: 0, start: null, end: null, articles: [], operators: [], entries: [],
     };
   }
 
@@ -505,6 +527,39 @@ export async function getOrderData(orderKey: string): Promise<ErpOrderData | nul
       ORDER BY SUM(lce_tempese) DESC;
     `);
 
+  // Chi ha timbrato (lce_codcope) e le singole timbrature: alimentano il
+  // riquadro "timbrature per operatore" aperto dalla card Analisi ore.
+  const ops = await pool
+    .request()
+    .input("t", SQL.VarChar, k.tipork)
+    .input("y", SQL.Int, k.anno)
+    .input("s", SQL.VarChar, k.serie)
+    .input("n", SQL.Int, k.num)
+    .query<{ nome: string | null; ore: number | null; n: number; s: Date | null; e: Date | null; centro: string | null }>(`
+      SELECT MAX(lce_descope) AS nome, SUM(lce_tempese) AS ore, COUNT(*) AS n,
+             MIN(lce_start) AS s, MAX(lce_stop) AS e, MAX(lce_descent) AS centro
+      FROM avlavp
+      WHERE lce_ortipo = @t AND lce_oranno = @y
+        AND LTRIM(RTRIM(lce_orserie)) = @s AND lce_ornum = @n
+      GROUP BY lce_codcope
+      ORDER BY SUM(lce_tempese) DESC;
+    `);
+
+  const ent = await pool
+    .request()
+    .input("t", SQL.VarChar, k.tipork)
+    .input("y", SQL.Int, k.anno)
+    .input("s", SQL.VarChar, k.serie)
+    .input("n", SQL.Int, k.num)
+    .query<{ nome: string | null; centro: string | null; lavoro: string | null; s: Date | null; e: Date | null; ore: number | null }>(`
+      SELECT TOP 300 lce_descope AS nome, lce_descent AS centro, lce_deslavo AS lavoro,
+             lce_start AS s, lce_stop AS e, lce_tempese AS ore
+      FROM avlavp
+      WHERE lce_ortipo = @t AND lce_oranno = @y
+        AND LTRIM(RTRIM(lce_orserie)) = @s AND lce_ornum = @n
+      ORDER BY lce_start;
+    `);
+
   return {
     key: orderKey, found: true,
     tipork: k.tipork, anno: k.anno, serie: k.serie, num: k.num,
@@ -518,6 +573,22 @@ export async function getOrderData(orderKey: string): Promise<ErpOrderData | nul
       rows: x.n ?? 0,
       start: x.s ?? null,
       end: x.e ?? null,
+    })),
+    operators: ops.recordset.map((x) => ({
+      name: x.nome?.trim() || "—",
+      hours: x.ore ?? 0,
+      rows: x.n ?? 0,
+      start: x.s ?? null,
+      end: x.e ?? null,
+      center: x.centro?.trim() || null,
+    })),
+    entries: ent.recordset.map((x) => ({
+      operator: x.nome?.trim() || null,
+      center: x.centro?.trim() || null,
+      work: x.lavoro?.trim() || null,
+      start: x.s ?? null,
+      end: x.e ?? null,
+      hours: x.ore ?? 0,
     })),
   };
 }

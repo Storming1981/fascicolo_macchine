@@ -63,6 +63,10 @@ export type ErpOrder = {
   start: string | null;
   end: string | null;
   articles: { code: string | null; desc: string | null; hours: number; rows: number }[];
+  /** Chi ha timbrato sull'ordine (riquadro "timbrature per operatore"). */
+  operators: { name: string; hours: number; rows: number; start: string | null; end: string | null; center: string | null }[];
+  /** Le singole timbrature, in ordine di tempo. */
+  entries: { operator: string | null; center: string | null; work: string | null; start: string | null; end: string | null; hours: number }[];
 };
 
 export type HoursAnalysis = {
@@ -159,6 +163,14 @@ async function productionHours(machine: {
       start: Date | string | null;
       end: Date | string | null;
       articles: { code: string | null; desc: string | null; hours: number; rows: number }[];
+      operators?: {
+        name: string; hours: number; rows: number;
+        start: Date | string | null; end: Date | string | null; center: string | null;
+      }[];
+      entries?: {
+        operator: string | null; center: string | null; work: string | null;
+        start: Date | string | null; end: Date | string | null; hours: number;
+      }[];
     };
   };
   type Src = {
@@ -210,6 +222,22 @@ async function productionHours(machine: {
         start: iso(o.data.start),
         end: iso(o.data.end),
         articles: o.data.articles.map((a) => ({ ...a, hours: r1(a.hours) })),
+        operators: (o.data.operators ?? []).map((p) => ({
+          name: p.name,
+          hours: r1(p.hours),
+          rows: p.rows,
+          start: iso(p.start),
+          end: iso(p.end),
+          center: p.center,
+        })),
+        entries: (o.data.entries ?? []).map((t) => ({
+          operator: t.operator,
+          center: t.center,
+          work: t.work,
+          start: iso(t.start),
+          end: iso(t.end),
+          hours: r1(t.hours),
+        })),
       })),
     hasProduction: d.hasProduction,
   });

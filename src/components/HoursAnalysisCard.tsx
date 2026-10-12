@@ -14,6 +14,8 @@ import type { HoursAnalysis, SiteLink } from "@/lib/hoursAnalysis";
  * produzione e «Applica date», che la card gestionale aveva di suo.
  */
 
+type ErpOrderDto = HoursAnalysis["production"]["orders"][number];
+
 const LINK_LABEL: Record<SiteLink, string> = {
   job: "Job",
   cantiere: "Commessa cantiere",
@@ -87,6 +89,8 @@ export default function HoursAnalysisCard({
   const [refreshing, setRefreshing] = useState(false);
   const [applying, setApplying] = useState(false);
   const [showOps, setShowOps] = useState(false);
+  // ordine di cui si stanno guardando le timbrature (riquadro sopra la card)
+  const [orderOpen, setOrderOpen] = useState<ErpOrderDto | null>(null);
 
   async function load(method: "GET" | "POST" = "GET") {
     if (method === "POST") setRefreshing(true);
@@ -307,16 +311,34 @@ export default function HoursAnalysisCard({
           {/* Articoli degli ordini selezionati */}
           {p.orders.map((o) => (
             <div key={o.role + o.key} style={{ marginTop: 12 }}>
-              <div className="muted small" style={{ fontWeight: 600 }}>
-                Articoli ordine {o.role} — {o.tipork}/{o.anno}/{o.num}
-                {o.articles.length > 0 || o.hours > 0 ? (
-                  <>
-                    {" · "}
-                    {h(o.hours)} · {o.start ? fmtDate(o.start) : "—"} →{" "}
-                    {o.end ? fmtDate(o.end) : "—"}
-                  </>
-                ) : null}
-              </div>
+              <button
+                type="button"
+                className="order-head"
+                onClick={() => o.entries.length > 0 && setOrderOpen(o)}
+                disabled={o.entries.length === 0}
+                title={
+                  o.entries.length > 0
+                    ? "Apri le timbrature per operatore"
+                    : "Nessuna timbratura su questo ordine"
+                }
+              >
+                <span className="muted small" style={{ fontWeight: 600 }}>
+                  Articoli ordine {o.role} — {o.tipork}/{o.anno}/{o.num}
+                  {o.articles.length > 0 || o.hours > 0 ? (
+                    <>
+                      {" · "}
+                      {h(o.hours)} · {o.start ? fmtDate(o.start) : "—"} →{" "}
+                      {o.end ? fmtDate(o.end) : "—"}
+                    </>
+                  ) : null}
+                </span>
+                {o.entries.length > 0 && (
+                  <span className="order-head-cta">
+                    <Icon name="people" size={13} /> {o.operators.length} operatori ·{" "}
+                    {o.entries.length} timbrature
+                  </span>
+                )}
+              </button>
               {o.articles.length === 0 ? (
                 <p className="muted small" style={{ margin: "4px 0 0" }}>
                   Nessuna timbratura su questo ordine: è aperto nel gestionale ma il lavoro non è
@@ -348,6 +370,8 @@ export default function HoursAnalysisCard({
               )}
             </div>
           ))}
+
+          {orderOpen && <OrderTimbratureModal order={orderOpen} onClose={() => setOrderOpen(null)} />}
 
           {/* Cantiere: commesse del timbratore agganciate al fascicolo */}
           <div className="hours-sub">Cantiere · timbratore</div>
@@ -563,6 +587,130 @@ function OrderPicker({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+
+/**
+ * Timbrature di un ordine di produzione: chi ci ha lavorato e quando.
+ * Si apre dalla card Analisi ore cliccando l'intestazione dell'ordine; i dati
+ * arrivano già con la card (la VPS non può interrogare il gestionale a clic
+ * fatto), quindi il riquadro non carica nulla.
+ */
+function OrderTimbratureModal({ order, onClose }: { order: ErpOrderDto; onClose: () => void }) {
+  const [detail, setDetail] = useState(false);
+  const maxHours = Math.max(...order.operators.map((o) => o.hours), 0.01);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h2>
+              Timbrature ordine {order.tipork}/{order.anno}/{order.num}
+            </h2>
+            <p className="muted small" style={{ margin: "4px 0 0" }}>
+              {order.role} · {order.articles[0]?.desc ?? order.articles[0]?.code ?? "—"} ·{" "}
+              {h(order.hours)}
+              {order.start ? ` · ${fmtDate(order.start)} → ${order.end ? fmtDate(order.end) : "in corso"}` : ""}
+            </p>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Chiudi">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div>
+            <div className="hours-sub" style={{ marginTop: 0 }}>
+              Per operatore ({order.operators.length})
+            </div>
+            <div className="table-wrap">
+              <table className="erp-jobs hours-table">
+                <thead>
+                  <tr>
+                    <th>Operatore</th>
+                    <th>Centro di lavoro</th>
+                    <th>Periodo</th>
+                    <th style={{ textAlign: "right" }}>Timbr.</th>
+                    <th style={{ textAlign: "right" }}>Ore</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {order.operators.map((p) => (
+                    <tr key={p.name + (p.center ?? "")}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{p.name}</div>
+                        {/* barra proporzionale: si vede a colpo d'occhio chi ha fatto il grosso */}
+                        <div className="op-bar">
+                          <span style={{ width: `${Math.round((p.hours / maxHours) * 100)}%` }} />
+                        </div>
+                      </td>
+                      <td className="muted small">{p.center ?? "—"}</td>
+                      <td className="muted small">
+                        {p.start ? fmtDate(p.start) : "—"} → {p.end ? fmtDate(p.end) : "—"}
+                      </td>
+                      <td className="mono" style={{ textAlign: "right" }}>
+                        {p.rows}
+                      </td>
+                      <td className="mono" style={{ textAlign: "right" }}>
+                        {h(p.hours)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <button className="btn-ghost-sm" onClick={() => setDetail((v) => !v)}>
+              <Icon name={detail ? "chev-down" : "chev-right"} size={13} />
+              {detail ? "Nascondi" : "Mostra"} le singole timbrature ({order.entries.length})
+            </button>
+            {detail && (
+              <div className="table-wrap" style={{ marginTop: 8 }}>
+                <table className="erp-jobs hours-table">
+                  <thead>
+                    <tr>
+                      <th>Operatore</th>
+                      <th>Lavorazione</th>
+                      <th>Inizio</th>
+                      <th>Fine</th>
+                      <th style={{ textAlign: "right" }}>Ore</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.entries.map((t, i) => (
+                      <tr key={i}>
+                        <td>{t.operator ?? "—"}</td>
+                        <td className="muted small">{t.center ?? t.work ?? "—"}</td>
+                        <td className="mono small">{t.start ? fmtDateTime(t.start) : "—"}</td>
+                        <td className="mono small">{t.end ? fmtDateTime(t.end) : "in corso"}</td>
+                        <td className="mono" style={{ textAlign: "right" }}>
+                          {h(t.hours)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <p className="muted small" style={{ margin: 0 }}>
+            Dati del gestionale (avanzamento lavorazioni `avlavp`): l'operatore è quello registrato
+            sulla timbratura, a volte una persona e a volte una postazione.
+          </p>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn-ghost" onClick={onClose}>
+            Chiudi
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

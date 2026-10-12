@@ -28,6 +28,7 @@ import {
   getAllCustomers,
   getCommessaOrders,
   getCommessaOrderArticles,
+  getCommessaOrderTimbrature,
   getMachineErpData,
   testConnection,
   GENERIC_COMMESSA,
@@ -301,6 +302,7 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
     // articoli di TUTTI gli ordini, non solo di quelli gia' selezionati: la VPS
     // non puo' interrogare il gestionale quando si cambia ordine nel fascicolo
     const genArticles = await getCommessaOrderArticles(GENERIC_COMMESSA);
+    const genTimbr = await getCommessaOrderTimbrature(GENERIC_COMMESSA);
     const payload = genOrders.map((o) => ({
       key: o.key,
       tipork: o.tipork,
@@ -322,6 +324,22 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
         rows: a.rows,
         start: iso(a.start),
         end: iso(a.end),
+      })),
+      operators: (genTimbr.operators.get(o.key) ?? []).map((p) => ({
+        name: p.name,
+        hours: p.hours,
+        rows: p.rows,
+        start: iso(p.start),
+        end: iso(p.end),
+        center: p.center,
+      })),
+      entries: (genTimbr.entries.get(o.key) ?? []).map((t) => ({
+        operator: t.operator,
+        center: t.center,
+        work: t.work,
+        start: iso(t.start),
+        end: iso(t.end),
+        hours: t.hours,
       })),
     }));
     const oResp = await pushOrders(GENERIC_COMMESSA, payload);
