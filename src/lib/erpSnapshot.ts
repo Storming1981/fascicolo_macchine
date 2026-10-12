@@ -102,6 +102,8 @@ export async function computeErpFromSnapshot(id: string): Promise<ComputedErp | 
     if (snapData) {
       data = snapData;
     } else if (row) {
+      // ore/date fresche + articoli dalla copia: senza, scegliendo un ordine
+      // nuovo il dettaglio restava vuoto fino al sync successivo
       data = {
         key: row.key,
         found: true,
@@ -112,7 +114,7 @@ export async function computeErpFromSnapshot(id: string): Promise<ComputedErp | 
         hours: row.hours,
         start: row.start ? row.start.toISOString() : null,
         end: row.end ? row.end.toISOString() : null,
-        articles: [],
+        articles: Array.isArray(row.articles) ? (row.articles as unknown as SnapArticle[]) : [],
       };
     } else {
       data = { key: s.key, found: false, tipork: "", anno: 0, serie: "", num: 0, hours: 0, start: null, end: null, articles: [] };

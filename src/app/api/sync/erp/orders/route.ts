@@ -59,6 +59,7 @@ export async function POST(req: Request) {
       end: toDate(o.end),
       rows: n(o.rows),
       articleCount: n(o.articleCount),
+      articles: Array.isArray(o.articles) ? (o.articles as object[]) : undefined,
     }));
 
   // replace: cancella gli ordini della commessa e reinserisce

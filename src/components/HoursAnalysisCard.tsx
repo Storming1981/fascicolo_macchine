@@ -308,9 +308,21 @@ export default function HoursAnalysisCard({
           {p.orders.map((o) => (
             <div key={o.role + o.key} style={{ marginTop: 12 }}>
               <div className="muted small" style={{ fontWeight: 600 }}>
-                Articoli ordine {o.role} — {o.tipork}/{o.anno}/{o.num} · {h(o.hours)} ·{" "}
-                {o.start ? fmtDate(o.start) : "—"} → {o.end ? fmtDate(o.end) : "—"}
+                Articoli ordine {o.role} — {o.tipork}/{o.anno}/{o.num}
+                {o.articles.length > 0 || o.hours > 0 ? (
+                  <>
+                    {" · "}
+                    {h(o.hours)} · {o.start ? fmtDate(o.start) : "—"} →{" "}
+                    {o.end ? fmtDate(o.end) : "—"}
+                  </>
+                ) : null}
               </div>
+              {o.articles.length === 0 ? (
+                <p className="muted small" style={{ margin: "4px 0 0" }}>
+                  Nessuna timbratura su questo ordine: è aperto nel gestionale ma il lavoro non è
+                  ancora partito.
+                </p>
+              ) : (
               <div className="table-wrap">
                 <table className="erp-jobs hours-table">
                   <thead>
@@ -333,6 +345,7 @@ export default function HoursAnalysisCard({
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
           ))}
 

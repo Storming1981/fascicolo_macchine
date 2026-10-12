@@ -353,6 +353,52 @@ export interface ErpOrder {
   orderDate: Date | null;
 }
 
+/** Articoli lavorati per ordine, per tutti gli ordini di una commessa. */
+export async function getCommessaOrderArticles(
+  commessa: number,
+): Promise<Map<string, { code: string | null; desc: string | null; hours: number; rows: number; start: Date | null; end: Date | null }[]>> {
+  const pool = await getPool();
+  const r = await pool
+    .request()
+    .input('c', sql.Int, commessa)
+    .query<{
+      anno: number;
+      serie: string | null;
+      num: number;
+      code: string | null;
+      descr: string | null;
+      ore: number | null;
+      n: number;
+      s: Date | null;
+      e: Date | null;
+    }>(`
+      SELECT lce_oranno AS anno, LTRIM(RTRIM(lce_orserie)) AS serie, lce_ornum AS num,
+             lce_codart AS code, lce_desart AS descr,
+             SUM(lce_tempese) AS ore, COUNT(*) AS n,
+             MIN(lce_start) AS s, MAX(lce_stop) AS e
+      FROM avlavp
+      WHERE lce_commeca = @c AND lce_ortipo = 'H'
+      GROUP BY lce_oranno, LTRIM(RTRIM(lce_orserie)), lce_ornum, lce_codart, lce_desart
+      ORDER BY lce_oranno DESC, lce_ornum DESC, SUM(lce_tempese) DESC;
+    `);
+
+  const byOrder = new Map<string, { code: string | null; desc: string | null; hours: number; rows: number; start: Date | null; end: Date | null }[]>();
+  for (const a of r.recordset) {
+    const key = buildOrderKey('H', a.anno, (a.serie ?? '').trim(), a.num);
+    const list = byOrder.get(key) ?? [];
+    list.push({
+      code: a.code?.trim() || null,
+      desc: a.descr?.trim() || null,
+      hours: a.ore ?? 0,
+      rows: a.n ?? 0,
+      start: realDate(a.s),
+      end: realDate(a.e),
+    });
+    byOrder.set(key, list);
+  }
+  return byOrder;
+}
+
 /**
  * Elenco ordini di produzione (tipork 'H') di una commessa.
  * Si parte dall'anagrafica ordini (testord): leggendo solo l'avanzamento

@@ -92,6 +92,16 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   ("tipork|anno|serie|numero"). API: `GET /api/erp/commessa/[commeca]/orders`.
   UI: tendina **Ordine Corpo / Ordine Container** nella card ERP + tabella
   articoli per ordine selezionato.
+- **Gli articoli di un ordine non aspettano il sync successivo.** La VPS
+  mostrava il dettaglio articoli solo per gli ordini che erano **gia'
+  selezionati** quando l'agent aveva girato (stavano nello snapshot): sceglieva
+  un ordine nuovo e la tabella restava vuota pur avendo le ore (H/2026/536:
+  5h 16m in testata, zero righe). Ora l'agent manda gli articoli di **tutti** gli
+  ordini della commessa generica (`getCommessaOrderArticles`, una query sola
+  raggruppata per ordine+articolo) e li salva in `ErpCommessaOrder.articles`;
+  `erpSnapshot` li usa quando l'ordine non e' nello snapshot. Un ordine senza
+  timbrature non mostra piu' una tabella vuota ma lo dice: *"e' aperto nel
+  gestionale ma il lavoro non e' ancora partito"*.
 - **L'elenco ordini parte dall'anagrafica, non dalle timbrature**
   (`getCommessaOrders`): si leggeva solo `avlavp`, quindi un ordine su cui
   nessuno aveva ancora timbrato **non esisteva** per il fascicolo — sulla

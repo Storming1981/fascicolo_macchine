@@ -27,6 +27,7 @@ import {
   getAllArticles,
   getAllCustomers,
   getCommessaOrders,
+  getCommessaOrderArticles,
   getMachineErpData,
   testConnection,
   GENERIC_COMMESSA,
@@ -297,6 +298,9 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
   try {
     log('Ordini di produzione commessa generica ...');
     const genOrders = await getCommessaOrders(GENERIC_COMMESSA);
+    // articoli di TUTTI gli ordini, non solo di quelli gia' selezionati: la VPS
+    // non puo' interrogare il gestionale quando si cambia ordine nel fascicolo
+    const genArticles = await getCommessaOrderArticles(GENERIC_COMMESSA);
     const payload = genOrders.map((o) => ({
       key: o.key,
       tipork: o.tipork,
@@ -311,6 +315,14 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
       end: iso(o.end),
       rows: o.rows,
       articleCount: o.articleCount,
+      articles: (genArticles.get(o.key) ?? []).map((a) => ({
+        code: a.code,
+        desc: a.desc,
+        hours: a.hours,
+        rows: a.rows,
+        start: iso(a.start),
+        end: iso(a.end),
+      })),
     }));
     const oResp = await pushOrders(GENERIC_COMMESSA, payload);
     log(`  ordini commessa ${GENERIC_COMMESSA}: ${oResp.count} sincronizzati`);
