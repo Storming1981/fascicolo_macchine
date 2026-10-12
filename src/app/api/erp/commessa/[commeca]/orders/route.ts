@@ -28,6 +28,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ commeca: strin
       anno: o.anno,
       serie: o.serie,
       num: o.num,
+      orderDate: o.orderDate ? o.orderDate.toISOString() : null,
       mainArticleCode: o.mainArticleCode,
       mainArticleDesc: o.mainArticleDesc,
       hours: o.hours,

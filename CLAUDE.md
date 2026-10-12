@@ -92,6 +92,21 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   ("tipork|anno|serie|numero"). API: `GET /api/erp/commessa/[commeca]/orders`.
   UI: tendina **Ordine Corpo / Ordine Container** nella card ERP + tabella
   articoli per ordine selezionato.
+- **L'elenco ordini parte dall'anagrafica, non dalle timbrature**
+  (`getCommessaOrders`): si leggeva solo `avlavp`, quindi un ordine su cui
+  nessuno aveva ancora timbrato **non esisteva** per il fascicolo — sulla
+  commessa di stock 999999999 se ne vedevano **113 invece di 484**, e un corpo
+  appena aperto (H/2026/534, 535) non era selezionabile. Ora la query parte da
+  `testord` (tipork 'H', `td_commeca`) e ci attacca l'avanzamento di `avlavp`:
+  ore, date e n. timbrature restano quelle vere (0 se il lavoro non e' partito) e
+  l'articolo principale e' quello con piu' ore, **oppure la prima riga
+  dell'ordine** (`movord`) per chi non ha ancora avanzamento. Restano inclusi i
+  pochi ordini (5 su 484) che hanno timbrature sulla commessa pur avendone
+  un'altra in testata, via UNION sulle chiavi. Nuovo campo `orderDate` fino alla
+  tendina, che mostra "aperto il gg-mm-aaaa" al posto delle ore quando sono zero.
+  **La stessa query sta nel sync-agent** (`sync-agent/src/erp.ts`): la VPS legge
+  la copia `ErpCommessaOrder`, quindi finche' l'agent non viene aggiornato sul
+  server del gestionale la produzione continua a vedere l'elenco corto.
 - **API**: `GET /api/erp/job/[job]` (dati commessa, `?fasi=1` per il dettaglio
   timbrature); `GET|POST /api/machines/[id]/erp-sync` (anteprima / sync completo
   singola macchina); `POST /api/erp/sync-all` (batch, permesso `machine.import`).

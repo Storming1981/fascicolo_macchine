@@ -313,7 +313,9 @@ export type ErpOrder = {
   anno: number;
   serie: string;
   num: number;
-  /** Articolo con più ore (rappresenta il pezzo prodotto). */
+  /** Data dell'ordine (anagrafica): utile quando non ci sono ancora ore. */
+  orderDate: Date | null;
+  /** Articolo con più ore, o la prima riga dell'ordine se non è ancora partito. */
   mainArticleCode: string | null;
   mainArticleDesc: string | null;
   hours: number;
@@ -327,6 +329,17 @@ export type ErpOrder = {
  * Elenco degli ordini di produzione (tipork 'H') di una commessa, ricavati
  * dalle timbrature in avlavp. La tendina del fascicolo usa questa lista.
  */
+/**
+ * Elenco ordini di produzione (tipork 'H') di una commessa.
+ *
+ * Si parte dall'ANAGRAFICA ordini (`testord`): leggendo solo l'avanzamento
+ * (`avlavp`) gli ordini su cui nessuno ha ancora timbrato non esistevano — sulla
+ * commessa di stock 999999999 significava vederne 113 invece di 484, e un corpo
+ * appena aperto non era selezionabile nel fascicolo. Ore, date e numero di
+ * timbrature restano quelle di `avlavp` (0 se il lavoro non è ancora partito);
+ * l'articolo principale è quello con più ore, oppure la prima riga dell'ordine
+ * per chi non ha ancora avanzamento.
+ */
 export async function getCommessaOrders(commessa: string): Promise<ErpOrder[]> {
   const commeca = jobToCommeca(commessa);
   if (commeca === null) return [];
@@ -336,71 +349,80 @@ export async function getCommessaOrders(commessa: string): Promise<ErpOrder[]> {
     .request()
     .input("c", SQL.Int, commeca)
     .query<{
-      lce_ortipo: string;
-      lce_oranno: number;
-      lce_orserie: string | null;
-      lce_ornum: number;
+      anno: number;
+      serie: string | null;
+      num: number;
+      datord: Date | null;
       n: number;
       ore: number | null;
       s: Date | null;
       e: Date | null;
       art_count: number;
+      code: string | null;
+      descr: string | null;
     }>(`
-      SELECT
-        lce_ortipo, lce_oranno, lce_orserie, lce_ornum,
-        COUNT(*) AS n, SUM(lce_tempese) AS ore,
-        MIN(lce_start) AS s, MAX(lce_stop) AS e,
-        COUNT(DISTINCT lce_codart) AS art_count
-      FROM avlavp
-      WHERE lce_commeca = @c AND lce_ortipo = 'H'
-      GROUP BY lce_ortipo, lce_oranno, lce_orserie, lce_ornum
-      ORDER BY lce_oranno DESC, lce_ornum DESC;
-    `);
-
-  // Articolo principale (max ore) per ciascun ordine
-  const mains = await pool
-    .request()
-    .input("c", SQL.Int, commeca)
-    .query<{
-      lce_ortipo: string;
-      lce_oranno: number;
-      lce_orserie: string | null;
-      lce_ornum: number;
-      lce_codart: string | null;
-      lce_desart: string | null;
-    }>(`
-      WITH x AS (
-        SELECT lce_ortipo, lce_oranno, lce_orserie, lce_ornum, lce_codart, lce_desart,
-          ROW_NUMBER() OVER (
-            PARTITION BY lce_ortipo, lce_oranno, lce_orserie, lce_ornum
-            ORDER BY SUM(lce_tempese) DESC
-          ) AS rn
-        FROM avlavp
-        WHERE lce_commeca = @c AND lce_ortipo = 'H'
-        GROUP BY lce_ortipo, lce_oranno, lce_orserie, lce_ornum, lce_codart, lce_desart
+      WITH av AS (
+        SELECT lce_oranno AS anno, LTRIM(RTRIM(lce_orserie)) AS serie, lce_ornum AS num,
+               COUNT(*) AS n, SUM(lce_tempese) AS ore,
+               MIN(lce_start) AS s, MAX(lce_stop) AS e,
+               COUNT(DISTINCT lce_codart) AS art_count
+        FROM avlavp WHERE lce_commeca = @c AND lce_ortipo = 'H'
+        GROUP BY lce_oranno, LTRIM(RTRIM(lce_orserie)), lce_ornum
+      ), avmain AS (
+        SELECT anno, serie, num, code, descr FROM (
+          SELECT lce_oranno AS anno, LTRIM(RTRIM(lce_orserie)) AS serie, lce_ornum AS num,
+                 lce_codart AS code, lce_desart AS descr,
+                 ROW_NUMBER() OVER (PARTITION BY lce_oranno, LTRIM(RTRIM(lce_orserie)), lce_ornum
+                                    ORDER BY SUM(lce_tempese) DESC) AS rn
+          FROM avlavp WHERE lce_commeca = @c AND lce_ortipo = 'H'
+          GROUP BY lce_oranno, LTRIM(RTRIM(lce_orserie)), lce_ornum, lce_codart, lce_desart
+        ) x WHERE rn = 1
+      ), mo AS (
+        SELECT anno, serie, num, code, descr FROM (
+          SELECT mo_anno AS anno, LTRIM(RTRIM(mo_serie)) AS serie, mo_numord AS num,
+                 mo_codart AS code, mo_descr AS descr,
+                 ROW_NUMBER() OVER (PARTITION BY mo_anno, LTRIM(RTRIM(mo_serie)), mo_numord
+                                    ORDER BY mo_riga) AS rn
+          FROM movord mv
+          WHERE mo_tipork = 'H' AND EXISTS (
+            SELECT 1 FROM testord t WHERE t.td_tipork = 'H' AND t.td_commeca = @c
+              AND t.td_anno = mv.mo_anno AND t.td_numord = mv.mo_numord
+              AND LTRIM(RTRIM(t.td_serie)) = LTRIM(RTRIM(mv.mo_serie))
+          )
+        ) y WHERE rn = 1
+      ), k AS (
+        -- anagrafica + eventuali ordini che hanno timbrature su questa commessa
+        -- pur avendo un'altra commessa in testata (succede: 5 su 484)
+        SELECT anno, serie, num, MAX(datord) AS datord FROM (
+          SELECT td_anno AS anno, LTRIM(RTRIM(td_serie)) AS serie, td_numord AS num, td_datord AS datord
+          FROM testord WHERE td_tipork = 'H' AND td_commeca = @c
+          UNION ALL
+          SELECT anno, serie, num, NULL FROM av
+        ) u GROUP BY anno, serie, num
       )
-      SELECT lce_ortipo, lce_oranno, lce_orserie, lce_ornum, lce_codart, lce_desart
-      FROM x WHERE rn = 1;
+      SELECT k.anno, k.serie, k.num, k.datord,
+             ISNULL(av.n, 0) AS n, ISNULL(av.ore, 0) AS ore, av.s, av.e,
+             ISNULL(av.art_count, 0) AS art_count,
+             COALESCE(avmain.code, mo.code) AS code,
+             COALESCE(avmain.descr, mo.descr) AS descr
+      FROM k
+      LEFT JOIN av ON av.anno = k.anno AND av.serie = k.serie AND av.num = k.num
+      LEFT JOIN avmain ON avmain.anno = k.anno AND avmain.serie = k.serie AND avmain.num = k.num
+      LEFT JOIN mo ON mo.anno = k.anno AND mo.serie = k.serie AND mo.num = k.num
+      ORDER BY k.anno DESC, k.num DESC;
     `);
-
-  const mainBy = new Map<string, { code: string | null; desc: string | null }>();
-  for (const m of mains.recordset) {
-    const key = buildOrderKey(m.lce_ortipo, m.lce_oranno, m.lce_orserie ?? "", m.lce_ornum);
-    mainBy.set(key, { code: m.lce_codart?.trim() || null, desc: m.lce_desart?.trim() || null });
-  }
 
   return r.recordset.map((o) => {
-    const serie = (o.lce_orserie ?? "").trim();
-    const key = buildOrderKey(o.lce_ortipo, o.lce_oranno, serie, o.lce_ornum);
-    const main = mainBy.get(key);
+    const serie = (o.serie ?? "").trim();
     return {
-      key,
-      tipork: o.lce_ortipo,
-      anno: o.lce_oranno,
+      key: buildOrderKey("H", o.anno, serie, o.num),
+      tipork: "H",
+      anno: o.anno,
       serie,
-      num: o.lce_ornum,
-      mainArticleCode: main?.code ?? null,
-      mainArticleDesc: main?.desc ?? null,
+      num: o.num,
+      orderDate: realDate(o.datord),
+      mainArticleCode: o.code?.trim() || null,
+      mainArticleDesc: o.descr?.trim() || null,
       hours: o.ore ?? 0,
       start: o.s ?? null,
       end: o.e ?? null,

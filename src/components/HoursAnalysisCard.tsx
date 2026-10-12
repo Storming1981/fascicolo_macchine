@@ -469,6 +469,7 @@ type ErpOrderOption = {
   num: number;
   mainArticleCode: string | null;
   mainArticleDesc: string | null;
+  orderDate?: string | null;
   hours: number;
 };
 
@@ -541,7 +542,11 @@ function OrderPicker({
         {(orders ?? []).map((o) => (
           <option key={o.key} value={o.key}>
             {o.tipork}/{o.anno}/{o.num} · {o.mainArticleDesc || o.mainArticleCode || "?"} ·{" "}
-            {o.hours.toLocaleString("it-IT", { maximumFractionDigits: 1 })} h
+            {o.hours > 0
+              ? `${o.hours.toLocaleString("it-IT", { maximumFractionDigits: 1 })} h`
+              : o.orderDate
+                ? `aperto il ${fmtDate(o.orderDate)}`
+                : "nessuna timbratura"}
           </option>
         ))}
       </select>

@@ -380,6 +380,7 @@ model ErpCommessaOrder {
   anno            Int
   serie           String    @default("")
   num             Int
+  orderDate       DateTime? // data dell'ordine (anagrafica), per gli ordini senza ore
   mainArticleCode String?
   mainArticleDesc String?
   hours           Float     @default(0)

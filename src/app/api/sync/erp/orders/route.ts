@@ -9,7 +9,8 @@ export const maxDuration = 60;
  * POST /api/sync/erp/orders
  *
  * Riceve dal sync-agent l'elenco ordini di produzione di una commessa (tipork
- * 'H', da avlavp) e sostituisce quelli salvati per quella commessa. Serve alle
+ * 'H', dall'anagrafica testord + avanzamento avlavp) e sostituisce quelli
+ * salvati per quella commessa. Serve alle
  * tendine "Ordine Corpo/Container" degli impianti nuovi (commessa 999999999)
  * quando la VPS non ha connessione diretta al gestionale.
  *
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
       anno: n(o.anno),
       serie: s(o.serie) ?? "",
       num: n(o.num),
+      orderDate: toDate(o.orderDate),
       mainArticleCode: s(o.mainArticleCode),
       mainArticleDesc: s(o.mainArticleDesc),
       hours: n(o.hours),

@@ -303,6 +303,7 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
       anno: o.anno,
       serie: o.serie,
       num: o.num,
+      orderDate: iso(o.orderDate),
       mainArticleCode: o.mainArticleCode,
       mainArticleDesc: o.mainArticleDesc,
       hours: o.hours,
