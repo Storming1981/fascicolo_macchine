@@ -116,9 +116,21 @@ export async function computeErpFromSnapshot(id: string): Promise<ComputedErp | 
     // altrimenti usa ErpCommessaOrder (ore/date fresche, senza articoli).
     const snapData = snapOrdByKey.get(s.key);
     const row = rowByKey.get(s.key);
+    const rowOperators = Array.isArray(row?.operators)
+      ? (row.operators as unknown as SnapOperator[])
+      : [];
+    const rowEntries = Array.isArray(row?.entries) ? (row.entries as unknown as SnapEntry[]) : [];
     let data: SnapOrderData;
     if (snapData) {
-      data = snapData;
+      // Lo snapshot del fascicolo NON porta le timbrature per operatore: le
+      // scrive solo il catalogo degli ordini (ErpCommessaOrder), che l'agent
+      // manda per tutta la commessa in una volta. Senza questa fusione il
+      // riquadro "chi ci ha lavorato" restava vuoto anche a sync appena fatto.
+      data = {
+        ...snapData,
+        operators: snapData.operators?.length ? snapData.operators : rowOperators,
+        entries: snapData.entries?.length ? snapData.entries : rowEntries,
+      };
     } else if (row) {
       // ore/date fresche + articoli dalla copia: senza, scegliendo un ordine
       // nuovo il dettaglio restava vuoto fino al sync successivo
@@ -133,8 +145,8 @@ export async function computeErpFromSnapshot(id: string): Promise<ComputedErp | 
         start: row.start ? row.start.toISOString() : null,
         end: row.end ? row.end.toISOString() : null,
         articles: Array.isArray(row.articles) ? (row.articles as unknown as SnapArticle[]) : [],
-        operators: Array.isArray(row.operators) ? (row.operators as unknown as SnapOperator[]) : [],
-        entries: Array.isArray(row.entries) ? (row.entries as unknown as SnapEntry[]) : [],
+        operators: rowOperators,
+        entries: rowEntries,
       };
     } else {
       data = {

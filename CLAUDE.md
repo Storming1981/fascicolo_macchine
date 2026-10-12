@@ -1116,6 +1116,16 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
       lato sync-agent `getCommessaOrderTimbrature` li spinge per **tutti** gli
       ordini della commessa insieme agli articoli (colonne `operators` /
       `entries` su `ErpCommessaOrder`), con tetto di 300 timbrature per ordine.
+    - **Lo snapshot del fascicolo non le porta, e va bene così**: le timbrature
+      per operatore stanno solo nel **catalogo** `ErpCommessaOrder`, che l'agent
+      riempie per tutta la commessa con **due query** (una per gli operatori,
+      una per le righe). Metterle anche in `buildSnapshot` vorrebbe dire due
+      query **per fascicolo** per un dato che si ha già. Quindi
+      `computeErpFromSnapshot` le **fonde**: lo snapshot per ore, date e
+      articoli, la riga del catalogo per operatori e timbrature. Senza la
+      fusione il riquadro restava vuoto **a sync appena fatto** (prima volta:
+      484 ordini con operatori in banca dati e la card che non mostrava niente,
+      perché lo snapshot ha la precedenza e quei campi non li ha).
     - L'intestazione di un ordine **senza timbrature non è cliccabile**: il
       lavoro non è partito e non c'è niente da distribuire.
     - L'operatore è quello scritto sulla timbratura (`lce_descope`): a volte una
