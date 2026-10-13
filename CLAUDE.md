@@ -547,6 +547,21 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     perse, zeri iniziali tolti, tipo al posto della matricola), Opus 5 10/10.
   - Il primo flusso chiedeva sempre ✓: nessuno lo premeva e il 14/09 10 foto
     su slot sono rimaste senza matricola.
+- **Lotto accanto alla matricola** (`ComponentItem.lot`): su certe targhette
+  punzonate la matricola non basta a identificare il pezzo — i blocchi motore
+  MAGNUM portano `MM104353` e sotto `09/26`, che è la **data di lotto**, e i
+  quattro blocchi di una macchina condividono spesso la stessa matricola. Il
+  lotto è quindi un dato a sé, non un pezzo della matricola.
+  - **Il gruppo dichiara se ce l'ha** (`ComponentGroup.lot.label` in
+    `components.ts`; oggi `motor_blocks` → *Data lotto*): dove non è dichiarato
+    lo slot resta com'era. Un secondo campo su tutti i 2.356 slot sarebbe
+    rumore per riduttori e motori, che un lotto non ce l'hanno.
+  - **L'OCR lo legge dalla stessa foto** (`serialOcr.ts`: campo `lot` nello
+    schema JSON, istruzione sul formato mm/aa): la proposta del lotto **non
+    aspetta la conferma della matricola**, perché non è la matricola e non è
+    soggetta alla regola del "non sovrascrivere".
+  - Finisce anche nel PDF della scheda, accanto alla matricola
+    (`MM104353 · 09/26`), e ogni cambio va a diario.
 - **Miniature nello slot componente**: la colonna Foto di Componenti &
   Matricole mostra l'ultima foto dello slot (clic = apre) con il conteggio
   delle altre; prima la foto finiva solo in Foto produzione perché il loader
@@ -611,6 +626,11 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     altrimenti la scheda resterebbe eternamente incompleta. Il lotto già scritto
     a mano **si sposta sullo slot** alla creazione del gruppo (`moveShaftLot`):
     senza, sparirebbe dalla scheda di ogni fascicolo già compilato.
+  - **Lotto lame: foto e OCR come l'albero.** Era un campo `extra` del gruppo
+    (testo a mano, nessuna prova): ora è la matricola dello slot *Set lame*,
+    quindi ha fotocamera, foto e lettura automatica. Il valore già scritto si
+    sposta sullo slot alla prima apertura (`moveBladesLot`) e l'`extra.lot` si
+    svuota: due verità sullo stesso dato sono peggio di nessuna.
   - **Gli alberi sono due** (gruppo `shaft`, lavorati da DGS): la definizione di
     un gruppo puo' crescere, quindi `ensureSheetSlots` aggiunge **in coda** gli
     slot che mancano sui fascicoli gia' aperti (gli slot aggiunti a mano dagli

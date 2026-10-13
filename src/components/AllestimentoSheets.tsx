@@ -26,7 +26,7 @@ import {
 import { fmtDateTime } from "@/lib/format";
 import { kitDef, type KitFlag } from "@/lib/kits";
 
-type Item = { id: string; position: number; label: string; serial: string | null; note: string | null };
+type Item = { id: string; position: number; label: string; serial: string | null; lot: string | null; note: string | null };
 type Comp = { id: string; groupId: string; items: Item[] };
 
 type SheetDTO = {
@@ -83,7 +83,7 @@ export default function AllestimentoSheets({
   hasSavedSignature: boolean;
   /** Spunte di dotazione della macchina (tirante giunto, filtro maggiorato). */
   kits: Record<KitFlag, boolean>;
-  renderSerial: (item: Item) => ReactNode;
+  renderSerial: (item: Item, groupId: string) => ReactNode;
   renderPhoto: (itemId: string, title: string) => ReactNode;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
@@ -342,7 +342,7 @@ export default function AllestimentoSheets({
             {items.map((it) => (
               <div key={it.id} className={"al-serial" + (it.serial ? " ok" : "")}>
                 <span className="al-serial-label">{it.label}</span>
-                <div className="al-serial-cell">{renderSerial(it)}</div>
+                <div className="al-serial-cell">{renderSerial(it, row.serials!)}</div>
                 <div className="al-serial-photo">{renderPhoto(it.id, `${row.label} — ${it.label}`)}</div>
               </div>
             ))}

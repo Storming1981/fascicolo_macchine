@@ -271,6 +271,9 @@ img.user-avatar.small { object-fit: cover; }
 .sw-version label { font-size: 12.5px; font-weight: 600; color: var(--navy); display: flex; flex-direction: column; gap: 2px; }
 .sw-version label .small { font-weight: 400; }
 .sw-version .input { max-width: 200px; }
+/* Lotto / data di lotto accanto alla matricola dello slot */
+.slot-lot { width: 92px; flex: 0 0 92px; font-size: 12px; }
+.slot-lot-ro { color: var(--muted); }
 .detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto; }

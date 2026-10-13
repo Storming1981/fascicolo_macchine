@@ -24,7 +24,11 @@ export async function renderSheetPdf(
     header: s.header,
     model: m.model,
     values: s.values,
-    components: m.components.map((c) => ({ groupId: c.groupId, serials: c.items.map((i) => i.serial ?? "") })),
+    components: m.components.map((c) => ({
+      groupId: c.groupId,
+      // il lotto punzonato accanto alla matricola (es. 09/26) va stampato con lei
+      serials: c.items.map((i) => [i.serial ?? "", i.lot ?? ""].filter(Boolean).join(" · ")),
+    })),
     compilerName: s.compilerName,
     compiledAt: s.compiledAt,
     compilerSignature: s.compilerSignature,

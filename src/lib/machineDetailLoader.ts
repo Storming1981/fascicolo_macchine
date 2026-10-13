@@ -173,6 +173,7 @@ export async function loadMachineDetailProps(code: string) {
         position: i.position,
         label: i.label,
         serial: i.serial,
+        lot: i.lot,
         note: i.note,
       })),
     })),

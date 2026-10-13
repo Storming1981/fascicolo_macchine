@@ -130,12 +130,18 @@ export async function ensureSheetComponents(machineId: string): Promise<number> 
 async function ensureSheetSlots(machineId: string, groupIds: string[]): Promise<number> {
   const comps = await prisma.component.findMany({
     where: { machineId, groupId: { in: groupIds } },
-    select: { id: true, groupId: true, items: { orderBy: { position: "asc" }, select: { id: true, position: true, label: true } } },
+    select: {
+      id: true,
+      groupId: true,
+      extra: true,
+      items: { orderBy: { position: "asc" }, select: { id: true, position: true, label: true, serial: true } },
+    },
   });
   let added = 0;
   for (const c of comps) {
     const g = COMPONENT_GROUPS.find((x) => x.id === c.groupId);
     if (!g) continue;
+    if (c.groupId === "blades") await moveBladesLot(c);
     // lo slot unico dell'albero si chiamava "Albero": col secondo prende il numero
     const unnamed = c.groupId === "shaft" ? c.items.find((i) => i.label === "Albero") : undefined;
     if (unnamed) await prisma.componentItem.update({ where: { id: unnamed.id }, data: { label: g.slots[0] } });
@@ -146,6 +152,28 @@ async function ensureSheetSlots(machineId: string, groupIds: string[]): Promise<
     added += missing.length;
   }
   return added;
+}
+
+/**
+ * Il lotto lame era un campo `extra` del gruppo (testo a mano): ora e' la
+ * matricola dello slot "Set lame", che ha foto e OCR come le altre. Il valore
+ * gia' inserito si sposta sullo slot la prima volta, e l'extra si svuota per
+ * non lasciare due verita' sullo stesso dato.
+ */
+async function moveBladesLot(c: {
+  id: string;
+  extra: unknown;
+  items: { id: string; serial: string | null }[];
+}) {
+  const extra = (c.extra && typeof c.extra === "object" ? c.extra : {}) as Record<string, unknown>;
+  const lot = str(extra.lot, 120);
+  const slot = c.items[0];
+  if (!lot || !slot || (slot.serial ?? "").trim()) return;
+  const { lot: _drop, ...rest } = extra;
+  await prisma.$transaction([
+    prisma.componentItem.update({ where: { id: slot.id }, data: { serial: lot } }),
+    prisma.component.update({ where: { id: c.id }, data: { extra: rest as Prisma.InputJsonValue } }),
+  ]);
 }
 
 /**

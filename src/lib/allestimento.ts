@@ -131,7 +131,7 @@ export const SHEET_TRITURATORE: SheetDef = {
         { key: "giunti_sicurezza", label: "Giunti sicurezza", input: "yesno", kitFlag: "tiranteGiunto" },
         { key: "lame", label: "Lame", bind: { group: "blades", field: "extra", extraKey: "type" }, suggest: ["PLATINUM"] },
         { key: "costruttore_lame", label: "Costruttori lame", bind: { group: "blades", field: "brand" }, suggest: ["CO.DI.TRA"] },
-        { key: "lotto_lame", label: "Lotto lame", bind: { group: "blades", field: "extra", extraKey: "lot" }, free: true },
+        { key: "lotto_lame", label: "Lotto lame", serials: "blades", noSpec: true },
         { key: "lav_portalame", label: "Lav portalame - distanziali - alberi", suggest: ["DGS"], list: "lavorazioni" },
         { key: "montaggio_albero", label: "Montaggio albero", suggest: ["DGS"], list: "lavorazioni" },
         { key: "lotto_albero", label: "Lotto albero", serials: "shaft", noSpec: true },

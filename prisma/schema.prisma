@@ -275,6 +275,7 @@ model ComponentItem {
   position    Int
   label       String
   serial      String?
+  lot         String? // data o numero di lotto stampato accanto alla matricola (es. 09/26)
   note        String?
   component   Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
   photos      Photo[]

@@ -28,9 +28,31 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   const newSerial = typeof b.serial === "string" ? b.serial.trim() || null : item.serial;
   const note = typeof b.note === "string" ? b.note.trim() || null : item.note;
+  // Lotto / data di lotto punzonata accanto alla matricola (es. 09/26): e' un
+  // dato a se', non parte della matricola.
+  const newLot = typeof b.lot === "string" ? b.lot.trim().slice(0, 40) || null : item.lot;
   const prev = item.serial;
+  const prevLot = item.lot;
 
-  await prisma.componentItem.update({ where: { id: item.id }, data: { serial: newSerial, note } });
+  await prisma.componentItem.update({ where: { id: item.id }, data: { serial: newSerial, lot: newLot, note } });
+
+  // Il lotto da solo non merita un evento suo quando cambia anche la matricola:
+  // finisce nella nota di quello.
+  if (newLot !== prevLot && newSerial === prev) {
+    await prisma.diaryEvent.create({
+      data: {
+        machineId: id,
+        phase: "PRODUCTION",
+        type: "note",
+        title: newLot
+          ? `Lotto ${prevLot ? "aggiornato" : "assegnato"}: ${item.label} → ${newLot}`
+          : `Lotto rimosso: ${item.label}`,
+        actorName: user.name,
+        componentRef: item.label,
+        authorId: user.id,
+      },
+    });
+  }
 
   // Evento a diario (leggero, senza firma) per tracciare l'assegnazione/correzione.
   if (newSerial && newSerial !== prev) {
@@ -45,13 +67,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         actorName: user.name,
         oldSerial: prev,
         newSerial,
+        note: newLot && newLot !== prevLot ? `Lotto: ${newLot}` : null,
         componentRef: item.label,
         authorId: user.id,
       },
     });
   }
 
-  return NextResponse.json({ ok: true, serial: newSerial });
+  return NextResponse.json({ ok: true, serial: newSerial, lot: newLot });
 }
 
 /** Aggiunge un campo/slot a un gruppo componente. */

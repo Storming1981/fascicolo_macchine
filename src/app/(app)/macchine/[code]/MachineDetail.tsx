@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Icon, { Flag } from "@/components/Icon";
 import { SignaturePad, SignaturePadHandle } from "@/components/SignaturePad";
 import CustomerPicker, { type CustomerHit } from "@/components/CustomerPicker";
-import { COMPONENT_GROUPS } from "@/lib/components";
+import { COMPONENT_GROUPS, lotLabel } from "@/lib/components";
 import {
   STATUS_META,
   PHASE_META,
@@ -36,7 +36,7 @@ type ServiceData = {
   }[];
 };
 
-type Item = { id: string; position: number; label: string; serial: string | null; note: string | null };
+type Item = { id: string; position: number; label: string; serial: string | null; lot: string | null; note: string | null };
 type Comp = { id: string; groupId: string; label: string | null; brand: string | null; extra: Record<string, string> | null; items: Item[] };
 type Diary = {
   id: string; phase: string; type: string; title: string; note: string | null;
@@ -1188,8 +1188,15 @@ function TabComponenti({
           canManageOptions={!!canManageOptions}
           hasSavedSignature={!!hasSavedSignature}
           kits={{ tiranteGiunto: machine.tiranteGiunto, filtroMaggiorato: machine.filtroMaggiorato }}
-          renderSerial={(it) => (
-            <SlotSerialCell machineId={machine.id} item={it} canEdit={!!canEdit} onDone={onDone} notify={notify} />
+          renderSerial={(it, groupId) => (
+            <SlotSerialCell
+              machineId={machine.id}
+              item={it}
+              lotLabel={lotLabel(groupId)}
+              canEdit={!!canEdit}
+              onDone={onDone}
+              notify={notify}
+            />
           )}
           renderPhoto={photoCell}
           onDone={onDone}
@@ -1258,6 +1265,7 @@ function TabComponenti({
                               <SlotSerialCell
                                 machineId={machine.id}
                                 item={it}
+                                lotLabel={g.lot?.label}
                                 canEdit={!!canEdit}
                                 onDone={onDone}
                                 notify={notify}
@@ -1495,37 +1503,49 @@ function AddComponentModal({
 // componente: dopo l'upload della foto la pagina si aggiorna e lo stato locale
 // della cella andava perso, facendo sparire la proposta dell'OCR.
 const pendingSerials = new Map<string, string>();
+const pendingLots = new Map<string, string>();
 
 function SlotSerialCell({
   machineId,
   item,
+  lotLabel: lotName,
   canEdit,
   onDone,
   notify,
 }: {
   machineId: string;
   item: Item;
+  /** Se il componente porta anche un lotto (es. blocchi motore), la sua etichetta. */
+  lotLabel?: string;
   canEdit: boolean;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
   const [val, setValState] = useState(() => pendingSerials.get(item.id) ?? item.serial ?? "");
+  const [lot, setLotState] = useState(() => pendingLots.get(item.id) ?? item.lot ?? "");
   const [busy, setBusy] = useState<null | "save" | "ocr">(null);
   const camRef = useRef<HTMLInputElement>(null);
-  const dirty = val.trim() !== (item.serial ?? "");
+  const dirty = val.trim() !== (item.serial ?? "") || lot.trim() !== (item.lot ?? "");
 
   function setVal(v: string) {
     pendingSerials.set(item.id, v);
     setValState(v);
   }
+  function setLot(v: string) {
+    pendingLots.set(item.id, v);
+    setLotState(v);
+  }
 
-  async function persist(serial: string): Promise<boolean> {
+  async function persist(serial: string, lotValue = lot): Promise<boolean> {
     const res = await fetch(`/api/machines/${machineId}/component-item`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId: item.id, serial }),
+      body: JSON.stringify({ itemId: item.id, serial, ...(lotName ? { lot: lotValue } : {}) }),
     });
-    if (res.ok) pendingSerials.delete(item.id);
+    if (res.ok) {
+      pendingSerials.delete(item.id);
+      pendingLots.delete(item.id);
+    }
     return res.ok;
   }
 
@@ -1562,6 +1582,10 @@ function SlotSerialCell({
       const d = await res.json().catch(() => null);
       if (!up?.ok) notify("Foto non salvata sullo slot", "err");
       const serial: string = res.ok ? d?.serial ?? "" : "";
+      // il lotto si propone sempre: non e' la matricola, quindi non ha senso
+      // tenerlo in ostaggio della regola di sovrascrittura di quella
+      const readLot: string = lotName && res.ok ? d?.lot ?? "" : "";
+      if (readLot && readLot !== lot) setLot(readLot);
       const current = item.serial ?? "";
       if (!serial) {
         notify(d?.error || "Matricola non riconosciuta nella foto: inseriscila a mano", "err");
@@ -1572,7 +1596,10 @@ function SlotSerialCell({
         // proposta da confermare con ✓ e nessuno la confermava). Resta
         // correggibile, e la correzione va a diario come ogni modifica.
         setVal(serial);
-        if (await persist(serial)) notify(`Matricola ${serial} letta e salvata — controlla che sia giusta`);
+        if (await persist(serial, readLot || lot))
+          notify(
+            `Matricola ${serial}${readLot ? ` · lotto ${readLot}` : ""} letta e salvata — controlla che sia giusta`
+          );
         else notify("Matricola letta ma non salvata: premi ✓", "err");
       } else {
         // Slot già compilato con un altro valore, o lettura incerta: non si
@@ -1591,7 +1618,13 @@ function SlotSerialCell({
     }
   }
 
-  if (!canEdit) return <span className="mono">{item.serial || <span className="muted">—</span>}</span>;
+  if (!canEdit)
+    return (
+      <span className="mono">
+        {item.serial || <span className="muted">—</span>}
+        {lotName && item.lot && <span className="slot-lot-ro"> · {item.lot}</span>}
+      </span>
+    );
 
   return (
     <div className="slot-serial">
@@ -1621,6 +1654,16 @@ function SlotSerialCell({
         >
           <Icon name="check" size={15} />
         </button>
+      )}
+      {lotName && (
+        <input
+          className="mono slot-lot"
+          value={lot}
+          onChange={(e) => setLot(e.target.value)}
+          placeholder={lotName.toLowerCase()}
+          title={lotName}
+          maxLength={40}
+        />
       )}
       {busy === "ocr" && <span className="muted small">lettura…</span>}
       <input

@@ -10,6 +10,12 @@ export type ComponentGroup = {
   icon: string;
   slots: string[];
   extra?: ExtraField[];
+  /**
+   * Il componente porta, accanto alla matricola, anche un lotto o una data di
+   * lotto (es. blocchi motore MAGNUM: "MM104353" e sotto "09/26"). Dove c'è,
+   * lo slot ha un secondo campo e l'OCR lo legge dalla stessa foto.
+   */
+  lot?: { label: string };
   /** Lettere colonna Excel (R3+ = dati) per il parser di import */
   excel: { brandCol?: string; serialCols: string[]; extraCols?: Record<string, string> };
 };
@@ -38,6 +44,7 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     en: "MOTOR BLOCKS",
     icon: "rotor",
     slots: ["Blocco #1", "Blocco #2", "Blocco #3", "Blocco #4"],
+    lot: { label: "Data lotto" },
     excel: { serialCols: [] },
   },
   {
@@ -193,6 +200,11 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     excel: { brandCol: "BB", serialCols: [], extraCols: { type: "BC", lot: "BD" } },
   },
 ];
+
+/** Etichetta del campo lotto di un gruppo, se quel componente ne ha uno. */
+export function lotLabel(groupId: string | null | undefined): string | undefined {
+  return groupId ? COMPONENT_GROUPS.find((g) => g.id === groupId)?.lot?.label : undefined;
+}
 
 export function groupById(id: string) {
   return COMPONENT_GROUPS.find((g) => g.id === id);

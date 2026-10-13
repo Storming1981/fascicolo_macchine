@@ -20,6 +20,8 @@ export type SerialOcrResult = {
   serial: string;
   /** Etichetta stampata accanto alla matricola (es. "NR.MATRICOLA - REGISTRATION NR"). */
   label: string;
+  /** Lotto o data di lotto letti sulla stessa targhetta (es. "09/26"), "" se assenti. */
+  lot: string;
   confidence: "high" | "medium" | "low";
   /** Tutti i codici leggibili sulla targhetta, con la loro etichetta. */
   candidates: { label: string; value: string }[];
@@ -40,15 +42,18 @@ Trascrizione:
 - nelle matricole numeriche non confondere 0/O, 1/I, 5/S, 8/B: usa il contesto degli altri caratteri;
 - se sulla targhetta non c'è un'etichetta di matricola riconoscibile, lascia serial vuoto e confidence "low", salvo che esista un unico codice che per forma sia inequivocabilmente un numero di serie.
 
+Oltre alla matricola, cerca il LOTTO o la DATA DI LOTTO: sulle targhette punzonate sta spesso sotto la matricola nel formato mm/aa o mm/aaaa (es. "09/26"), oppure accanto a etichette come LOTTO, LOT, BATCH, DATE, DATA. E' un dato diverso dalla matricola: va in lot, non in serial, e se non c'e' lot resta vuoto.
+
 Elenca in candidates tutti i codici che riesci a leggere, ciascuno con la sua etichetta.`;
 
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["serial", "label", "confidence", "candidates"],
+  required: ["serial", "label", "lot", "confidence", "candidates"],
   properties: {
     serial: { type: "string", description: "Matricola esatta, stringa vuota se non individuata" },
     label: { type: "string", description: "Etichetta stampata accanto alla matricola" },
+    lot: { type: "string", description: "Lotto o data di lotto (es. 09/26), stringa vuota se assente" },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
     candidates: {
       type: "array",
@@ -87,5 +92,6 @@ export async function readSerialFromImage(base64: string, mediaType: ImageMedia)
   const out = JSON.parse(text) as SerialOcrResult;
   // Il modello copia la matricola com'è; qui si toglie solo lo spazio accidentale.
   out.serial = out.serial.replace(/\s+/g, "").trim();
+  out.lot = (out.lot ?? "").replace(/\s+/g, "").trim();
   return out;
 }
