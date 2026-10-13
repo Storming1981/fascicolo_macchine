@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
+import { backupPhotos } from "@/lib/googlePhotos";
 import { saveFile, saveDataUrl, saveBytes, sha256 } from "@/lib/uploads";
 import { renderRapportinoPdf } from "@/lib/rapportinoRender";
 import { sessionHours, type TimbraturaRow } from "@/lib/timbrature";
@@ -150,9 +151,10 @@ async function mirrorImagesToDiary(
   atts: SavedAtt[],
   args: { interventoId: string; machineId: string | null; diaryEventId: string; caption: string; authorName: string; authorId: string }
 ) {
+  const ids: string[] = [];
   for (const a of atts) {
     if (a.kind !== "image") continue;
-    await prisma.photo.create({
+    const photo = await prisma.photo.create({
       data: {
         interventoId: args.interventoId,
         machineId: args.machineId,
@@ -164,7 +166,9 @@ async function mirrorImagesToDiary(
         authorId: args.authorId,
       },
     });
+    ids.push(photo.id);
   }
+  after(() => backupPhotos(ids));
 }
 
 /**

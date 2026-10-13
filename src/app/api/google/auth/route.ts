@@ -3,7 +3,7 @@ import { SignJWT } from "jose";
 import crypto from "crypto";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
-import { isGoogleConfigured, buildConsentUrl, type GoogleTarget } from "@/lib/google";
+import { isGoogleConfigured, buildConsentUrl, GOOGLE_SCOPES, GPHOTO_SCOPE, type GoogleTarget } from "@/lib/google";
 import { absoluteUrl } from "@/lib/absoluteUrl";
 
 const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret-change-me");
@@ -43,5 +43,9 @@ export async function GET(req: Request) {
     .setExpirationTime("600s")
     .sign(SECRET);
 
-  return NextResponse.redirect(buildConsentUrl(state));
+  // `?photos=1`: chiede anche il permesso di caricare su Google Foto. Non e'
+  // nel giro normale perche' chi collega la casella per spedire non deve
+  // vedersi chiedere l'accesso alle proprie foto.
+  const scopes = sp.get("photos") === "1" ? `${GOOGLE_SCOPES} ${GPHOTO_SCOPE}` : GOOGLE_SCOPES;
+  return NextResponse.redirect(buildConsentUrl(state, scopes));
 }

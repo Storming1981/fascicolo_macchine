@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { currentUser, verifyPin } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
+import { backupPhotos } from "@/lib/googlePhotos";
 import { saveFile, saveDataUrl, sha256 } from "@/lib/uploads";
 import type { DiaryPhase, SignMethod } from "@prisma/client";
 
@@ -100,9 +101,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   // Foto allegate
   const files = form.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  const photoIds: string[] = [];
   for (const f of files) {
     const saved = await saveFile(f, `${machine.code}/interventi`);
-    await prisma.photo.create({
+    const photo = await prisma.photo.create({
       data: {
         machineId: id,
         diaryEventId: created.id,
@@ -113,7 +115,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         authorId: user.id,
       },
     });
+    photoIds.push(photo.id);
   }
+  after(() => backupPhotos(photoIds));
 
   return NextResponse.json({ ok: true });
 }

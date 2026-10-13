@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { saveFile } from "@/lib/uploads";
+import { backupPhotos } from "@/lib/googlePhotos";
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
@@ -17,10 +18,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const files = form.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
   if (!files.length) return NextResponse.json({ error: "Nessuna foto" }, { status: 400 });
 
-  let n = 0;
+  const ids: string[] = [];
   for (const f of files) {
     const saved = await saveFile(f, `${machine.code}/foto`);
-    await prisma.photo.create({
+    const photo = await prisma.photo.create({
       data: {
         machineId: id,
         componentItemId,
@@ -31,7 +32,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         authorId: user.id,
       },
     });
-    n++;
+    ids.push(photo.id);
   }
-  return NextResponse.json({ ok: true, count: n });
+  // Copia su Google Foto dell'autore, se l'ha attivata: dopo la risposta, cosi'
+  // una foto si carica anche quando Google e' lento o il permesso e' scaduto.
+  after(() => backupPhotos(ids));
+  return NextResponse.json({ ok: true, count: ids.length });
 }

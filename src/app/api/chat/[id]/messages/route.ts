@@ -6,6 +6,7 @@ import { absoluteUrl } from "@/lib/absoluteUrl";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
+import { backupPhotos } from "@/lib/googlePhotos";
 import { saveFile } from "@/lib/uploads";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -109,7 +110,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   // La foto confluisce nel corpus dell'intervento/fascicolo (come le altre foto).
   if (photoPath && conv.interventoId) {
-    await prisma.photo.create({
+    const photo = await prisma.photo.create({
       data: {
         interventoId: conv.interventoId,
         // il fascicolo puo' essere collegato al solo intervento (chat aperta prima)
@@ -121,6 +122,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         authorId: user.id,
       },
     });
+    after(() => backupPhotos([photo.id]));
   }
 
 

@@ -678,6 +678,33 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   quella aziendale se non l'ha collegata; l'invio va a diario con mittente e
   destinatari. `POST /api/machines/[id]/allestimento/send` (permesso
   `machine.intervention` o `machine.edit`).
+- **Backup delle foto su Google Foto** (`src/lib/googlePhotos.ts`): ogni foto
+  caricata resta nel fascicolo e viene **copiata nell'account Google personale
+  di chi l'ha scattata**, in un album per macchina (`ZATO M-2026-0010 — Cliente`).
+  È una copia in più chiesta dal committente, non una seconda fonte: la verità
+  resta il file su disco più la riga `Photo`.
+  - **Permesso a parte, opt-in** (`GPHOTO_SCOPE` =
+    `photoslibrary.appendonly`): non sta in `GOOGLE_SCOPES` perché chi collega
+    la casella solo per spedire non deve vedersi chiedere l'accesso alle proprie
+    foto. Si attiva dal **Profilo** (spunta *Copia le foto sul mio Google Foto*
+    → `User.photoBackup`), che manda subito al consenso
+    (`/api/google/auth?target=me&photos=1`): un interruttore acceso senza
+    permesso non copierebbe niente. `appendonly` consente **solo** di creare
+    album e caricare: l'app non può leggere la libreria dell'utente.
+  - **Account personale, non aziendale**: la foto la scatta un operatore col suo
+    telefono e il backup serve a lui; l'album vive nel suo account, quindi l'id
+    vale per **(utente, fascicolo)** — da qui il modello `GphotoAlbum`.
+  - **Gira dopo la risposta HTTP** (`after()` nelle quattro route che creano
+    foto: fascicolo, chat di cantiere, rapportini, interventi a diario).
+    Caricare una foto non deve fallire perché Google è lento o il consenso è
+    scaduto — è la stessa regola delle mail di notifica. L'esito resta sulla
+    riga: `Photo.gphotoId` / `gphotoAt` / `gphotoError`.
+  - **Chi fallisce si recupera**: `npm run gphoto:retry [quante]` ricopia le
+    foto senza `gphotoId` degli utenti che hanno il backup attivo — comprese
+    quelle scattate **prima** di attivarlo. Senza, un errore dopo la risposta
+    non lo scoprirebbe nessuno.
+  - Lo spazio consumato è quello del Google dell'utente, e le foto copiate
+    **restano sue**: scollegare l'account dall'app non le cancella.
 - **Profilo utente** (`/profilo`, clic su avatar o nome in topbar/sidebar):
   foto (ridotta a 256 px), telefono, **casella Gmail personale** (Accedi con
   Google → `/api/google/auth?target=me&return=profilo`, la callback torna al

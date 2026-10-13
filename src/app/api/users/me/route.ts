@@ -39,6 +39,7 @@ export async function PATCH(req: Request) {
   }
 
   if (typeof b.phone === "string") data.phone = b.phone.trim().slice(0, 40) || null;
+  if (typeof b.photoBackup === "boolean") data.photoBackup = b.photoBackup;
 
   if (b.photo === null) data.photo = null;
   else if (typeof b.photo === "string") {

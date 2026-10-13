@@ -34,6 +34,15 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ].join(" ");
 
+/**
+ * Backup delle foto su Google Foto: permesso **in aggiunta**, chiesto solo a chi
+ * lo attiva. Non sta in GOOGLE_SCOPES perche' chi collega la casella solo per
+ * spedire non deve vedersi chiedere l'accesso alle proprie foto.
+ * `appendonly` consente di creare album e caricare: l'app non puo' leggere
+ * nulla della libreria dell'utente.
+ */
+export const GPHOTO_SCOPE = "https://www.googleapis.com/auth/photoslibrary.appendonly";
+
 /** Bersaglio del collegamento: casella personale dell'utente o aziendale. */
 export type GoogleTarget = "me" | "company";
 
@@ -97,12 +106,12 @@ async function writeCompanyAccess(accessEnc: string, expiresAtMs: number) {
 /* ─────────────────────────── OAuth flow ─────────────────────────── */
 
 /** URL della schermata di consenso Google (offline + prompt=consent → refresh token). */
-export function buildConsentUrl(state: string): string {
+export function buildConsentUrl(state: string, scopes: string = GOOGLE_SCOPES): string {
   const u = new URL(AUTH_URL);
   u.searchParams.set("client_id", process.env.GOOGLE_CLIENT_ID!);
   u.searchParams.set("redirect_uri", process.env.GOOGLE_REDIRECT_URI!);
   u.searchParams.set("response_type", "code");
-  u.searchParams.set("scope", GOOGLE_SCOPES);
+  u.searchParams.set("scope", scopes);
   u.searchParams.set("access_type", "offline");
   u.searchParams.set("prompt", "consent");
   u.searchParams.set("include_granted_scopes", "true");
@@ -272,9 +281,27 @@ async function emailStillLinked(
 
 export async function getUserGoogleInfo(
   userId: string
-): Promise<{ email: string; connectedAt: string } | null> {
+): Promise<{ email: string; connectedAt: string; scopes: string } | null> {
   const t = await prisma.googleToken.findUnique({ where: { userId } });
-  return t ? { email: t.email, connectedAt: t.connectedAt.toISOString() } : null;
+  return t ? { email: t.email, connectedAt: t.connectedAt.toISOString(), scopes: t.scope ?? "" } : null;
+}
+
+/** L'utente ha concesso il permesso di caricare su Google Foto? */
+export async function hasPhotoScope(userId: string): Promise<boolean> {
+  const t = await prisma.googleToken.findUnique({ where: { userId }, select: { scope: true } });
+  return (t?.scope ?? "").includes(GPHOTO_SCOPE);
+}
+
+/**
+ * Access token della casella PERSONALE di un utente (niente ripiego su quella
+ * aziendale: il backup delle foto va nell'account di chi le scatta, mandarle
+ * nella libreria aziendale sarebbe un'altra cosa e nessuno l'ha chiesta).
+ */
+export async function getUserAccessToken(userId: string): Promise<{ token: string; email: string } | null> {
+  const stored = await readUserToken(userId);
+  if (!stored) return null;
+  const token = await ensureAccessToken(stored, (a, e) => writeUserAccess(userId, a, e));
+  return { token, email: stored.email };
 }
 
 export async function getCompanyGoogleInfo(): Promise<

@@ -19,9 +19,12 @@ type Props = {
     matricola: string | null;
     hasPin: boolean;
     signatureImage: string | null;
+    photoBackup: boolean;
   };
   googleConfigured: boolean;
   google: { email: string; connectedAt: string } | null;
+  /** L'account collegato ha già concesso il permesso di caricare su Google Foto. */
+  photoScope: boolean;
   companyEmail: string | null;
 };
 
@@ -56,7 +59,7 @@ function photoToDataUrl(file: File): Promise<string> {
   });
 }
 
-export default function ProfileClient({ user, googleConfigured, google, companyEmail }: Props) {
+export default function ProfileClient({ user, googleConfigured, google, photoScope, companyEmail }: Props) {
   const router = useRouter();
   const refresh = () => router.refresh();
 
@@ -89,6 +92,8 @@ export default function ProfileClient({ user, googleConfigured, google, companyE
           <GmailCard
             configured={googleConfigured}
             google={google}
+            photoScope={photoScope}
+            photoBackup={user.photoBackup}
             companyEmail={companyEmail}
             userEmail={user.email}
             initialMsg={googleMsg}
@@ -252,6 +257,8 @@ function IdentityCard({ user, onSaved }: { user: Props["user"]; onSaved: () => v
 function GmailCard({
   configured,
   google,
+  photoScope,
+  photoBackup,
   companyEmail,
   userEmail,
   initialMsg,
@@ -259,13 +266,16 @@ function GmailCard({
 }: {
   configured: boolean;
   google: Props["google"];
+  photoScope: boolean;
+  photoBackup: boolean;
   companyEmail: string | null;
   userEmail: string;
   initialMsg: Msg;
   onChanged: () => void;
 }) {
   const [msg, setMsg] = useState<Msg>(null);
-  const [busy, setBusy] = useState<null | "test" | "unlink">(null);
+  const [backup, setBackup] = useState(photoBackup);
+  const [busy, setBusy] = useState<null | "test" | "unlink" | "backup">(null);
   useEffect(() => {
     if (initialMsg) setMsg(initialMsg);
   }, [initialMsg]);
@@ -282,6 +292,31 @@ function GmailCard({
     const d = await res.json().catch(() => ({}));
     setBusy(null);
     setMsg(res.ok ? { kind: "ok", text: `Mail di prova inviata a ${d.to} da ${d.from}` } : { kind: "err", text: d.error || "Invio non riuscito" });
+  }
+
+  /**
+   * Backup su Google Foto: la spunta salva la preferenza, ma senza il permesso
+   * dedicato non si copierebbe niente — quindi si passa dal consenso subito,
+   * invece di lasciare un interruttore acceso che non fa nulla.
+   */
+  async function toggleBackup(v: boolean) {
+    setBusy("backup");
+    setBackup(v);
+    const err = await patchMe({ photoBackup: v });
+    setBusy(null);
+    if (err) {
+      setBackup(!v);
+      return setMsg({ kind: "err", text: err });
+    }
+    if (v && !photoScope) {
+      window.location.href = `${connectHref}&photos=1`;
+      return;
+    }
+    setMsg({
+      kind: "ok",
+      text: v ? "Backup su Google Foto attivo" : "Backup su Google Foto disattivato",
+    });
+    onChanged();
   }
 
   async function unlink() {
@@ -325,6 +360,28 @@ function GmailCard({
               <strong>{google.email}</strong>
               <div className="muted small">collegata il {fmtDateTime(google.connectedAt)}</div>
             </div>
+          </div>
+          <div className="pf-backup">
+            <label>
+              <input
+                type="checkbox"
+                checked={backup}
+                disabled={busy !== null}
+                onChange={(e) => toggleBackup(e.target.checked)}
+              />
+              <span>
+                <strong>Copia le foto sul mio Google Foto</strong>
+                <span className="muted small">
+                  Ogni foto che carichi resta nel fascicolo e viene copiata nel tuo account, in un album per
+                  macchina. La piattaforma non legge le tue foto: può solo aggiungerne.
+                </span>
+              </span>
+            </label>
+            {backup && !photoScope && (
+              <a className="btn-ghost-sm" href={`${connectHref}&photos=1`}>
+                Autorizza Google Foto
+              </a>
+            )}
           </div>
           <div className="pf-actions">
             <button className="btn-ghost-sm" onClick={test} disabled={busy !== null}>

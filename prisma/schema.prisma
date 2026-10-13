@@ -91,6 +91,7 @@ model User {
   reparto        String?  // reparto (timbratore): PRO, APV, UTE…
   siteManager    Boolean  @default(false) // responsabile di cantiere
   posValidator   Boolean  @default(false) // puo' validare il P.O.S. degli interventi (responsabile sicurezza)
+  photoBackup    Boolean  @default(false) // copia le proprie foto sul suo Google Foto
   appAccess      String?  // override guscio: "desktop" | "field" (null = default ruolo)
   customerId     String?  // per gli utenti CLIENTE: azienda cliente di appartenenza
   /// Collegamento al dipendente su TeamSystem HR (fascicolo documenti).
@@ -123,6 +124,22 @@ model User {
 /// Token OAuth Google PERSONALE di un utente, per inviare le email dalla propria
 /// casella Gmail. I token sono cifrati (src/lib/crypto.ts). La casella aziendale
 /// (fallback) è invece nel Setting `googleAccount`.
+/**
+ * Album creato dall'app su Google Foto: uno per (utente, fascicolo). L'album
+ * vive nell'account personale di chi scatta, quindi l'id non e' condivisibile
+ * fra utenti diversi.
+ */
+model GphotoAlbum {
+  id        String   @id @default(cuid())
+  userId    String
+  machineId String
+  albumId   String
+  title     String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, machineId])
+}
+
 model GoogleToken {
   userId       String    @id
   email        String    // indirizzo Gmail collegato
@@ -343,6 +360,10 @@ model Photo {
   deletedAt       DateTime?
   deletedById     String?
   deletedByName   String?
+  // Copia su Google Foto dell'account personale dell'autore (backup opzionale)
+  gphotoId        String?
+  gphotoAt        DateTime?
+  gphotoError     String?
 
   machine       Machine?       @relation(fields: [machineId], references: [id], onDelete: Cascade)
   diaryEvent    DiaryEvent?    @relation(fields: [diaryEventId], references: [id], onDelete: SetNull)
