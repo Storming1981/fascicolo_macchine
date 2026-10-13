@@ -363,6 +363,7 @@ model Photo {
   // Copia su Google Foto dell'account personale dell'autore (backup opzionale)
   gphotoId        String?
   gphotoAt        DateTime?
+  gphotoAccount   String? // indirizzo Google in cui e' finita la copia
   gphotoError     String?
 
   machine       Machine?       @relation(fields: [machineId], references: [id], onDelete: Cascade)

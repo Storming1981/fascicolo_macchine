@@ -372,8 +372,9 @@ function GmailCard({
               <span>
                 <strong>Copia le foto sul mio Google Foto</strong>
                 <span className="muted small">
-                  Ogni foto che carichi resta nel fascicolo e viene copiata nel tuo account, in un album per
-                  macchina. La piattaforma non legge le tue foto: può solo aggiungerne.
+                  Ogni foto che carichi resta nel fascicolo e viene copiata in un album per macchina dentro{" "}
+                  <strong>{google?.email}</strong>, l&apos;account qui sopra. La piattaforma non legge le tue foto:
+                  può solo aggiungerne.
                 </span>
               </span>
             </label>

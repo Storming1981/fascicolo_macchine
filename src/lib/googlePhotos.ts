@@ -98,11 +98,13 @@ export async function backupPhotos(photoIds: string[]): Promise<{ done: number; 
     if (!user?.photoBackup) continue;
 
     let token: string;
+    let account: string;
     try {
       if (!(await hasPhotoScope(userId))) throw new Error("Permesso Google Foto non concesso: ricollega l'account");
       const t = await getUserAccessToken(userId);
       if (!t) throw new Error("Nessun account Google collegato");
       token = t.token;
+      account = t.email;
     } catch (e) {
       const error = e instanceof Error ? e.message : "Backup non riuscito";
       await prisma.photo.updateMany({ where: { id: { in: list.map((p) => p.id) } }, data: { gphotoError: error } });
@@ -157,7 +159,7 @@ export async function backupPhotos(photoIds: string[]): Promise<{ done: number; 
 
         await prisma.photo.update({
           where: { id: p.id },
-          data: { gphotoId: id, gphotoAt: new Date(), gphotoError: null },
+          data: { gphotoId: id, gphotoAt: new Date(), gphotoAccount: account, gphotoError: null },
         });
         done++;
       } catch (e) {
