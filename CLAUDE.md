@@ -560,6 +560,19 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     schema JSON, istruzione sul formato mm/aa): la proposta del lotto **non
     aspetta la conferma della matricola**, perché non è la matricola e non è
     soggetta alla regola del "non sovrascrivere".
+  - **Si rilegge la foto già caricata** (icona ↻ accanto alla fotocamera, dove
+    lo slot ha una foto): l'OCR gira allo scatto, quindi tutte le foto fatte
+    prima che il campo lotto esistesse resterebbero senza, pur avendo il dato
+    sotto gli occhi — il primo caso visto in produzione, quattro blocchi con la
+    matricola letta e la data vuota. La foto si scarica, si riduce nel browser
+    come allo scatto e ripassa dallo stesso `/api/vision/serial`: nessun
+    ridimensionamento lato server (non c'è `sharp`) e nessuna seconda copia
+    della foto sullo slot.
+  - **Un lotto letto su uno slot che non ne aveva si salva da solo**: non c'è
+    niente da sovrascrivere, e chiederne conferma vorrebbe dire lasciarlo vuoto
+    — è lo stesso errore del primo flusso OCR, dove la matricola restava una
+    proposta che nessuno confermava. Se invece un lotto c'era già ed è diverso,
+    resta una proposta da confermare con ✓.
   - Finisce anche nel PDF della scheda, accanto alla matricola
     (`MM104353 · 09/26`), e ogni cambio va a diario.
 - **Miniature nello slot componente**: la colonna Foto di Componenti &

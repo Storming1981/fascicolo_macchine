@@ -1193,6 +1193,7 @@ function TabComponenti({
               machineId={machine.id}
               item={it}
               lotLabel={lotLabel(groupId)}
+              photoPath={photoByItem.get(it.id)?.path}
               canEdit={!!canEdit}
               onDone={onDone}
               notify={notify}
@@ -1266,6 +1267,7 @@ function TabComponenti({
                                 machineId={machine.id}
                                 item={it}
                                 lotLabel={g.lot?.label}
+                                photoPath={photoByItem.get(it.id)?.path}
                                 canEdit={!!canEdit}
                                 onDone={onDone}
                                 notify={notify}
@@ -1509,6 +1511,7 @@ function SlotSerialCell({
   machineId,
   item,
   lotLabel: lotName,
+  photoPath,
   canEdit,
   onDone,
   notify,
@@ -1517,6 +1520,8 @@ function SlotSerialCell({
   item: Item;
   /** Se il componente porta anche un lotto (es. blocchi motore), la sua etichetta. */
   lotLabel?: string;
+  /** Ultima foto dello slot: permette di rileggerla senza riscattarla. */
+  photoPath?: string;
   canEdit: boolean;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
@@ -1581,41 +1586,81 @@ function SlotSerialCell({
       ]);
       const d = await res.json().catch(() => null);
       if (!up?.ok) notify("Foto non salvata sullo slot", "err");
-      const serial: string = res.ok ? d?.serial ?? "" : "";
-      // il lotto si propone sempre: non e' la matricola, quindi non ha senso
-      // tenerlo in ostaggio della regola di sovrascrittura di quella
-      const readLot: string = lotName && res.ok ? d?.lot ?? "" : "";
-      if (readLot && readLot !== lot) setLot(readLot);
-      const current = item.serial ?? "";
-      if (!serial) {
-        notify(d?.error || "Matricola non riconosciuta nella foto: inseriscila a mano", "err");
-      } else if (serial === current) {
-        notify(`Matricola ${serial} confermata dalla foto`);
-      } else if (!current && d?.confidence !== "low") {
-        // Slot vuoto e lettura sicura: si salva subito (prima restava una
-        // proposta da confermare con ✓ e nessuno la confermava). Resta
-        // correggibile, e la correzione va a diario come ogni modifica.
-        setVal(serial);
-        if (await persist(serial, readLot || lot))
-          notify(
-            `Matricola ${serial}${readLot ? ` · lotto ${readLot}` : ""} letta e salvata — controlla che sia giusta`
-          );
-        else notify("Matricola letta ma non salvata: premi ✓", "err");
-      } else {
-        // Slot già compilato con un altro valore, o lettura incerta: non si
-        // sovrascrive da solo, decide l'operatore.
-        setVal(serial);
-        notify(
-          current
-            ? `Letta ${serial}, diversa da quella salvata (${current}): premi ✓ per sostituirla`
-            : `Letta ${serial} ma con poca sicurezza: controlla e premi ✓ per salvarla`,
-          "err"
-        );
-      }
-      onDone();
+      await applyRead(res.ok, d);
     } finally {
       setBusy(null);
     }
+  }
+
+  /**
+   * Rilegge la foto GIÀ caricata sullo slot. Serve perché l'OCR gira al momento
+   * dello scatto: le foto fatte prima che esistesse il campo lotto (o prima di
+   * un miglioramento della lettura) resterebbero senza, pur avendo il dato
+   * sotto gli occhi. La foto si riduce nel browser come allo scatto, quindi il
+   * server non deve ridimensionare niente.
+   */
+  async function rereadPhoto() {
+    if (!photoPath) return;
+    setBusy("ocr");
+    try {
+      const r = await fetch(photoPath);
+      if (!r.ok) return notify("Foto dello slot non raggiungibile", "err");
+      const blob = await r.blob();
+      const fd = new FormData();
+      fd.append("photo", await downscaleImage(new File([blob], "slot.jpg", { type: blob.type || "image/jpeg" })));
+      const res = await fetch("/api/vision/serial", { method: "POST", body: fd });
+      await applyRead(res.ok, await res.json().catch(() => null));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Cosa fare del risultato dell'OCR, uguale per lo scatto e per la rilettura. */
+  async function applyRead(
+    ok: boolean,
+    d: { serial?: string; lot?: string; confidence?: string; error?: string } | null
+  ) {
+    const serial = ok ? d?.serial ?? "" : "";
+    const readLot = lotName && ok ? d?.lot ?? "" : "";
+    const current = item.serial ?? "";
+    const curLot = item.lot ?? "";
+    // Un lotto letto su uno slot che non ne aveva si salva da solo: non c'è
+    // niente da sovrascrivere, e chiedere conferma vorrebbe dire lasciarlo vuoto.
+    const newLot = readLot && !curLot ? readLot : "";
+    if (readLot) setLot(readLot);
+    const lotMsg = newLot
+      ? ` · lotto ${newLot} salvato`
+      : readLot && readLot !== curLot
+        ? ` · lotto ${readLot}: premi ✓`
+        : "";
+
+    if (!serial) {
+      if (newLot && (await persist(current, newLot))) notify(`Lotto ${newLot} letto e salvato`);
+      else notify(d?.error || "Matricola non riconosciuta nella foto: inseriscila a mano", "err");
+    } else if (serial === current) {
+      if (newLot) await persist(current, newLot);
+      notify(`Matricola ${serial} confermata dalla foto${lotMsg}`);
+    } else if (!current && d?.confidence !== "low") {
+      // Slot vuoto e lettura sicura: si salva subito (prima restava una
+      // proposta da confermare con ✓ e nessuno la confermava). Resta
+      // correggibile, e la correzione va a diario come ogni modifica.
+      setVal(serial);
+      if (await persist(serial, newLot || lot))
+        notify(`Matricola ${serial}${newLot ? ` · lotto ${newLot}` : ""} letta e salvata — controlla che sia giusta`);
+      else notify("Matricola letta ma non salvata: premi ✓", "err");
+    } else {
+      // Slot già compilato con un altro valore, o lettura incerta: non si
+      // sovrascrive da solo, decide l'operatore.
+      setVal(serial);
+      if (newLot) await persist(current, newLot);
+      notify(
+        current
+          ? `Letta ${serial}, diversa da quella salvata (${current}): premi ✓ per sostituirla${lotMsg}`
+          : `Letta ${serial} ma con poca sicurezza: controlla e premi ✓ per salvarla${lotMsg}`,
+        "err"
+      );
+    }
+    onDone();
   }
 
   if (!canEdit)
@@ -1644,6 +1689,17 @@ function SlotSerialCell({
       >
         <Icon name="camera" size={15} />
       </button>
+      {photoPath && (
+        <button
+          type="button"
+          className="icon-btn sm"
+          title={`Rileggi la foto già caricata${lotName ? ` (matricola e ${lotName.toLowerCase()})` : ""}`}
+          onClick={rereadPhoto}
+          disabled={busy !== null}
+        >
+          <Icon name="refresh" size={14} />
+        </button>
+      )}
       {dirty && (
         <button
           type="button"
