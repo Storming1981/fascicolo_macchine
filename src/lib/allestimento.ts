@@ -85,6 +85,47 @@ const GHIERE = ["CILINDRICA DIAMETRO EST. PICCOLO"];
 const isElectric = (c: SheetCtx) => !c.diesel;
 const isDiesel = (c: SheetCtx) => c.diesel;
 
+/**
+ * Tipologie di container. Elettrico e diesel si distinguono per **mercato**
+ * (E, E UL per gli USA, E KOREA) e per **classe emissioni** (Stage III,
+ * Tier IV, Stage V): la scheda da compilare resta la stessa dentro ognuno dei
+ * due gruppi, cambia solo l'etichetta del fascicolo — per questo il tipo non
+ * genera righe condizionali diverse, ma colora e qualifica la macchina.
+ *
+ * `CONTAINER D` senza classe e' il valore storico: riconosciuto, non piu'
+ * proposto, cosi' un fascicolo vecchio non perde il suo tipo.
+ */
+export type ContainerTypeDef = {
+  value: string;
+  /** Etichetta corta: quella che si legge in elenco. */
+  short: string;
+  group: "Elettrico" | "Diesel";
+  color: string;
+  legacy?: boolean;
+};
+
+export const CONTAINER_TYPES: ContainerTypeDef[] = [
+  { value: "CONTAINER E", short: "E", group: "Elettrico", color: "#2f6aed" },
+  { value: "CONTAINER E UL", short: "E UL", group: "Elettrico", color: "#8b5cf6" },
+  { value: "CONTAINER E KOREA", short: "E KOREA", group: "Elettrico", color: "#0ea5a3" },
+  { value: "CONTAINER D STAGE III", short: "Stage III", group: "Diesel", color: "#f59e0b" },
+  { value: "CONTAINER D TIER IV", short: "Tier IV", group: "Diesel", color: "#ea580c" },
+  { value: "CONTAINER D STAGE V", short: "Stage V", group: "Diesel", color: "#16a34a" },
+  { value: "CONTAINER D", short: "D", group: "Diesel", color: "#64748b", legacy: true },
+];
+
+export function containerType(tipo: string | null | undefined): ContainerTypeDef | undefined {
+  const t = (tipo ?? "").trim().toUpperCase();
+  return CONTAINER_TYPES.find((c) => c.value === t);
+}
+
+/** Il tipo scelto e' diesel? Vale anche per i valori storici (`CONTAINER D`). */
+export function isDieselTipo(tipo: string | null | undefined): boolean {
+  const def = containerType(tipo);
+  if (def) return def.group === "Diesel";
+  return /\bD\b|DIESEL|STAGE|TIER/i.test(tipo ?? "");
+}
+
 export const SHEET_TRITURATORE: SheetDef = {
   kind: "TRITURATORE",
   code: "M5.16",
@@ -179,7 +220,7 @@ export const SHEET_CONTAINER: SheetDef = {
   rev: "Rev. 00 maggio 22",
   plantTypes: ["BLUE DEVIL"],
   typeLabel: "TIPO GF",
-  typeOptions: ["CONTAINER E", "CONTAINER D"],
+  typeOptions: CONTAINER_TYPES.filter((c) => !c.legacy).map((c) => c.value),
   headerFields: ["collaudatoDa"],
   sections: [
     {
@@ -435,8 +476,7 @@ export function defaultTipo(kind: SheetKind, model: string): string {
 
 export function sheetCtx(kind: SheetKind, header: SheetHeader, model: string): SheetCtx {
   if (kind !== "CONTAINER") return { diesel: false };
-  const tipo = header.tipo || defaultTipo(kind, model);
-  return { diesel: tipo === "CONTAINER D" };
+  return { diesel: isDieselTipo(header.tipo || defaultTipo(kind, model)) };
 }
 
 export function visibleRows(section: SheetSection, ctx: SheetCtx): SheetRow[] {

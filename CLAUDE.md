@@ -665,6 +665,19 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     riempimento** (`fill_pump`, due slot: Motore e Pompa). Come `motor_blocks`
     non stanno nel file MATRICOLE: li crea `ensureSheetComponents` sui fascicoli
     esistenti alla prima apertura della scheda.
+  - **Sei tipi di container, due famiglie** (`CONTAINER_TYPES` in
+    `allestimento.ts`): elettrico per **mercato** — E, E UL (USA), E KOREA — e
+    diesel per **classe emissioni** — Stage III, Tier IV, Stage V. Dentro una
+    famiglia la scheda da compilare è la stessa: il tipo non genera righe
+    diverse (`sheetCtx` guarda solo elettrico/diesel via `isDieselTipo`), ma
+    qualifica il fascicolo. `CONTAINER D` senza classe resta **riconosciuto ma
+    non più proposto**, altrimenti i fascicoli vecchi perderebbero il tipo.
+  - **Il tipo si legge dall'elenco macchine**: colonna *Tipo container* con la
+    sigla colorata e **riga tinta del colore del tipo**. Su 195 fascicoli quasi
+    identici (tutti BLUE DEVIL GF4000) era l'unico modo per distinguerli senza
+    aprirli uno a uno. Il valore arriva dall'intestazione della M5.17 con una
+    query sola per pagina; dove la scheda non è ancora stata aperta la colonna
+    resta vuota, invece di mostrare un default che nessuno ha scelto.
   **Elenchi con voci aggiungibili**: ogni specifica non libera (`free`) è una
   tendina che parte dai `suggest` e si arricchisce con le voci aggiunte dagli
   operatori, salvate in `Setting.allestimentoOptions` per elenco (`list`

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Icon, { Flag } from "@/components/Icon";
 import { STATUS_META, STATUS_ORDER } from "@/lib/domain";
 import { hasKit, KITS } from "@/lib/kits";
+import { containerType } from "@/lib/allestimento";
 import type { MachineStatus } from "@prisma/client";
 
 type M = {
@@ -21,6 +22,8 @@ type M = {
   progress: number;
   tiranteGiunto: boolean;
   filtroMaggiorato: boolean;
+  /** Tipo container dalla scheda M5.17 (null = scheda non ancora compilata). */
+  containerType: string | null;
 };
 
 export default function MachinesList({
@@ -115,6 +118,7 @@ export default function MachinesList({
                 <th>Job</th>
                 <th>Tipologia</th>
                 <th>Modello</th>
+                <th title="Tipo container dalla scheda di allestimento M5.17">Tipo container</th>
                 {KITS.map((k) => (
                   <th key={k.key} title={k.hint}>
                     {k.column}
@@ -129,16 +133,31 @@ export default function MachinesList({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((m) => (
+              {filtered.map((m) => {
+                const ct = containerType(m.containerType);
+                return (
                 <tr
                   key={m.id}
                   className="clickable"
+                  // Colore di riga per tipo container: in un elenco di 195
+                  // fascicoli quasi uguali e' l'unico modo per distinguerli
+                  // senza leggere riga per riga.
+                  style={ct ? { borderLeft: `4px solid ${ct.color}`, background: `${ct.color}0d` } : undefined}
                   onClick={() => router.push(`/macchine/${m.code}`)}
                 >
                   <td className="mono">{m.code}</td>
                   <td className="mono muted">{m.job}</td>
                   <td>{m.plantType || <span className="muted">—</span>}</td>
                   <td>{m.model}</td>
+                  <td>
+                    {ct ? (
+                      <span className="ctype-badge" style={{ background: `${ct.color}1f`, color: ct.color }}>
+                        {ct.short}
+                      </span>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
                   {KITS.map((k) => (
                     <td key={k.key} style={{ textAlign: "center" }}>
                       {hasKit(k.key, m.plantType) ? (
@@ -188,10 +207,11 @@ export default function MachinesList({
                     <Icon name="chev-right" size={16} color="var(--muted)" />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="empty">
+                  <td colSpan={12} className="empty">
                     Nessuna macchina trovata.
                   </td>
                 </tr>

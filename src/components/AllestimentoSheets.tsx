@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Icon from "@/components/Icon";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import {
+  CONTAINER_TYPES,
+  containerType,
   MATRICOLA_LABEL,
   YES_NO,
   YES_NO_NA,
@@ -450,7 +452,34 @@ export default function AllestimentoSheets({
           </div>
           <div className="al-kv">
             <span className="al-kv-label">{def.typeLabel}</span>
-            {def.typeOptions ? (
+            {kind === "CONTAINER" ? (
+              // Sei tipi in due famiglie: il mercato (E, E UL, E KOREA) e la
+              // classe emissioni (Stage III, Tier IV, Stage V). La scheda da
+              // compilare e' la stessa dentro ogni famiglia.
+              <div className="al-type-groups">
+                {(["Elettrico", "Diesel"] as const).map((g) => (
+                  <div key={g} className="al-type-group">
+                    <span className="al-type-group-label">{g}</span>
+                    <div className="al-choice">
+                      {CONTAINER_TYPES.filter(
+                        (c) => c.group === g && (!c.legacy || draft.header.tipo === c.value)
+                      ).map((c) => (
+                        <button
+                          key={c.value}
+                          type="button"
+                          disabled={disabled}
+                          title={c.legacy ? "Valore storico: scegli la classe emissioni" : c.value}
+                          className={"al-choice-btn type" + (draft.header.tipo === c.value ? " active" : "")}
+                          onClick={() => setHeader("tipo", c.value)}
+                        >
+                          {c.short}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : def.typeOptions ? (
               <div className="al-choice">
                 {def.typeOptions.map((o) => (
                   <button
@@ -460,7 +489,7 @@ export default function AllestimentoSheets({
                     className={"al-choice-btn type" + (draft.header.tipo === o ? " active" : "")}
                     onClick={() => setHeader("tipo", o)}
                   >
-                    {o === "CONTAINER E" ? "Elettrico · E" : o === "CONTAINER D" ? "Diesel · D" : o}
+                    {o}
                   </button>
                 ))}
               </div>
