@@ -648,6 +648,9 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     un gruppo puo' crescere, quindi `ensureSheetSlots` aggiunge **in coda** gli
     slot che mancano sui fascicoli gia' aperti (gli slot aggiunti a mano dagli
     operatori non si toccano) e rinomina l'unico "Albero" in "Albero #1".
+  - **La targhetta CE dell'impianto sta in testa alla M5.16**, in un blocco suo
+    sopra il cavalletto: identifica la macchina, non un suo gruppo, e dentro
+    l'allestimento cavalletto sembrava una voce di quel gruppo.
   - **Via *Targhetta CE Macchina*** dall'allestimento corpo: ripeteva la
     *Targhetta CE impianto* del cavalletto.
   - **Le matricole dei motori seguono il numero dichiarato** (`limitBy`):

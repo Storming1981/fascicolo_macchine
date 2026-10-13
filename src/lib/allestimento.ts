@@ -95,6 +95,16 @@ export const SHEET_TRITURATORE: SheetDef = {
   headerFields: ["collaudatoDa"],
   sections: [
     {
+      // La targhetta CE e' dell'IMPIANTO, non del cavalletto: sta in testa alla
+      // scheda, da sola, perche' identifica la macchina e non un suo gruppo.
+      key: "targhetta",
+      title: "TARGHETTA CE IMPIANTO",
+      icon: "qr",
+      rows: [
+        { key: "targhetta_ce_impianto", label: "Targhetta CE impianto", suggest: ["ZATO"], list: "targhetta_ce" },
+      ],
+    },
+    {
       key: "cavalletto",
       title: "ALLESTIMENTO CAVALLETTO TRAMOGGIA",
       icon: "box",
@@ -103,7 +113,6 @@ export const SHEET_TRITURATORE: SheetDef = {
         { key: "colore_cavalletto", label: "Colore cavalletto", suggest: COLORS, list: "colori" },
         { key: "colore_tramoggia", label: "Colore tramoggia", suggest: COLORS, list: "colori" },
         { key: "verniciatura_cavalletto", label: "Verniciatura", suggest: PAINT, list: "verniciatura" },
-        { key: "targhetta_ce_impianto", label: "Targhetta CE impianto", suggest: ["ZATO"], list: "targhetta_ce" },
         { key: "speciali_cavalletto", label: "Specifiche speciali", free: true },
       ],
     },
