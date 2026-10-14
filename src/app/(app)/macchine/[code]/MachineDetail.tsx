@@ -777,6 +777,13 @@ function TabAnagrafica({
                       onPick={(c) => {
                         setFF("naCustomer", c?.name ?? "");
                         setFF("naCustomerCode", c?.code ?? "");
+                        // La macchina va dal cliente finale, non alla sede di
+                        // ZATO North America: scelto il cliente, il sito e' il
+                        // suo indirizzo (resta correggibile prima di salvare).
+                        if (c) {
+                          const addr = naAddress(c);
+                          if (addr) setFF("site", addr);
+                        }
                       }}
                     />
                   ) : (
@@ -3811,15 +3818,36 @@ function PhotoPickerModal({
  * tiene allineata al database ZATONA del gestionale. Sono una sessantina, ma
  * si cerca scrivendo perche' i nomi si somigliano tutti.
  */
+type NaCustomer = {
+  code: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+};
+
+/** Indirizzo del cliente ZATO NA su una riga, per il campo Sito. */
+function naAddress(c: NaCustomer): string {
+  const parts = [c.address, c.city, c.state, c.zip]
+    .map((x) => (x ?? "").trim())
+    .filter(Boolean)
+    // la citta' a volte contiene gia' lo stato ("Phildalephia, PA")
+    .filter((x, i, a) => a.findIndex((y) => y.toUpperCase() === x.toUpperCase()) === i);
+  const out: string[] = [];
+  for (const p of parts) if (!out.some((o) => o.toUpperCase().includes(p.toUpperCase()))) out.push(p);
+  return out.join(", ");
+}
+
 function NaCustomerPicker({
   current,
   onPick,
 }: {
   current: string;
-  onPick: (c: { code: string; name: string } | null) => void;
+  onPick: (c: NaCustomer | null) => void;
 }) {
   const [q, setQ] = useState("");
-  const [list, setList] = useState<{ code: string; name: string; city: string | null; state: string | null }[]>([]);
+  const [list, setList] = useState<NaCustomer[]>([]);
   const [open, setOpen] = useState(false);
   const [total, setTotal] = useState<number | null>(null);
 
@@ -3876,7 +3904,7 @@ function NaCustomerPicker({
               }}
             >
               <span>{c.name}</span>
-              <span className="muted small">{[c.city, c.state].filter(Boolean).join(", ")}</span>
+              <span className="muted small">{naAddress(c) || "—"}</span>
             </button>
           ))}
           {list.length === 0 && total !== 0 && (

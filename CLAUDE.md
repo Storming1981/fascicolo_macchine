@@ -133,6 +133,10 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
     (tendina ricercabile, `GET /api/erp/na-customers?q=`) **solo quando il paese
     è USA** — sugli altri fascicoli sarebbe un campo che non si compila mai.
     Campi su `Machine`: `naCustomerCode`, `naCustomer`.
+  - **Scegliendo il cliente, il Sito diventa il suo indirizzo**: la macchina va
+    dal cliente finale, non alla sede di ZATO North America, e lasciare
+    "Stabilimento ZATO NORTH AMERICA CORP." vorrebbe dire avere in anagrafica un
+    luogo dove la macchina non sta. Resta correggibile prima di salvare.
 - **API**: `GET /api/erp/job/[job]` (dati commessa, `?fasi=1` per il dettaglio
   timbrature); `GET|POST /api/machines/[id]/erp-sync` (anteprima / sync completo
   singola macchina); `POST /api/erp/sync-all` (batch, permesso `machine.import`).

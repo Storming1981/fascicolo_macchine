@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     where: q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { city: { contains: q, mode: "insensitive" } }] } : {},
     orderBy: { name: "asc" },
     take: 50,
-    select: { code: true, name: true, city: true, state: true, country: true },
+    select: { code: true, name: true, address: true, city: true, state: true, zip: true, country: true },
   });
   return NextResponse.json({ customers, total: await prisma.erpNaCustomer.count() });
 }
