@@ -594,6 +594,18 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     resta una proposta da confermare con ✓.
   - Finisce anche nel PDF della scheda, accanto alla matricola
     (`MM104353 · 09/26`), e ogni cambio va a diario.
+- **Una foto già caricata si collega a uno slot** (icona immagine accanto alla
+  fotocamera in Componenti & Matricole): in officina si scatta prima e si
+  compila dopo, quindi la foto della targhetta è quasi sempre già nel fascicolo,
+  in *Produzione*. Riscattarla vorrebbe dire avere due volte la stessa immagine.
+  Il riquadro mostra tutte le foto del fascicolo con la cartella di provenienza;
+  collegandola la foto **si sposta** nella cartella dello slot (una foto sta in
+  un posto solo, altrimenti non si sa quale delle due vale) e il passaggio va a
+  diario con la cartella di partenza e quella d'arrivo. Dopo il collegamento il
+  pulsante ↻ legge la matricola da quella foto.
+  API: `PATCH /api/machines/[id]/photos/[photoId]` `{componentItemId}` (null per
+  staccarla). Permesso: chi lavora sui componenti (`machine.intervention`),
+  l'autore della foto o chi ha `machine.edit`.
 - **Miniature nello slot componente**: la colonna Foto di Componenti &
   Matricole mostra l'ultima foto dello slot (clic = apre) con il conteggio
   delle altre; prima la foto finiva solo in Foto produzione perché il loader

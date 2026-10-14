@@ -1082,6 +1082,28 @@ function TabComponenti({
       notify("Campo aggiunto");
     } else notify("Errore", "err");
   }
+  // Slot per cui si sta scegliendo una foto gia' caricata (riquadro di scelta)
+  const [pickFor, setPickFor] = useState<{ id: string; title: string } | null>(null);
+
+  /**
+   * Collega allo slot una foto che sta gia' nel fascicolo. In officina si
+   * fotografa prima e si compila dopo: la foto finisce in "Produzione" e
+   * riscattarla per lo slot vuol dire avere due volte la stessa immagine.
+   */
+  async function linkPhoto(photoId: string, itemId: string) {
+    const res = await fetch(`/api/machines/${machine.id}/photos/${photoId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ componentItemId: itemId }),
+    });
+    const d = await res.json().catch(() => ({}));
+    setPickFor(null);
+    if (res.ok) {
+      onDone();
+      notify("Foto collegata allo slot — premi ↻ per leggerne la matricola");
+    } else notify(d.error || "Collegamento non riuscito", "err");
+  }
+
   async function deleteField(itemId: string) {
     const res = await fetch(`/api/machines/${machine.id}/component-item?itemId=${itemId}`, { method: "DELETE" });
     if (res.ok) {
@@ -1128,11 +1150,23 @@ function TabComponenti({
       setTarget(itemId);
       setTimeout(() => photoRef.current?.click(), 0);
     };
+    const choose = (
+      <button
+        className="icon-btn sm"
+        title="Scegli una foto già caricata nel fascicolo"
+        onClick={() => setPickFor({ id: itemId, title })}
+      >
+        <Icon name="image" size={14} />
+      </button>
+    );
     if (!ph)
       return (
-        <button className="thumb-empty" title={title} onClick={pick}>
-          <Icon name="camera" size={16} />
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button className="thumb-empty" title={title} onClick={pick}>
+            <Icon name="camera" size={16} />
+          </button>
+          {choose}
+        </div>
       );
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1149,6 +1183,7 @@ function TabComponenti({
         <button className="icon-btn sm" title="Aggiungi un'altra foto" onClick={pick}>
           <Icon name="camera" size={14} />
         </button>
+        {choose}
       </div>
     );
   }
@@ -1179,6 +1214,15 @@ function TabComponenti({
         hidden
         onChange={(e) => uploadItemPhoto(e.target.files)}
       />
+
+      {pickFor && (
+        <PhotoPickerModal
+          photos={machine.photos}
+          slot={pickFor}
+          onClose={() => setPickFor(null)}
+          onPick={(photoId) => linkPhoto(photoId, pickFor.id)}
+        />
+      )}
 
       {sheetsMode && view === "schede" && (
         <AllestimentoSheets
@@ -3731,6 +3775,84 @@ function CollaudoModal({
             </button>
           )}
         </footer>
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * Scelta di una foto già nel fascicolo da collegare a uno slot componente.
+ * Mostra tutte le foto non eliminate con la cartella di provenienza: in
+ * officina si scatta prima (cartella Produzione) e si compila dopo, quindi la
+ * foto giusta quasi sempre c'è già e riscattarla significherebbe averla due
+ * volte. Collegandola **si sposta** nella cartella dello slot.
+ */
+function PhotoPickerModal({
+  photos,
+  slot,
+  onClose,
+  onPick,
+}: {
+  photos: PhotoItem[];
+  slot: { id: string; title: string };
+  onClose: () => void;
+  onPick: (photoId: string) => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  // le foto gia' su questo slot non si ri-collegano
+  const list = photos.filter((p) => p.componentItemId !== slot.id);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <header className="modal-header">
+          <div>
+            <h2>Scegli una foto già caricata</h2>
+            <div className="muted small">{slot.title}</div>
+          </div>
+          <button className="icon-btn" onClick={onClose}>
+            <Icon name="x" size={18} />
+          </button>
+        </header>
+        <div className="modal-body">
+          {list.length === 0 ? (
+            <p className="muted">Nel fascicolo non ci sono altre foto da collegare.</p>
+          ) : (
+            <div className="pick-grid">
+              {list.map((p) => {
+                const folder = FOLDERS.find((f) => f.id === folderOf(p));
+                return (
+                  <button
+                    key={p.id}
+                    className="pick-card"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      setBusy(p.id);
+                      onPick(p.id);
+                    }}
+                    title={p.caption || p.path}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.path} alt={p.caption || "foto"} />
+                    <span className="pick-meta">
+                      <span className="pick-folder">{p.componentLabel || folder?.label || "Foto"}</span>
+                      <span className="muted small">
+                        {fmtDate(p.takenAt)} · {p.authorName || "—"}
+                      </span>
+                    </span>
+                    {busy === p.id && <span className="pick-busy">collego…</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn-ghost" onClick={onClose}>
+            Chiudi
+          </button>
+        </div>
       </div>
     </div>
   );
