@@ -1,49 +1,46 @@
 import { prisma } from "./db";
-import { sheetKindsFor } from "./allestimento";
-import { machineProgress, type CollaudoState, type MachineProgress, type MachineStatusLike } from "./machineProgress";
+import { machineProgress, type AnagraficaFields, type CollaudoState, type MachineProgress } from "./machineProgress";
+
+/** Quanto serve per calcolare l'avanzamento: i campi anagrafici del fascicolo. */
+export type ProgressMachine = AnagraficaFields & { id: string };
 
 /**
- * Avanzamento di più fascicoli in quattro query sole: elenco macchine,
- * dashboard e scheda del fascicolo devono mostrare lo stesso numero, quindi
- * passano tutti di qui invece di calcolarselo ognuno coi dati che ha sottomano.
+ * Avanzamento di più fascicoli in due query: elenco macchine, dashboard e
+ * scheda devono mostrare lo stesso numero, quindi passano tutti di qui invece
+ * di calcolarselo ognuno coi dati che ha sottomano.
+ *
+ * Le matricole si contano in **SQL aggregato**: caricare gli slot di 195
+ * fascicoli (oltre diecimila righe) per contarli in JavaScript sarebbe il modo
+ * più lento di ottenere due numeri.
  */
-export async function progressForMachines(
-  machines: { id: string; plantType: string | null; status: MachineStatusLike }[]
-): Promise<Map<string, MachineProgress>> {
+export async function progressForMachines(machines: ProgressMachine[]): Promise<Map<string, MachineProgress>> {
   const out = new Map<string, MachineProgress>();
   if (!machines.length) return out;
   const ids = machines.map((m) => m.id);
 
-  const [milestones, collaudi, sheets] = await Promise.all([
-    prisma.machineMilestone.findMany({ where: { machineId: { in: ids } }, select: { machineId: true, key: true } }),
+  const [collaudi, serials] = await Promise.all([
     prisma.collaudo.findMany({ where: { machineId: { in: ids } }, select: { machineId: true, status: true } }),
-    prisma.allestimentoSheet.findMany({ where: { machineId: { in: ids } }, select: { machineId: true, status: true } }),
+    prisma.$queryRaw<{ machineId: string; total: bigint; filled: bigint }[]>`
+      SELECT c."machineId", COUNT(*) AS total,
+             COUNT(*) FILTER (WHERE COALESCE(BTRIM(i.serial), '') <> '') AS filled
+      FROM "ComponentItem" i
+      JOIN "Component" c ON c.id = i."componentId"
+      WHERE c."machineId" = ANY(${ids})
+      GROUP BY c."machineId"`,
   ]);
 
-  const byMachine = <T extends { machineId: string }>(rows: T[]) => {
-    const m = new Map<string, T[]>();
-    for (const r of rows) m.set(r.machineId, [...(m.get(r.machineId) ?? []), r]);
-    return m;
-  };
-  const ms = byMachine(milestones);
   const cs = new Map(collaudi.map((c) => [c.machineId, c.status]));
-  const sh = byMachine(sheets);
+  const ss = new Map(serials.map((r) => [r.machineId, { total: Number(r.total), filled: Number(r.filled) }]));
 
   for (const m of machines) {
     const st = cs.get(m.id);
     const collaudo: CollaudoState =
       st === "APPROVED" ? "APPROVED" : st === "PENDING_APPROVAL" ? "COMPILED" : st ? "DRAFT" : "NONE";
-    const rows = sh.get(m.id) ?? [];
     out.set(
       m.id,
       machineProgress({
-        status: m.status,
-        milestones: (ms.get(m.id) ?? []).map((x) => x.key),
-        sheets: {
-          expected: sheetKindsFor(m.plantType).length,
-          started: rows.filter((r) => r.status !== "SIGNED").length,
-          signed: rows.filter((r) => r.status === "SIGNED").length,
-        },
+        anagrafica: m,
+        serials: ss.get(m.id) ?? { filled: 0, total: 0 },
         collaudo,
       })
     );
@@ -51,11 +48,7 @@ export async function progressForMachines(
   return out;
 }
 
-export async function progressForMachine(m: {
-  id: string;
-  plantType: string | null;
-  status: MachineStatusLike;
-}): Promise<MachineProgress> {
+export async function progressForMachine(m: ProgressMachine): Promise<MachineProgress> {
   const map = await progressForMachines([m]);
   return map.get(m.id) ?? { percent: 0, steps: [] };
 }

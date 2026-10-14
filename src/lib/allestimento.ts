@@ -535,21 +535,6 @@ export function inlineRow(def: SheetDef, key: string): SheetRow | undefined {
   return allRows(def).find((r) => r.inlineWith === key);
 }
 
-/** La voce e' compilata? Per le righe con N.A. di default il vuoto vale N.A. */
-export function isRowDone(row: SheetRow, values: SheetValues): boolean {
-  if (row.naDefault) return true;
-  return !!(values[row.key]?.spec ?? "").trim();
-}
-
-/**
- * Righe che contano per l'avanzamento: quelle senza specifica (la matricola la
- * si legge dalla foto) non si possono "compilare", quindi terrebbero la scheda
- * eternamente incompleta.
- */
-export function scoredRows(rows: SheetRow[]): SheetRow[] {
-  return rows.filter((r) => !r.noSpec);
-}
-
 /**
  * Quante matricole mostrare per la riga: il numero scritto in un'altra riga
  * (es. "Nr. Motori Elettrici" = 1 → un solo slot). null = tutte. Gli slot gia'

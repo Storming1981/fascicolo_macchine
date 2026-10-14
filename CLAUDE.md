@@ -665,9 +665,11 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   - **Lotto albero: si legge dalla foto**, come le matricole dei riduttori. Non
     è più una voce scritta a mano nella scheda ma la matricola dello slot del
     gruppo **`shaft`** (Albero), quindi ha fotocamera, OCR e foto per slot senza
-    scrivere niente di nuovo. La riga è `noSpec: true`: non ha specifica, e le
-    righe senza specifica **non contano nell'avanzamento** (`scoredRows`),
-    altrimenti la scheda resterebbe eternamente incompleta. Il lotto già scritto
+    scrivere niente di nuovo. La riga è `noSpec: true`: non ha specifica, e si
+    considera compilata **quando la matricola c'è**. Prima queste righe erano
+    escluse dal conteggio e una sezione risultava 16/16 col lotto lame ancora
+    vuoto: una voce che si compila in un altro modo non è una voce che non
+    conta. Il lotto già scritto
     a mano **si sposta sullo slot** alla creazione del gruppo (`moveShaftLot`):
     senza, sparirebbe dalla scheda di ogni fascicolo già compilato.
   - **Lotto lame: foto e OCR come l'albero.** Era un campo `extra` del gruppo
@@ -787,27 +789,33 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   richiedono la password attuale), **firma personale**. Nome, e-mail e ruolo
   restano all'amministratore. `GET|PATCH /api/users/me`. Prima il collegamento
   Gmail personale era raggiungibile solo da Impostazioni (`settings.manage`).
-- **Avanzamento: calcolato, non più un cursore** (`src/lib/machineProgress.ts`
-  puro + `src/lib/progressService.ts` per le query). Lo slider diceva solo
-  quanto qualcuno si era ricordato di spostarlo: in produzione era fermo a 0 o a
-  un numero vecchio su tutta la flotta, quindi la barra in elenco e in dashboard
-  non significava niente. Ora è la somma pesata di passaggi che il fascicolo
-  registra già da sé — apertura 5, inizio produzione 15, schede di allestimento
-  20 (firmate; mezzo punto se solo avviate), fine produzione 15, check list
-  compilata 10, collaudo approvato 10, spedita 15, installata 10 — rinormalizzati
-  sulle voci che valgono per quella tipologia (senza schede il 20 sparisce).
-  - **Lo stato della macchina implica i passaggi precedenti**: un fascicolo
-    marcato *Spedita* ha per forza finito produzione e collaudo anche se non
-    sono mai stati registrati qui. Senza questa regola i 187 fascicoli importati
-    dal file MATRICOLE, in esercizio da anni, sarebbero rimasti a metà barra. I
-    passaggi dedotti così sono marcati «da stato» nell'elenco dei passaggi.
-  - **Un solo punto di calcolo** (`progressForMachines`, quattro query per N
-    fascicoli): elenco, dashboard e scheda mostrano lo stesso numero. Il campo
-    `Machine.progress` **non esiste più** (eliminato con lo slider e col
-    `PATCH` che lo scriveva): un numero scritto a mano che nessuno aggiornava è
-    peggio di nessun numero.
-  - Nella scheda la percentuale si apre e mostra **i passaggi fatti e quelli che
-    mancano**: l'unica cosa utile da offrire su un dato che non si modifica.
+- **Avanzamento = quanto è COMPLETO il fascicolo** (`src/lib/machineProgress.ts`
+  puro + `src/lib/progressService.ts` per le query). Due versioni scartate prima
+  di questa: il **cursore manuale** (fermo a 0 su tutta la flotta, diceva solo
+  quanto qualcuno si era ricordato di spostarlo) e la **somma delle date di
+  stato** — ma lo stato della macchina si legge già nella colonna *Stato*, e
+  ripeterlo in una barra non aggiungeva niente. Il dato che serve è **quanto
+  manca da compilare**, diviso nelle tre cose che si compilano a mano:
+  - **Anagrafica**: quota dei campi compilati (tipologia, modello, anno, job,
+    cliente, paese, sito, date, targa tecnica, settaggio pressione; job corpo e
+    container **solo sui BLUE DEVIL**, altrove non esistono e chiederli
+    abbasserebbe per sempre fascicoli completi).
+  - **Componenti e matricole**: slot con matricola sul totale degli slot.
+  - **Collaudo**: 0 → bozza 40% → compilata e firmata 70% → approvata 100%.
+
+  Pesano **uguale**: un fascicolo con l'anagrafica piena ma senza matricole è
+  completo per un terzo, ed è esattamente quello che si vuole vedere. Nella
+  scheda la percentuale si apre e mostra le tre voci col loro dettaglio
+  ("35 di 56 matricole"), perché su un numero che non si modifica a mano
+  l'unica cosa utile è spiegare da dove viene.
+  - **Un solo punto di calcolo** (`progressForMachines`, due query per N
+    fascicoli — le matricole si contano in **SQL aggregato**, caricare diecimila
+    slot per contarli in JavaScript sarebbe il modo più lento di ottenere due
+    numeri): elenco, dashboard e scheda mostrano lo stesso numero. Il campo
+    `Machine.progress` **non esiste più**.
+  - Conseguenza voluta: i fascicoli importati, in esercizio da anni ma senza
+    collaudo registrato qui, **non sono al 100%** — perché il loro fascicolo
+    non è completo, ed è proprio la domanda a cui la barra deve rispondere.
 - **Stato macchina** modificabile dal dettaglio (select), evento a diario.
 - **Nuovo intervento**: fase, tipo (sostituzione/ispezione/riparazione/nota),
   matricole, foto, firma PIN o a penna su canvas → diario + firma + aggiorna seriale.

@@ -6,7 +6,6 @@ import {
   CONTAINER_TYPES,
   containerType,
   inlineRow,
-  isRowDone,
   MATRICOLA_LABEL,
   NA_VALUE,
   YES_NO,
@@ -14,7 +13,6 @@ import {
   isListRow,
   listKey,
   listOptions,
-  scoredRows,
   serialLimit,
   serialListKey,
   serialListOptions,
@@ -215,8 +213,10 @@ export default function AllestimentoSheets({
   const sections = def.sections
     .map((s) => {
       const rows = visibleRows(s, ctx, draft.values);
-      const scored = scoredRows(rows);
-      return { s, rows, scored, done: scored.filter((r) => isRowDone(r, draft.values)).length };
+      // Contano TUTTE le voci mostrate: una riga che si compila solo con la
+      // matricola (lotto lame, lotto albero) restava fuori dal conteggio, e la
+      // sezione risultava completa mentre un dato mancava ancora.
+      return { s, rows, scored: rows, done: rows.filter((r) => rowFilled(r)).length };
     })
     .filter((x) => x.rows.length);
   const total = sections.reduce((a, x) => a + x.scored.length, 0);
@@ -227,14 +227,14 @@ export default function AllestimentoSheets({
     const d = drafts[k];
     if (!d) return 0;
     const c = sheetCtx(k, d.header, machine.model);
-    const rows = scoredRows(sheetDef(k).sections.flatMap((s) => visibleRows(s, c, d.values)));
-    return rows.length ? Math.round((rows.filter((r) => isRowDone(r, d.values)).length / rows.length) * 100) : 0;
+    const rows = sheetDef(k).sections.flatMap((s) => visibleRows(s, c, d.values));
+    return rows.length ? Math.round((rows.filter((r) => rowFilled(r, d.values)).length / rows.length) * 100) : 0;
   }
 
   /** Riga compilata: la specifica, o la matricola per le righe che non ce l'hanno. */
-  function rowFilled(row: SheetRow) {
+  function rowFilled(row: SheetRow, values: SheetValues = draft.values) {
     if (row.naDefault) return true;
-    if (!row.noSpec) return filled(draft.values[row.key]?.spec);
+    if (!row.noSpec) return filled(values[row.key]?.spec);
     return (compOf(row.serials ?? "")?.items ?? []).some((it) => !!(it.serial ?? "").trim());
   }
 

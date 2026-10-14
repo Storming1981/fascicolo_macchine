@@ -52,7 +52,7 @@ type Machine = {
   model: string; year: number; customer: string; customerId: string | null; country: string; countryCode: string;
   site: string | null; status: MachineStatus;
   /** Avanzamento calcolato dai fatti del fascicolo (src/lib/machineProgress.ts). */
-  progress: { percent: number; steps: { key: string; label: string; weight: number; done: number; implied: boolean }[] };
+  progress: { percent: number; steps: { key: string; label: string; weight: number; done: number; detail: string }[] };
   productionStart: string | null; deliveryDate: string | null; pressureSettings: string | null;
   plateWeight: string | null; platePower: string | null; plateVoltage: string | null; notes: string | null;
   tiranteGiunto: boolean;
@@ -388,9 +388,11 @@ function ProgressBlock({
           {progress.steps.map((s) => (
             <div key={s.key} className={"progress-step" + (s.done >= 1 ? " done" : s.done > 0 ? " partial" : "")}>
               <Icon name={s.done >= 1 ? "check" : "clock"} size={12} />
-              <span>{s.label}</span>
-              {s.implied && <em title="Dato per fatto dallo stato del fascicolo">da stato</em>}
-              <span className="mono">{s.weight}%</span>
+              <span>
+                {s.label}
+                <em>{s.detail}</em>
+              </span>
+              <span className="mono">{Math.round(s.done * 100)}%</span>
             </div>
           ))}
         </div>

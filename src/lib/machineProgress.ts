@@ -1,32 +1,43 @@
-// Avanzamento del fascicolo: calcolato dai fatti, non più spostato a mano.
+// Avanzamento del fascicolo: quanto è COMPLETO, non a che punto è la macchina.
 //
-// Il cursore manuale diceva solo quanto qualcuno si era ricordato di muoverlo:
-// su 194 fascicoli era fermo a 0 o a un numero vecchio, quindi la barra in
-// elenco e in dashboard non significava niente. Qui l'avanzamento è la somma
-// pesata di passaggi che il fascicolo registra già da solo (date di stato dal
-// gestionale, schede di allestimento, check list di collaudo).
+// Prima era un cursore spostato a mano (fermo a 0 su tutta la flotta), poi una
+// somma di date di stato — ma lo stato della macchina lo si legge già dalla
+// colonna *Stato*, e ripeterlo in una barra non aggiungeva niente. Il dato che
+// serve davvero è **quanto manca da compilare**, e il committente l'ha diviso
+// nelle tre cose che si compilano a mano:
 //
-// Regola importante: **lo stato della macchina implica il passaggio e i
-// precedenti**: marcare "Spedita" vuol dire che la spedizione c'e' stata.
-// Un fascicolo marcato "Spedita" ha per forza finito produzione e collaudo,
-// anche se quei passaggi non sono mai stati registrati nell'app — è il caso dei
-// 187 fascicoli importati dal file MATRICOLE, che altrimenti resterebbero a
-// metà barra pur essendo in esercizio da anni.
+//   Anagrafica · Componenti e matricole · Collaudo
+//
+// Pesano uguale: un fascicolo con l'anagrafica piena ma senza matricole è
+// completo per un terzo, ed è esattamente quello che si vuole vedere.
 //
 // Modulo puro (client + server): niente import server-only.
 
-import { STATUS_ORDER } from "./domain";
-
-export type MachineStatusLike = (typeof STATUS_ORDER)[number];
-
 export type CollaudoState = "NONE" | "DRAFT" | "COMPILED" | "APPROVED";
 
+/** Campi dell'anagrafica che contano come "compilati". */
+export type AnagraficaFields = {
+  plantType: string | null;
+  model: string | null;
+  year: number | null;
+  job: string | null;
+  jobBody: string | null;
+  jobContainer: string | null;
+  customer: string | null;
+  country: string | null;
+  site: string | null;
+  productionStart: Date | string | null;
+  deliveryDate: Date | string | null;
+  pressureSettings: string | null;
+  plateWeight: string | null;
+  platePower: string | null;
+  plateVoltage: string | null;
+};
+
 export type ProgressFacts = {
-  status: MachineStatusLike;
-  /** Chiavi delle date di stato presenti (MachineMilestone + calcolate). */
-  milestones: string[];
-  /** Schede di allestimento previste per la tipologia, avviate e firmate. */
-  sheets: { expected: number; started: number; signed: number };
+  anagrafica: AnagraficaFields;
+  /** Slot componente del fascicolo e quanti hanno una matricola. */
+  serials: { filled: number; total: number };
   collaudo: CollaudoState;
 };
 
@@ -34,50 +45,84 @@ export type ProgressStep = {
   key: string;
   label: string;
   weight: number;
-  /** 0 = da fare, 1 = fatto, valori intermedi per i passaggi parziali. */
+  /** 0 = da fare, 1 = fatto. */
   done: number;
-  /** Il passaggio è dato per fatto dallo stato del fascicolo, non registrato. */
-  implied: boolean;
+  /** Dettaglio leggibile ("12 di 20 matricole"). */
+  detail: string;
 };
 
-const rank = (s: MachineStatusLike) => STATUS_ORDER.indexOf(s);
-const from = (status: MachineStatusLike, min: MachineStatusLike) => rank(status) >= rank(min);
+const has = (v: unknown) => (typeof v === "number" ? !!v : !!(v && String(v).trim()));
+
+/**
+ * Quota dei campi anagrafici compilati. Job corpo e container contano **solo
+ * sui BLUE DEVIL**: sulle altre tipologie non esistono, e chiederli
+ * abbasserebbe per sempre l'avanzamento di fascicoli completi.
+ */
+export function anagraficaScore(a: AnagraficaFields): { done: number; total: number } {
+  const fields: unknown[] = [
+    a.plantType,
+    a.model,
+    a.year,
+    a.job,
+    a.customer,
+    a.country,
+    a.site,
+    a.productionStart,
+    a.deliveryDate,
+    a.pressureSettings,
+    a.plateWeight,
+    a.platePower,
+    a.plateVoltage,
+  ];
+  if (a.plantType === "BLUE DEVIL") fields.push(a.jobBody, a.jobContainer);
+  return { done: fields.filter(has).length, total: fields.length };
+}
+
+const COLLAUDO_SCORE: Record<CollaudoState, number> = {
+  NONE: 0,
+  DRAFT: 0.4,
+  COMPILED: 0.7,
+  APPROVED: 1,
+};
+const COLLAUDO_LABEL: Record<CollaudoState, string> = {
+  NONE: "da compilare",
+  DRAFT: "in compilazione",
+  COMPILED: "in attesa di approvazione",
+  APPROVED: "approvato",
+};
 
 export function progressSteps(f: ProgressFacts): ProgressStep[] {
-  const has = (k: string) => f.milestones.includes(k);
-  const sheetsDone = f.sheets.expected
-    ? Math.min(1, (f.sheets.signed + f.sheets.started * 0.5) / f.sheets.expected)
-    : 0;
-
-  const steps: { key: string; label: string; weight: number; raw: number; implied: MachineStatusLike | null }[] = [
-    { key: "open", label: "Fascicolo aperto", weight: 5, raw: 1, implied: null },
-    { key: "production_start", label: "Produzione iniziata", weight: 15, raw: has("production_start") ? 1 : 0, implied: "TESTING" },
-    ...(f.sheets.expected
-      ? [{ key: "sheets", label: "Schede di allestimento", weight: 20, raw: sheetsDone, implied: "SHIPPED" as MachineStatusLike }]
-      : []),
-    { key: "production_end", label: "Produzione conclusa", weight: 15, raw: has("production_end") ? 1 : 0, implied: "TESTING" },
+  const a = anagraficaScore(f.anagrafica);
+  const s = f.serials;
+  return [
+    {
+      key: "anagrafica",
+      label: "Anagrafica",
+      weight: 1,
+      done: a.total ? a.done / a.total : 1,
+      detail: `${a.done} di ${a.total} campi`,
+    },
+    {
+      key: "componenti",
+      label: "Componenti e matricole",
+      weight: 1,
+      done: s.total ? s.filled / s.total : 0,
+      detail: s.total ? `${s.filled} di ${s.total} matricole` : "nessuno slot censito",
+    },
     {
       key: "collaudo",
-      label: "Check list di collaudo compilata",
-      weight: 10,
-      raw: f.collaudo === "COMPILED" || f.collaudo === "APPROVED" ? 1 : f.collaudo === "DRAFT" ? 0.4 : 0,
-      implied: "SHIPPED",
+      label: "Collaudo",
+      weight: 1,
+      done: COLLAUDO_SCORE[f.collaudo],
+      detail: COLLAUDO_LABEL[f.collaudo],
     },
-    { key: "collaudo_ok", label: "Collaudo approvato", weight: 10, raw: f.collaudo === "APPROVED" || has("testing") ? 1 : 0, implied: "SHIPPED" },
-    { key: "shipped", label: "Spedita", weight: 15, raw: has("shipped") ? 1 : 0, implied: "SHIPPED" },
-    { key: "installed", label: "Installata", weight: 10, raw: has("installed") ? 1 : 0, implied: "INSTALLED" },
   ];
-
-  return steps.map((s) => {
-    const implied = !!s.implied && s.raw < 1 && from(f.status, s.implied);
-    return { key: s.key, label: s.label, weight: s.weight, done: implied ? 1 : s.raw, implied };
-  });
 }
 
 export function progressPercent(steps: ProgressStep[]): number {
-  const total = steps.reduce((a, s) => a + s.weight, 0);
+  const total = steps.reduce((acc, s) => acc + s.weight, 0);
   if (!total) return 0;
-  return Math.round((steps.reduce((a, s) => a + s.weight * s.done, 0) / total) * 100);
+  return Math.round((steps.reduce((acc, s) => acc + s.weight * s.done, 0) / total) * 100);
 }
 
 export type MachineProgress = { percent: number; steps: ProgressStep[] };
