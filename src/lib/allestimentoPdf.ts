@@ -7,6 +7,7 @@ import {
   MATRICOLA_LABEL,
   sheetCtx,
   sheetDef,
+  NA_VALUE,
   serialLimit,
   visibleRows,
   type SheetHeader,
@@ -211,7 +212,7 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
   newPage(true);
 
   for (const section of def.sections) {
-    const rows = visibleRows(section, ctx);
+    const rows = visibleRows(section, ctx, input.values);
     if (!rows.length) continue;
     // la testata di sezione non resta orfana in fondo alla pagina
     if (y - 22 - LINE_H < bottom) newPage(false);
@@ -228,8 +229,9 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
       // (es. un solo motore elettrico) non si stampano se sono vuoti
       const lim = serialLimit(row, input.values);
       const serials = lim === null ? all : all.filter((s, i) => i < lim || !!s.trim());
-      // riga senza specifica (lotto albero): la colonna resta vuota
-      const spec = row.noSpec ? "" : v.spec ?? "";
+      // riga senza specifica (lotto albero): la colonna resta vuota; dove N.A.
+      // e' il default (specifiche speciali) il vuoto si stampa come N.a.
+      const spec = row.noSpec ? "" : (v.spec ?? "") || (row.naDefault ? NA_VALUE : "");
       const subRows = Math.max(1, serials.length);
       const specW = row.wide ? COLS[1] + COLS[2] : COLS[1];
       const textLines = Math.max(

@@ -5,7 +5,9 @@ import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad
 import {
   CONTAINER_TYPES,
   containerType,
+  isRowDone,
   MATRICOLA_LABEL,
+  NA_VALUE,
   YES_NO,
   YES_NO_NA,
   isListRow,
@@ -211,9 +213,9 @@ export default function AllestimentoSheets({
 
   const sections = def.sections
     .map((s) => {
-      const rows = visibleRows(s, ctx);
+      const rows = visibleRows(s, ctx, draft.values);
       const scored = scoredRows(rows);
-      return { s, rows, scored, done: scored.filter((r) => filled(draft.values[r.key]?.spec)).length };
+      return { s, rows, scored, done: scored.filter((r) => isRowDone(r, draft.values)).length };
     })
     .filter((x) => x.rows.length);
   const total = sections.reduce((a, x) => a + x.scored.length, 0);
@@ -224,12 +226,13 @@ export default function AllestimentoSheets({
     const d = drafts[k];
     if (!d) return 0;
     const c = sheetCtx(k, d.header, machine.model);
-    const rows = scoredRows(sheetDef(k).sections.flatMap((s) => visibleRows(s, c)));
-    return rows.length ? Math.round((rows.filter((r) => filled(d.values[r.key]?.spec)).length / rows.length) * 100) : 0;
+    const rows = scoredRows(sheetDef(k).sections.flatMap((s) => visibleRows(s, c, d.values)));
+    return rows.length ? Math.round((rows.filter((r) => isRowDone(r, d.values)).length / rows.length) * 100) : 0;
   }
 
   /** Riga compilata: la specifica, o la matricola per le righe che non ce l'hanno. */
   function rowFilled(row: SheetRow) {
+    if (row.naDefault) return true;
     if (!row.noSpec) return filled(draft.values[row.key]?.spec);
     return (compOf(row.serials ?? "")?.items ?? []).some((it) => !!(it.serial ?? "").trim());
   }
@@ -627,7 +630,43 @@ export default function AllestimentoSheets({
                       </span>
                     </div>
                     <div className="al-row-spec">
-                      {specControl(row)}
+                      <div className="al-spec-line">
+                        {specControl(row)}
+                        {row.naButton && (
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            // Con naDefault il vuoto E' gia' N.A.: il bottone
+                            // serve a cancellare quello che si era scritto.
+                            className={
+                              "al-na" +
+                              ((row.naDefault
+                                ? !(draft.values[row.key]?.spec ?? "").trim()
+                                : (draft.values[row.key]?.spec ?? "") === NA_VALUE)
+                                ? " on"
+                                : "")
+                            }
+                            title={
+                              row.naDefault
+                                ? "Nessuna specifica speciale"
+                                : "Non previsto su questa macchina"
+                            }
+                            onClick={() =>
+                              setValue(
+                                row.key,
+                                "spec",
+                                row.naDefault
+                                  ? ""
+                                  : (draft.values[row.key]?.spec ?? "") === NA_VALUE
+                                    ? ""
+                                    : NA_VALUE
+                              )
+                            }
+                          >
+                            N.A.
+                          </button>
+                        )}
+                      </div>
                       {row.kitFlag && (
                         <KitFlagBox
                           machineId={machine.id}

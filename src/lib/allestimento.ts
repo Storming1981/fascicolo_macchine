@@ -41,6 +41,16 @@ export type SheetRow = {
   /** La riga non ha specifica: conta solo la matricola (es. lotto albero da foto). */
   noSpec?: boolean;
   /**
+   * Bottone **N.A.** accanto alla specifica, per le voci che spesso non si
+   * applicano. Con `naDefault` il vuoto *vale* N.A. (specifiche speciali: se
+   * non si scrive niente la voce e' conclusa, non in attesa); senza, N.A. e'
+   * una scelta esplicita scritta nella scheda (condizionatore assente).
+   */
+  naButton?: boolean;
+  naDefault?: boolean;
+  /** Riga nascosta quando la riga indicata e' su N.A. (es. tensione del condizionatore). */
+  hiddenByNa?: string;
+  /**
    * Spunta di dotazione della macchina (campo su `Machine`, non sulla scheda):
    * sta qui perche' e' una caratteristica del componente di questa riga, e
    * compare nell'elenco macchine per tenerne lo storico.
@@ -72,6 +82,9 @@ export type SheetValues = Record<string, SheetValue>;
 export type SheetHeader = { tipo?: string; collaudatoDa?: string; matricola?: string };
 /** Voci aggiunte dagli operatori, per elenco. */
 export type SheetOptions = Record<string, string[]>;
+
+/** Valore scritto nella scheda quando una voce non si applica. */
+export const NA_VALUE = "N.a.";
 
 export const YES_NO = ["Sì", "No"];
 export const YES_NO_NA = ["Sì", "No", "N.a."];
@@ -157,11 +170,16 @@ export const SHEET_TRITURATORE: SheetDef = {
       title: "ALLESTIMENTO CAVALLETTO TRAMOGGIA",
       icon: "box",
       rows: [
-        { key: "costruttore_cavalletto", label: "Costruttore cavalletto e tramoggia", suggest: ["STAM"] },
+        {
+          key: "costruttore_cavalletto",
+          label: "Costruttore cavalletto e tramoggia",
+          suggest: ["STAM"],
+          serials: "stand",
+        },
         { key: "colore_cavalletto", label: "Colore cavalletto", suggest: COLORS, list: "colori" },
         { key: "colore_tramoggia", label: "Colore tramoggia", suggest: COLORS, list: "colori" },
         { key: "verniciatura_cavalletto", label: "Verniciatura", suggest: PAINT, list: "verniciatura" },
-        { key: "speciali_cavalletto", label: "Specifiche speciali", free: true },
+        { key: "speciali_cavalletto", label: "Specifiche speciali", free: true, naButton: true, naDefault: true },
       ],
     },
     {
@@ -174,7 +192,7 @@ export const SHEET_TRITURATORE: SheetDef = {
         { key: "fornitore_tubi_rigidi", label: "Fornitore tubi rigidi", suggest: ["EFFEGI"] },
         { key: "lunghezza_linea", label: "Lunghezza linea ferro", suggest: ["STD"] },
         { key: "kit_ruotato", label: "Kit ruotato", input: "yesno" },
-        { key: "speciali_tubi", label: "Specifiche speciali", free: true },
+        { key: "speciali_tubi", label: "Specifiche speciali", free: true, naButton: true, naDefault: true },
       ],
     },
     {
@@ -214,7 +232,7 @@ export const SHEET_TRITURATORE: SheetDef = {
         { key: "ctrl_lame", label: "Controllo spazio tra lama e lama (0,5 mm)", input: "yesnona" },
         { key: "ctrl_verniciatura", label: "Controllo verniciatura", input: "yesnona" },
         { key: "ctrl_adesivi", label: "Controllo applicazione adesivi e pittogrammi", input: "yesnona" },
-        { key: "speciali_controlli", label: "Specifiche speciali", free: true },
+        { key: "speciali_controlli", label: "Specifiche speciali", free: true, naButton: true, naDefault: true },
       ],
     },
   ],
@@ -244,16 +262,17 @@ export const SHEET_CONTAINER: SheetDef = {
         { key: "motore_diesel", label: "Motore diesel", bind: { group: "diesel", field: "brand" }, serials: "diesel", when: isDiesel },
         { key: "costruttore_container", label: "Costruttori Container", bind: { group: "container", field: "brand" }, serials: "container", suggest: ["ECOFER"] },
         { key: "coibentazione", label: "Coibentazione Container", input: "yesno" },
-        { key: "condizionatore", label: "Costruttore Condizionatore", bind: { group: "cooling", field: "brand" }, serials: "cooling" },
-        { key: "tensione_condizionatore", label: "Tensione Condizionatore (V)", suggest: ["400", "230"], list: "tensione" },
-        { key: "frequenza_condizionatore", label: "Frequenza Condizionatore (Hz)", suggest: ["50", "60"], list: "frequenza" },
+        { key: "condizionatore", label: "Costruttore Condizionatore", bind: { group: "cooling", field: "brand" }, serials: "cooling", naButton: true },
+        { key: "tensione_condizionatore", label: "Tensione Condizionatore (V)", suggest: ["400", "230"], list: "tensione", hiddenByNa: "condizionatore" },
+        { key: "frequenza_condizionatore", label: "Frequenza Condizionatore (Hz)", suggest: ["50", "60"], list: "frequenza", hiddenByNa: "condizionatore" },
         { key: "centrale_idraulica", label: "Centrale Idraulica", bind: { group: "hyd_unit", field: "brand" }, serials: "hyd_unit", suggest: ["MAGNUM"], kitFlag: "filtroMaggiorato" },
         { key: "pompe", label: "Pompe idrauliche (Pompa 1 / Pompa 2)", bind: { group: "hyd_pumps", field: "brand" }, serials: "hyd_pumps", suggest: ["LINDE"] },
         { key: "blocchi_pompe", label: "Blocchi pompe", bind: { group: "pump_blocks", field: "brand" }, serials: "pump_blocks", suggest: ["LINDE", "MAGNUM"] },
         { key: "valvola_max", label: "Valvola Max", bind: { group: "hyd_pumps", field: "extra", extraKey: "valves" }, free: true },
         { key: "valvola_velocita", label: "Valvola regolazione velocità", bind: { group: "speed_valve", field: "brand" }, serials: "speed_valve" },
         { key: "taglio_pressione", label: "Valore taglio di pressione", free: true },
-        { key: "pompa_riempimento", label: "Pompa di riempimento (motore / pompa)", bind: { group: "fill_pump", field: "brand" }, serials: "fill_pump" },
+        { key: "pompa_riempimento", label: "Pompa di riempimento · marca motore", bind: { group: "fill_pump", field: "brand" }, serials: "fill_pump", suggest: ["BROOK CROMPTON"] },
+        { key: "pompa_riempimento_pompa", label: "Pompa di riempimento · marca pompa", bind: { group: "fill_pump", field: "extra", extraKey: "pumpBrand" }, suggest: ["VALVOIL"] },
         { key: "pompe_sovralimentazione", label: "Pompe sovralimentaz. e raffreddamento", bind: { group: "boost_pumps", field: "brand" }, serials: "boost_pumps", suggest: ["B & C"] },
         { key: "pompa_grasso", label: "Pompa Grasso", bind: { group: "grease", field: "brand" }, serials: "grease", suggest: ["CIAPONI"] },
         { key: "nr_radiatori", label: "Nr. Radiatori", free: true },
@@ -262,7 +281,7 @@ export const SHEET_CONTAINER: SheetDef = {
         { key: "installazione_radiatori", label: "Tipo installazione Radiatori", suggest: ["A TETTO", "LATERALE"] },
         { key: "radiatore_marino", label: "Radiatore modello marino", input: "yesno" },
         { key: "colore_container", label: "Colore container", suggest: COLORS, list: "colori" },
-        { key: "speciali_container", label: "Specifiche speciali", free: true },
+        { key: "speciali_container", label: "Specifiche speciali", free: true, naButton: true, naDefault: true },
       ],
     },
     {
@@ -486,8 +505,23 @@ export function sheetCtx(kind: SheetKind, header: SheetHeader, model: string): S
   return { diesel: isDieselTipo(header.tipo || defaultTipo(kind, model)) };
 }
 
-export function visibleRows(section: SheetSection, ctx: SheetCtx): SheetRow[] {
-  return section.rows.filter((r) => !r.when || r.when(ctx));
+/**
+ * Righe da mostrare: quelle previste per l'alimentazione scelta e, fra queste,
+ * quelle che non dipendono da una voce messa a **N.A.** (il condizionatore
+ * assente non ha tensione ne' frequenza da chiedere).
+ */
+export function visibleRows(section: SheetSection, ctx: SheetCtx, values?: SheetValues): SheetRow[] {
+  return section.rows.filter((r) => {
+    if (r.when && !r.when(ctx)) return false;
+    if (r.hiddenByNa && values && (values[r.hiddenByNa]?.spec ?? "") === NA_VALUE) return false;
+    return true;
+  });
+}
+
+/** La voce e' compilata? Per le righe con N.A. di default il vuoto vale N.A. */
+export function isRowDone(row: SheetRow, values: SheetValues): boolean {
+  if (row.naDefault) return true;
+  return !!(values[row.key]?.spec ?? "").trim();
 }
 
 /**

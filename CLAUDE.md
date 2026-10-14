@@ -713,6 +713,25 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     aprirli uno a uno. Il valore arriva dall'intestazione della M5.17 con una
     query sola per pagina; dove la scheda non è ancora stata aperta la colonna
     resta vuota, invece di mostrare un default che nessuno ha scelto.
+  - **N.A. sulle voci che spesso non si applicano** (`naButton`): le
+    *Specifiche speciali* nascono già su N.A. (`naDefault`) e **contano come
+    compilate** — erano la ragione per cui una scheda non arrivava mai al 100%
+    pur essendo finita; scrivendo qualcosa il N.A. si spegne da solo, e il
+    bottone rimette il vuoto. Sul **Costruttore condizionatore** N.A. è invece
+    una scelta scritta nella scheda ("non previsto") e **nasconde tensione e
+    frequenza del condizionatore** (`hiddenByNa`): chiedere la tensione di una
+    cosa che non c'è è solo un modo per raccogliere dati finti. Vale anche nel
+    PDF.
+  - **L'intestazione delle colonne resta visibile** mentre si scorre
+    (`.al-row-head` sticky): in una scheda da 36 voci, a metà pagina non si
+    sapeva più quale colonna fosse quale.
+  - Matricola e foto hanno ora tre icone (scatta, rileggi, scegli dal
+    fascicolo): le colonne sono state strette, altrimenti l'ultima finiva fuori
+    dal riquadro.
+  - **Cavalletto e tramoggia** hanno la loro matricola con foto (gruppo
+    `stand`), accanto al costruttore. **Pompa di riempimento**: due righe, la
+    marca del motore (BROOK CROMPTON) e quella della pompa (VALVOIL), perché
+    sono due costruttori diversi.
   **Elenchi con voci aggiungibili**: ogni specifica non libera (`free`) è una
   tendina che parte dai `suggest` e si arricchisce con le voci aggiunte dagli
   operatori, salvate in `Setting.allestimentoOptions` per elenco (`list`

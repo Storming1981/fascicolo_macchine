@@ -96,13 +96,27 @@
 .al-rows > .al-row:first-child { border-top: 0; }
 .al-row.has-serials { align-items: start; padding-top: 14px; padding-bottom: 14px; }
 .al-row:not(.al-row-head):hover { background: color-mix(in srgb, var(--accent-soft) 35%, transparent); }
-.al-row-head { padding-top: 8px; padding-bottom: 8px; background: var(--bg-3); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; color: var(--muted); }
+.al-row-head {
+  padding-top: 8px; padding-bottom: 8px; background: var(--bg-3); font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: .05em; font-weight: 600; color: var(--muted);
+  position: sticky; top: 64px; z-index: 3; box-shadow: 0 1px 0 var(--border);
+}
 .al-row-label { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; color: var(--text); line-height: 1.35; }
 .al-row.has-serials .al-row-label, .al-row.has-serials .al-row-spec { padding-top: 4px; }
 .al-dot { width: 8px; height: 8px; flex: 0 0 8px; margin-top: 5px; border-radius: 50%; border: 1.5px solid var(--border-strong); background: var(--surface); transition: background .15s, border-color .15s; }
 .al-row.filled .al-dot { background: #10b981; border-color: #10b981; }
 .al-linked { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 99px; font-size: 10px; font-weight: 500; background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }
 .al-row-spec, .al-row-side { min-width: 0; }
+.al-spec-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.al-spec-line > :first-child { flex: 1; min-width: 0; }
+.al-na {
+  flex: 0 0 auto; height: 36px; padding: 0 11px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.al-na:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text-2); }
+.al-na.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.al-na:disabled { cursor: default; }
 .al-side-stack { display: flex; flex-direction: column; gap: 8px; }
 /* Riga senza specifica: la matricola si legge dalla foto (es. lotto albero) */
 .al-nospec { display: inline-block; padding-top: 9px; font-style: italic; }
@@ -173,7 +187,7 @@
 /* Matricole: tre colonne fisse, così miniature e fotocamere stanno in fila */
 .al-serials { display: flex; flex-direction: column; gap: 6px; }
 .al-serial {
-  display: grid; grid-template-columns: 84px minmax(0, 1fr) 116px; align-items: center; gap: 10px;
+  display: grid; grid-template-columns: 76px minmax(0, 1fr) 152px; align-items: center; gap: 8px;
   padding: 4px 6px 4px 10px; border-radius: 9px; background: var(--bg); border: 1px solid transparent;
 }
 .al-serial.ok { background: color-mix(in srgb, #10b981 7%, var(--surface)); }
@@ -181,6 +195,12 @@
 .al-serial-cell { min-width: 0; }
 .al-serial-cell .slot-serial { flex-wrap: nowrap; gap: 4px; }
 .al-serial-cell .slot-serial input { flex: 1; width: auto; min-width: 0; max-width: none; height: 34px; border-radius: 7px; }
+/* Il lotto sta accanto alla matricola: fisso e stretto, il resto va alla matricola */
+.al-serial-cell .slot-serial .slot-lot { flex: 0 0 76px; width: 76px; }
+.al-serial-cell .slot-serial .icon-btn.sm { width: 26px; height: 26px; padding: 0; flex: 0 0 26px; }
+.al-serial-photo { gap: 4px; }
+.al-serial-photo .icon-btn.sm { width: 26px; height: 26px; padding: 0; }
+.al-serial-photo .thumb-photo, .al-serial-photo .thumb-empty { width: 42px; height: 34px; }
 .al-serial-photo { display: flex; align-items: center; justify-content: flex-start; min-height: 42px; }
 .al-serial-photo .thumb-empty { background: var(--surface); cursor: pointer; }
 .al-serial-photo .thumb-empty:hover { border-color: var(--accent); color: var(--accent); }
@@ -211,6 +231,6 @@
   .al-row-head { display: none; }
   .al-hero-grid { grid-template-columns: 1fr; }
   .al-kind { min-width: 0; flex: 1; }
-  .al-serial { grid-template-columns: minmax(0, 1fr) 116px; }
+  .al-serial { grid-template-columns: minmax(0, 1fr) 152px; }
   .al-serial-label { grid-column: 1 / -1; }
 }

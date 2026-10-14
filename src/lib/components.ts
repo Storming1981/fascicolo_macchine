@@ -48,6 +48,14 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     excel: { serialCols: [] },
   },
   {
+    id: "stand",
+    label: "Cavalletto e tramoggia",
+    en: "STAND & HOPPER",
+    icon: "box",
+    slots: ["Cavalletto"],
+    excel: { serialCols: [] },
+  },
+  {
     // La targhetta CE dell'impianto si fotografa sempre in officina: il numero
     // da tenere e' il SERIAL NO. stampato sulla targhetta.
     id: "plate",
@@ -91,6 +99,8 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     en: "FILLING PUMP",
     icon: "drop",
     slots: ["Motore", "Pompa"],
+    // Motore e pompa sono di due costruttori diversi (BROOK CROMPTON + VALVOIL)
+    extra: [{ key: "pumpBrand", label: "Marca pompa" }],
     excel: { serialCols: [] },
   },
   {
