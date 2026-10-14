@@ -51,6 +51,16 @@ export type SheetRow = {
   /** Riga nascosta quando la riga indicata e' su N.A. (es. tensione del condizionatore). */
   hiddenByNa?: string;
   /**
+   * Seconda specifica della riga indicata invece che riga a se': la pompa di
+   * riempimento ha due costruttori (motore e pompa) ma una voce sola, e due
+   * righe separate facevano sembrare che fossero due componenti.
+   * La riga resta nelle definizioni (cosi' si salva e si legge come le altre)
+   * ma non si disegna da sola: la mostra il genitore, nella sua colonna.
+   */
+  inlineWith?: string;
+  /** Didascalia della propria specifica quando la riga ne ha una seconda in linea. */
+  specLabel?: string;
+  /**
    * Spunta di dotazione della macchina (campo su `Machine`, non sulla scheda):
    * sta qui perche' e' una caratteristica del componente di questa riga, e
    * compare nell'elenco macchine per tenerne lo storico.
@@ -271,8 +281,8 @@ export const SHEET_CONTAINER: SheetDef = {
         { key: "valvola_max", label: "Valvola Max", bind: { group: "hyd_pumps", field: "extra", extraKey: "valves" }, free: true },
         { key: "valvola_velocita", label: "Valvola regolazione velocità", bind: { group: "speed_valve", field: "brand" }, serials: "speed_valve" },
         { key: "taglio_pressione", label: "Valore taglio di pressione", free: true },
-        { key: "pompa_riempimento", label: "Pompa di riempimento · marca motore", bind: { group: "fill_pump", field: "brand" }, serials: "fill_pump", suggest: ["BROOK CROMPTON"] },
-        { key: "pompa_riempimento_pompa", label: "Pompa di riempimento · marca pompa", bind: { group: "fill_pump", field: "extra", extraKey: "pumpBrand" }, suggest: ["VALVOIL"] },
+        { key: "pompa_riempimento", label: "Pompa di riempimento (motore / pompa)", specLabel: "Marca motore", bind: { group: "fill_pump", field: "brand" }, serials: "fill_pump", suggest: ["BROOK CROMPTON"] },
+        { key: "pompa_riempimento_pompa", label: "Marca pompa", inlineWith: "pompa_riempimento", bind: { group: "fill_pump", field: "extra", extraKey: "pumpBrand" }, suggest: ["VALVOIL"] },
         { key: "pompe_sovralimentazione", label: "Pompe sovralimentaz. e raffreddamento", bind: { group: "boost_pumps", field: "brand" }, serials: "boost_pumps", suggest: ["B & C"] },
         { key: "pompa_grasso", label: "Pompa Grasso", bind: { group: "grease", field: "brand" }, serials: "grease", suggest: ["CIAPONI"] },
         { key: "nr_radiatori", label: "Nr. Radiatori", free: true },
@@ -512,10 +522,17 @@ export function sheetCtx(kind: SheetKind, header: SheetHeader, model: string): S
  */
 export function visibleRows(section: SheetSection, ctx: SheetCtx, values?: SheetValues): SheetRow[] {
   return section.rows.filter((r) => {
+    // le specifiche "in linea" le disegna la riga genitore
+    if (r.inlineWith) return false;
     if (r.when && !r.when(ctx)) return false;
     if (r.hiddenByNa && values && (values[r.hiddenByNa]?.spec ?? "") === NA_VALUE) return false;
     return true;
   });
+}
+
+/** La seconda specifica di una riga, se ne ha una (pompa di riempimento). */
+export function inlineRow(def: SheetDef, key: string): SheetRow | undefined {
+  return allRows(def).find((r) => r.inlineWith === key);
 }
 
 /** La voce e' compilata? Per le righe con N.A. di default il vuoto vale N.A. */

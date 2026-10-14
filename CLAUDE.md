@@ -729,9 +729,14 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     fascicolo): le colonne sono state strette, altrimenti l'ultima finiva fuori
     dal riquadro.
   - **Cavalletto e tramoggia** hanno la loro matricola con foto (gruppo
-    `stand`), accanto al costruttore. **Pompa di riempimento**: due righe, la
-    marca del motore (BROOK CROMPTON) e quella della pompa (VALVOIL), perché
-    sono due costruttori diversi.
+    `stand`), accanto al costruttore.
+  - **Due specifiche su una riga sola** (`inlineWith`): la pompa di riempimento
+    ha due costruttori — motore (BROOK CROMPTON) e pompa (VALVOIL) — ma e' un
+    componente solo, con le sue due matricole. Prima erano due righe e
+    sembravano due componenti: ora la seconda specifica sta nella colonna
+    *Specifica* della stessa riga. La riga "figlia" resta nelle definizioni (si
+    salva e si legge come le altre) ma non si disegna da sola, e nel PDF i due
+    valori finiscono sulla stessa riga separati da un punto.
   **Elenchi con voci aggiungibili**: ogni specifica non libera (`free`) è una
   tendina che parte dai `suggest` e si arricchisce con le voci aggiunte dagli
   operatori, salvate in `Setting.allestimentoOptions` per elenco (`list`

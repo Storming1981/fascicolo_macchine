@@ -7,6 +7,7 @@ import {
   MATRICOLA_LABEL,
   sheetCtx,
   sheetDef,
+  inlineRow,
   NA_VALUE,
   serialLimit,
   visibleRows,
@@ -231,7 +232,11 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
       const serials = lim === null ? all : all.filter((s, i) => i < lim || !!s.trim());
       // riga senza specifica (lotto albero): la colonna resta vuota; dove N.A.
       // e' il default (specifiche speciali) il vuoto si stampa come N.a.
-      const spec = row.noSpec ? "" : (v.spec ?? "") || (row.naDefault ? NA_VALUE : "");
+      const sub = inlineRow(def, row.key);
+      const subSpec = sub ? (input.values[sub.key]?.spec ?? "").trim() : "";
+      const spec = row.noSpec
+        ? ""
+        : [(v.spec ?? "") || (row.naDefault ? NA_VALUE : ""), subSpec].filter(Boolean).join(" · ");
       const subRows = Math.max(1, serials.length);
       const specW = row.wide ? COLS[1] + COLS[2] : COLS[1];
       const textLines = Math.max(

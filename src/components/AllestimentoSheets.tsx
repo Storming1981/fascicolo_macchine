@@ -5,6 +5,7 @@ import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad
 import {
   CONTAINER_TYPES,
   containerType,
+  inlineRow,
   isRowDone,
   MATRICOLA_LABEL,
   NA_VALUE,
@@ -631,7 +632,24 @@ export default function AllestimentoSheets({
                     </div>
                     <div className="al-row-spec">
                       <div className="al-spec-line">
-                        {specControl(row)}
+                        {(() => {
+                          const sub = inlineRow(def, row.key);
+                          if (!sub) return specControl(row);
+                          // Due costruttori, una voce sola: le specifiche stanno
+                          // affiancate nella stessa colonna, non in due righe.
+                          return (
+                            <div className="al-spec-dual">
+                              <label>
+                                <span>{row.specLabel ?? "Specifica"}</span>
+                                {specControl(row)}
+                              </label>
+                              <label>
+                                <span>{sub.label}</span>
+                                {specControl(sub)}
+                              </label>
+                            </div>
+                          );
+                        })()}
                         {row.naButton && (
                           <button
                             type="button"
