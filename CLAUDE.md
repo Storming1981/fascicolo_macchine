@@ -669,7 +669,11 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     operatori non si toccano) e rinomina l'unico "Albero" in "Albero #1".
   - **La targhetta CE dell'impianto sta in testa alla M5.16**, in un blocco suo
     sopra il cavalletto: identifica la macchina, non un suo gruppo, e dentro
-    l'allestimento cavalletto sembrava una voce di quel gruppo.
+    l'allestimento cavalletto sembrava una voce di quel gruppo. Ha **foto e
+    OCR** come gli altri numeri (gruppo `plate`, slot *Targhetta*): in officina
+    la targhetta la si fotografa comunque, e il numero da tenere è il
+    **SERIAL NO.** stampato sopra (01482), non quello che qualcuno ricopia a
+    mano. La specifica (chi fa la targhetta) resta nella scheda.
   - **Via *Targhetta CE Macchina*** dall'allestimento corpo: ripeteva la
     *Targhetta CE impianto* del cavalletto.
   - **Le matricole dei motori seguono il numero dichiarato** (`limitBy`):

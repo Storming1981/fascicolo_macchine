@@ -48,6 +48,16 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     excel: { serialCols: [] },
   },
   {
+    // La targhetta CE dell'impianto si fotografa sempre in officina: il numero
+    // da tenere e' il SERIAL NO. stampato sulla targhetta.
+    id: "plate",
+    label: "Targhetta CE",
+    en: "CE PLATE",
+    icon: "qr",
+    slots: ["Targhetta"],
+    excel: { serialCols: [] },
+  },
+  {
     // Non presente nel file MATRICOLE: nasce con la scheda M5.16 (lotto albero
     // letto dalla foto come le matricole dei riduttori).
     id: "shaft",

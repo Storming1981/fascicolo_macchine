@@ -142,7 +142,14 @@ export const SHEET_TRITURATORE: SheetDef = {
       title: "TARGHETTA CE IMPIANTO",
       icon: "qr",
       rows: [
-        { key: "targhetta_ce_impianto", label: "Targhetta CE impianto", suggest: ["ZATO"], list: "targhetta_ce" },
+        {
+          key: "targhetta_ce_impianto",
+          label: "Targhetta CE impianto",
+          suggest: ["ZATO"],
+          list: "targhetta_ce",
+          // Si fotografa la targhetta: il numero e' il SERIAL NO. che ci sta sopra.
+          serials: "plate",
+        },
       ],
     },
     {
