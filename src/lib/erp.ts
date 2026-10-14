@@ -340,6 +340,49 @@ export type ErpOrder = {
  * l'articolo principale è quello con più ore, oppure la prima riga dell'ordine
  * per chi non ha ancora avanzamento.
  */
+export type ErpNaCustomerRow = {
+  code: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  country: string | null;
+};
+
+/**
+ * Clienti di ZATO North America. **Altro database, stessa istanza**: la ditta
+ * ZATONA non esiste dentro `ZATO` (lì c'è solo codditt='ZATO'), sta in
+ * `ZATONA.dbo.anagra`. Servono solo a compilare il cliente finale dei fascicoli
+ * destinati agli USA, quindi si leggono tutti in un colpo (sono ~65).
+ */
+export async function getNaCustomers(): Promise<ErpNaCustomerRow[]> {
+  const pool = await getPool();
+  const res = await pool.request().query<{
+    an_conto: string;
+    an_descr1: string | null;
+    an_indir: string | null;
+    an_citta: string | null;
+    an_prov: string | null;
+    an_cap: string | null;
+    an_stato: string | null;
+  }>(
+    `SELECT an_conto, an_descr1, an_indir, an_citta, an_prov, an_cap, an_stato
+       FROM ZATONA.dbo.anagra
+      WHERE an_tipo = 'C' AND LTRIM(RTRIM(ISNULL(an_descr1, ''))) <> ''
+      ORDER BY an_descr1`
+  );
+  return res.recordset.map((x) => ({
+    code: String(x.an_conto ?? "").trim(),
+    name: (x.an_descr1 ?? "").trim(),
+    address: (x.an_indir ?? "").trim() || null,
+    city: (x.an_citta ?? "").trim() || null,
+    state: (x.an_prov ?? "").trim() || null,
+    zip: (x.an_cap ?? "").trim() || null,
+    country: (x.an_stato ?? "").trim() || null,
+  }));
+}
+
 export async function getCommessaOrders(commessa: string): Promise<ErpOrder[]> {
   const commeca = jobToCommeca(commessa);
   if (commeca === null) return [];

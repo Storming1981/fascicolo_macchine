@@ -26,6 +26,7 @@ import {
   closePool,
   getAllArticles,
   getAllCustomers,
+  getNaCustomers,
   getCommessaOrders,
   getCommessaOrderArticles,
   getCommessaOrderTimbrature,
@@ -38,6 +39,7 @@ import {
   fetchMachines,
   pushArticles,
   pushCustomers,
+  pushNaCustomers,
   pushOrders,
   pushResults,
   type CustomerPush,
@@ -272,6 +274,16 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
     log(`  inviati ${Math.min(i + custBatch, allCustomers.length)}/${allCustomers.length}`);
   }
   log(`Clienti aggiornati: ${custUpserted} creati/aggiornati, ${custTotal} totali sulla piattaforma`);
+
+  // 1b) Clienti di ZATO North America (altro database): servono a compilare il
+  //     cliente finale dei fascicoli destinati agli USA.
+  try {
+    const na = await getNaCustomers();
+    const naResp = await pushNaCustomers(na);
+    log(`Clienti ZATO NA: ${naResp.upserted} inviati, ${naResp.total} sulla piattaforma`);
+  } catch (e) {
+    logErr(`Clienti ZATO NA non sincronizzati: ${(e as Error).message}`);
+  }
 
   // 2) Invio fascicoli a batch (con customerConto → collegamento cliente)
   const batchSize = config.sync.batchSize;

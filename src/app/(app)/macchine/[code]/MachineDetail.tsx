@@ -51,6 +51,7 @@ type Machine = {
   plantType: string | null;
   model: string; year: number; customer: string; customerId: string | null; country: string; countryCode: string;
   site: string | null; status: MachineStatus;
+  naCustomerCode: string | null; naCustomer: string | null;
   /** Avanzamento calcolato dai fatti del fascicolo (src/lib/machineProgress.ts). */
   progress: { percent: number; steps: { key: string; label: string; weight: number; done: number; detail: string }[] };
   productionStart: string | null; deliveryDate: string | null; pressureSettings: string | null;
@@ -486,6 +487,8 @@ function TabAnagrafica({
       site: machine.site || "",
       productionStart: isoToDay(machine.productionStart || undefined),
       deliveryDate: isoToDay(machine.deliveryDate || undefined),
+      naCustomer: machine.naCustomer || "",
+      naCustomerCode: machine.naCustomerCode || "",
       plateWeight: machine.plateWeight || "",
       platePower: machine.platePower || "",
       plateVoltage: machine.plateVoltage || "",
@@ -540,6 +543,8 @@ function TabAnagrafica({
         site: form.site,
         productionStart: form.productionStart,
         deliveryDate: form.deliveryDate,
+        naCustomer: form.naCustomer,
+        naCustomerCode: form.naCustomerCode,
         plateWeight: form.plateWeight,
         platePower: form.platePower,
         plateVoltage: form.plateVoltage,
@@ -754,6 +759,32 @@ function TabAnagrafica({
                 )}
               </dd>
             </div>
+            {/* Cliente finale dall'anagrafica di ZATO North America: compare solo
+                sui fascicoli destinati agli USA, dove il cliente del gestionale
+                italiano e' ZATO NORTH AMERICA e il cliente vero sta di la'. */}
+            {(edit ? form.countryCode === "US" : machine.countryCode === "US") && (
+              <div>
+                <dt>
+                  Cliente ZATO NA
+                  <span className="muted small" style={{ display: "block", fontWeight: 400 }}>
+                    Anagrafica di ZATO North America
+                  </span>
+                </dt>
+                <dd>
+                  {edit ? (
+                    <NaCustomerPicker
+                      current={form.naCustomer}
+                      onPick={(c) => {
+                        setFF("naCustomer", c?.name ?? "");
+                        setFF("naCustomerCode", c?.code ?? "");
+                      }}
+                    />
+                  ) : (
+                    machine.naCustomer || <span className="muted">—</span>
+                  )}
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Paese</dt>
               <dd>
@@ -840,93 +871,6 @@ function TabAnagrafica({
         </section>
 
         <HoursAnalysisCard machine={machine} canEdit={canEdit} onDone={onDone} notify={notify} />
-
-        <section className="card">
-          <div className="card-header">
-            <h3>Targa tecnica</h3>
-            {editButtons}
-          </div>
-          <dl className="kv">
-            <div>
-              <dt>Peso</dt>
-              <dd>
-                {edit ? (
-                  <input
-                    className="input"
-                    value={form.plateWeight}
-                    placeholder="38 500 kg"
-                    onChange={(e) => setFF("plateWeight", e.target.value)}
-                  />
-                ) : (
-                  machine.plateWeight || "—"
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Potenza nominale</dt>
-              <dd>
-                {edit ? (
-                  <input
-                    className="input"
-                    value={form.platePower}
-                    placeholder="450 kW"
-                    onChange={(e) => setFF("platePower", e.target.value)}
-                  />
-                ) : (
-                  machine.platePower || "—"
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Tensione / Frequenza</dt>
-              <dd>
-                {edit ? (
-                  <select
-                    className="input"
-                    value={form.plateVoltage}
-                    onChange={(e) => setFF("plateVoltage", e.target.value)}
-                  >
-                    <option value="">—</option>
-                    {[
-                      "400V / 50Hz",
-                      "480V / 60Hz",
-                      "690V / 50Hz",
-                      "380V / 50Hz",
-                      ...(form.plateVoltage &&
-                      ![
-                        "400V / 50Hz",
-                        "480V / 60Hz",
-                        "690V / 50Hz",
-                        "380V / 50Hz",
-                      ].includes(form.plateVoltage)
-                        ? [form.plateVoltage]
-                        : []),
-                    ].map((v) => (
-                      <option key={v}>{v}</option>
-                    ))}
-                  </select>
-                ) : (
-                  machine.plateVoltage || "—"
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Settaggi pressione</dt>
-              <dd className="mono">
-                {edit ? (
-                  <input
-                    className="input mono"
-                    value={form.pressureSettings}
-                    placeholder="255 bar + 3/4 giro (320 bar)"
-                    onChange={(e) => setFF("pressureSettings", e.target.value)}
-                  />
-                ) : (
-                  machine.pressureSettings || "—"
-                )}
-              </dd>
-            </div>
-          </dl>
-        </section>
 
         <section className="card">
           <div className="card-header">
@@ -3856,6 +3800,92 @@ function PhotoPickerModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+/**
+ * Scelta del cliente finale dall'anagrafica di **ZATO North America**: una
+ * tendina ricercabile sulla copia locale (`ErpNaCustomer`), che il sync-agent
+ * tiene allineata al database ZATONA del gestionale. Sono una sessantina, ma
+ * si cerca scrivendo perche' i nomi si somigliano tutti.
+ */
+function NaCustomerPicker({
+  current,
+  onPick,
+}: {
+  current: string;
+  onPick: (c: { code: string; name: string } | null) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [list, setList] = useState<{ code: string; name: string; city: string | null; state: string | null }[]>([]);
+  const [open, setOpen] = useState(false);
+  const [total, setTotal] = useState<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const t = setTimeout(async () => {
+      const res = await fetch(`/api/erp/na-customers?q=${encodeURIComponent(q)}`);
+      const d = await res.json().catch(() => ({}));
+      if (!alive) return;
+      setList(d.customers ?? []);
+      setTotal(typeof d.total === "number" ? d.total : null);
+    }, 200);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [q]);
+
+  return (
+    <div className="na-picker">
+      <div className="na-picker-row">
+        <input
+          className="input"
+          value={open ? q : current}
+          placeholder={current || "Cerca il cliente ZATO NA..."}
+          onFocus={() => {
+            setOpen(true);
+            setQ("");
+          }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        {current && (
+          <button className="btn-ghost-sm" onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(null)}>
+            Togli
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="na-picker-list">
+          {total === 0 && (
+            <div className="muted small" style={{ padding: 8 }}>
+              Anagrafica ZATO NA non ancora sincronizzata: arriva col prossimo giro del sync-agent.
+            </div>
+          )}
+          {list.map((c) => (
+            <button
+              key={c.code}
+              className="na-picker-item"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onPick(c);
+                setOpen(false);
+              }}
+            >
+              <span>{c.name}</span>
+              <span className="muted small">{[c.city, c.state].filter(Boolean).join(", ")}</span>
+            </button>
+          ))}
+          {list.length === 0 && total !== 0 && (
+            <div className="muted small" style={{ padding: 8 }}>
+              Nessun cliente trovato.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

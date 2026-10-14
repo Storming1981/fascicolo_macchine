@@ -117,6 +117,22 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   **La stessa query sta nel sync-agent** (`sync-agent/src/erp.ts`): la VPS legge
   la copia `ErpCommessaOrder`, quindi finche' l'agent non viene aggiornato sul
   server del gestionale la produzione continua a vedere l'elenco corto.
+- **Clienti di ZATO North America: altro database, stessa istanza.** I
+  fascicoli destinati agli USA hanno come cliente *ZATO NORTH AMERICA CORP.* (è
+  lei che fattura), ma il cliente finale sta nell'anagrafica della consociata:
+  **non** in `ZATO` (lí c'è solo `codditt='ZATO'`) ma nel database **`ZATONA`**
+  dello stesso SQL Server — `ZATONA.dbo.anagra`, `an_tipo='C'`, **65 clienti**
+  con indirizzo, città, stato USA (`an_prov`) e CAP.
+  - Copia locale `ErpNaCustomer` (`getNaCustomers()` in `erp.ts`), riscritta
+    per intero a ogni giro: sono poche righe e un diff non vale la complessità.
+    Chi sparisce dal gestionale sparisce anche qui, altrimenti resterebbe
+    selezionabile un cliente cancellato.
+  - La porta il **sync-agent** (`POST /api/sync/erp/na-customers`): sulla VPS il
+    gestionale non si raggiunge. In sviluppo: `npm run erp:na-customers`.
+  - UI: nella card *Cliente e destinazione* compare il campo **Cliente ZATO NA**
+    (tendina ricercabile, `GET /api/erp/na-customers?q=`) **solo quando il paese
+    è USA** — sugli altri fascicoli sarebbe un campo che non si compila mai.
+    Campi su `Machine`: `naCustomerCode`, `naCustomer`.
 - **API**: `GET /api/erp/job/[job]` (dati commessa, `?fasi=1` per il dettaglio
   timbrature); `GET|POST /api/machines/[id]/erp-sync` (anteprima / sync completo
   singola macchina); `POST /api/erp/sync-all` (batch, permesso `machine.import`).
@@ -696,6 +712,8 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     non sparisce perché qualcuno corregge un numero. Stessa regola nel PDF.
   - Nuova voce **Tipologia motore** (descrittiva, es. `355M B35 4P IE4`), a
     elenco con voci aggiungibili come le altre.
+  - **Scaldiglia** (gruppo `heater`): fornitore + matricola con foto, come gli
+    altri componenti del container.
   - Nuovi gruppi componente con matricola sul container: **Blocchi pompe**
     (`pump_blocks`, due slot LINDE/MAGNUM), **Valvola regolazione velocità**
     (`speed_valve`), **Blocco radiatori** (`radiator_block`) e **Pompa di
@@ -796,10 +814,14 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   stato** — ma lo stato della macchina si legge già nella colonna *Stato*, e
   ripeterlo in una barra non aggiungeva niente. Il dato che serve è **quanto
   manca da compilare**, diviso nelle tre cose che si compilano a mano:
-  - **Anagrafica**: quota dei campi compilati (tipologia, modello, anno, job,
-    cliente, paese, sito, date, targa tecnica, settaggio pressione; job corpo e
-    container **solo sui BLUE DEVIL**, altrove non esistono e chiederli
-    abbasserebbe per sempre fascicoli completi).
+  - **Anagrafica**: le due card che si compilano a mano (*Anagrafica macchina*
+    e *Cliente e destinazione*) più gli **ordini di produzione** agganciati in
+    *Analisi ore*. Fuori la targa tecnica (quei dati stanno nelle schede di
+    allestimento, dove si compilano davvero — la card non c'è più) e i
+    documenti, che sono allegati e non campi. Job corpo e container contano
+    **solo sui BLUE DEVIL**; l'ordine di produzione **solo dove serve**, cioè
+    sugli impianti nuovi sotto la commessa di stock 999999999: chi ha una
+    commessa sua non deve restare incompleto per un campo che non lo riguarda.
   - **Componenti e matricole**: slot con matricola sul totale degli slot.
   - **Collaudo**: 0 → bozza 40% → compilata e firmata 70% → approvata 100%.
 

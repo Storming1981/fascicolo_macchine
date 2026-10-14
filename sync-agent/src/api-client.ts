@@ -78,6 +78,21 @@ export async function pushCustomers(
   return res.json() as Promise<{ status: string; upserted: number; total: number }>;
 }
 
+export async function pushNaCustomers(
+  customers: unknown[],
+): Promise<{ ok: boolean; upserted: number; removed: number; total: number }> {
+  const res = await fetch(config.api.naCustomersUrl, {
+    method: 'POST',
+    headers: authHeaders(true),
+    body: JSON.stringify({ customers }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`POST /api/sync/erp/na-customers ${res.status}: ${t.slice(0, 300)}`);
+  }
+  return res.json() as Promise<{ ok: boolean; upserted: number; removed: number; total: number }>;
+}
+
 // NB: getCustomerDetails resta disponibile nell'agent per usi futuri (sync mirato).
 
 export async function pushOrders(

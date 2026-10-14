@@ -692,6 +692,48 @@ export interface ErpCustomerDetail {
 }
 
 /** Intera anagrafica clienti (anagra, an_tipo='C') con nome non vuoto. */
+export type NaCustomer = {
+  code: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  country: string | null;
+};
+
+/**
+ * Clienti di ZATO North America. Stanno in un ALTRO database della stessa
+ * istanza (`ZATONA.dbo.anagra`): dentro `ZATO` c'e' solo la ditta ZATO. Sono
+ * una sessantina, si leggono tutti in un colpo.
+ */
+export async function getNaCustomers(): Promise<NaCustomer[]> {
+  const pool = await getPool();
+  const r = await pool.request().query<{
+    an_conto: string;
+    an_descr1: string | null;
+    an_indir: string | null;
+    an_citta: string | null;
+    an_prov: string | null;
+    an_cap: string | null;
+    an_stato: string | null;
+  }>(
+    `SELECT an_conto, an_descr1, an_indir, an_citta, an_prov, an_cap, an_stato
+       FROM ZATONA.dbo.anagra
+      WHERE an_tipo = 'C' AND LTRIM(RTRIM(ISNULL(an_descr1, ''))) <> ''
+      ORDER BY an_descr1`,
+  );
+  return r.recordset.map((x) => ({
+    code: String(x.an_conto ?? '').trim(),
+    name: (x.an_descr1 ?? '').trim(),
+    address: (x.an_indir ?? '').trim() || null,
+    city: (x.an_citta ?? '').trim() || null,
+    state: (x.an_prov ?? '').trim() || null,
+    zip: (x.an_cap ?? '').trim() || null,
+    country: (x.an_stato ?? '').trim() || null,
+  }));
+}
+
 export async function getAllCustomers(): Promise<ErpCustomerDetail[]> {
   const pool = await getPool();
   const r = await pool.request().query<{

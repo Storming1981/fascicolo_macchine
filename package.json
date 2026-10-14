@@ -14,6 +14,7 @@
     "erp:sync": "tsx scripts/erp-sync-all.ts",
     "timbratore:storico": "tsx --conditions=react-server scripts/timbratore-storico.ts",
     "gphoto:retry": "tsx --conditions=react-server scripts/gphoto-retry.ts",
+    "erp:na-customers": "tsx --conditions=react-server scripts/erp-na-customers.ts",
     "service:seed": "tsx scripts/seed-service.ts",
     "service:backfill-customers": "tsx scripts/backfill-customers.ts",
     "operators:import": "tsx scripts/import-operators.ts",

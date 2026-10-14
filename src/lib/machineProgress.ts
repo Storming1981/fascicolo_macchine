@@ -15,7 +15,13 @@
 
 export type CollaudoState = "NONE" | "DRAFT" | "COMPILED" | "APPROVED";
 
-/** Campi dell'anagrafica che contano come "compilati". */
+/**
+ * Campi dell'anagrafica che contano come "compilati": quelli delle due card che
+ * si riempiono a mano (*Anagrafica macchina* e *Cliente e destinazione*) più
+ * gli **ordini di produzione** agganciati in *Analisi ore*. Fuori la targa
+ * tecnica (i suoi dati stanno nelle schede di allestimento) e i documenti, che
+ * sono allegati e non campi.
+ */
 export type AnagraficaFields = {
   plantType: string | null;
   model: string | null;
@@ -28,11 +34,12 @@ export type AnagraficaFields = {
   site: string | null;
   productionStart: Date | string | null;
   deliveryDate: Date | string | null;
-  pressureSettings: string | null;
-  plateWeight: string | null;
-  platePower: string | null;
-  plateVoltage: string | null;
+  erpBodyOrder: string | null;
+  erpContainerOrder: string | null;
 };
+
+/** Commessa generica degli impianti nuovi: lì l'ordine di produzione serve. */
+const STOCK_COMMESSA = "999999999";
 
 export type ProgressFacts = {
   anagrafica: AnagraficaFields;
@@ -69,12 +76,13 @@ export function anagraficaScore(a: AnagraficaFields): { done: number; total: num
     a.site,
     a.productionStart,
     a.deliveryDate,
-    a.pressureSettings,
-    a.plateWeight,
-    a.platePower,
-    a.plateVoltage,
   ];
   if (a.plantType === "BLUE DEVIL") fields.push(a.jobBody, a.jobContainer);
+  // L'ordine di produzione si chiede solo dove serve: sugli impianti nuovi,
+  // che stanno tutti sotto la commessa di stock. Chi ha una commessa sua non
+  // deve restare incompleto per un campo che non lo riguarda.
+  if ((a.jobBody ?? "").trim() === STOCK_COMMESSA) fields.push(a.erpBodyOrder);
+  if ((a.jobContainer ?? "").trim() === STOCK_COMMESSA) fields.push(a.erpContainerOrder);
   return { done: fields.filter(has).length, total: fields.length };
 }
 

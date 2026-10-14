@@ -149,6 +149,8 @@ export async function loadMachineDetailProps(code: string) {
     year: machine.year,
     customer: machine.customer,
     customerId: machine.customerId,
+    naCustomerCode: machine.naCustomerCode,
+    naCustomer: machine.naCustomer,
     country: machine.country,
     countryCode: machine.countryCode,
     site: machine.site,

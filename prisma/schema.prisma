@@ -131,6 +131,25 @@ model User {
  * vive nell'account personale di chi scatta, quindi l'id non e' condivisibile
  * fra utenti diversi.
  */
+/**
+ * Clienti di **ZATO North America**: stanno in un altro database del gestionale
+ * (`ZATONA.dbo.anagra`, codditt='ZATONA'), non nella ditta ZATO. Servono solo a
+ * compilare il cliente finale dei fascicoli destinati agli USA, quindi se ne
+ * tiene una copia piatta invece di mescolarli all'anagrafica Service.
+ */
+model ErpNaCustomer {
+  code      String   @id // an_conto
+  name      String
+  address    String?
+  city       String?
+  state      String? // an_prov: lo stato USA (OH, WI, ...)
+  zip        String?
+  country    String? // an_stato: USA, CND, ...
+  updatedAt  DateTime @updatedAt
+
+  @@index([name])
+}
+
 model GphotoAlbum {
   id        String   @id @default(cuid())
   userId    String
@@ -190,6 +209,9 @@ model Machine {
   // sync-agent, per mostrare la card ERP ricca sulla VPS (senza ERP diretto).
   erpSnapshot     Json?
   customerId      String?       // anagrafica cliente condivisa (service) — opzionale
+  // Cliente finale dall'anagrafica di ZATO North America (fascicoli USA)
+  naCustomerCode  String?
+  naCustomer      String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 

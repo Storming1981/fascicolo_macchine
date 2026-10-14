@@ -192,6 +192,14 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     excel: { brandCol: "AS", serialCols: ["AT", "AU"] },
   },
   {
+    id: "heater",
+    label: "Scaldiglia",
+    en: "HEATER",
+    icon: "bolt",
+    slots: ["Scaldiglia"],
+    excel: { serialCols: [] },
+  },
+  {
     id: "radiator_block",
     label: "Blocco radiatori",
     en: "RADIATOR BLOCK",
