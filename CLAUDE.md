@@ -1306,6 +1306,14 @@ API: `POST /api/turni` (crea/sposta/ridimensiona) · `DELETE /api/turni?turnoId=
     server e il giro automatico parte da lì in avanti. Per spedire anche
     l'arretrato c'è *Invia adesso*, che mostra quanti sono.
   - API: `GET|PUT|POST /api/settings/rapportino-mail` (permesso `settings.manage`).
+- **Elenco Rapportini** (menu Service → *Rapportini*, `/service/rapportini`,
+  voce di navigazione `rapportini`): tutti i rapportini giornalieri in una
+  tabella sola, senza dover indovinare in quale intervento stanno. Ricerca
+  libera (intervento, cliente, commessa, macchina, operatori, testo), periodo e
+  stato (bozze / firmati / **firmati non inviati**), totale ore dei filtrati,
+  PDF diretto. Il clic porta alla scheda intervento con `#rap-<id>`: la
+  giornata si apre e ci si scorre sopra. Stessa visibilità del kanban: senza
+  `intervento.viewAll` solo gli interventi in cui si è capo cantiere o squadra.
 - **Riepilogo intervento in un PDF solo** (`src/lib/riepilogoPdf.ts` +
   `riepilogoRender.ts`): tutte le giornate una dopo l'altra (ore per operatore
   con tipologia, attività e problematiche), totale per operatore e **una sola

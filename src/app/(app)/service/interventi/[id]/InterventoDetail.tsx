@@ -1124,6 +1124,16 @@ function RapportinoDay({
     !rapportino || !rapportino.authorId || rapportino.authorId === currentUserId || isAdmin;
   const [open, setOpen] = useState(defaultOpen);
   const bodyOpen = hideHeader || open;
+  // Arrivando dall'elenco Rapportini (`#rap-<id>`) la giornata si apre e ci si
+  // porta sopra: altrimenti si atterra in cima alla scheda e si ricomincia a cercare.
+  const anchorId = rapportino ? `rap-${rapportino.id}` : undefined;
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!anchorId || window.location.hash !== `#${anchorId}`) return;
+    setOpen(true);
+    const t = setTimeout(() => rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+    return () => clearTimeout(t);
+  }, [anchorId]);
   const [editing, setEditing] = useState(false); // modifica di un rapportino già firmato
   // sola lettura se: chiuso e non in modifica, OPPURE non sei l'autore/admin
   const readOnly = (closed && !editing) || !canEditThis;
@@ -1409,7 +1419,7 @@ function RapportinoDay({
   const roLegacyOps = rapportino?.hoursByOperator ?? [];
 
   return (
-    <div className={"rap-day" + (hideHeader ? " bare" : "")}>
+    <div id={anchorId} ref={rootRef} className={"rap-day" + (hideHeader ? " bare" : "")}>
       {!hideHeader && (
         <button className="rap-day-head" onClick={() => setOpen((o) => !o)}>
           <Icon name={open ? "chev-down" : "chev-right"} size={14} />

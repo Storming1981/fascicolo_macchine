@@ -12,6 +12,7 @@ type NavKey =
   | "persone"
   | "service"
   | "interventi"
+  | "rapportini"
   | "chat"
   | "pianificazione"
   | "mappa"
@@ -138,6 +139,7 @@ export default function AppShell({
       items: [
         { href: "/service", label: "Panoramica", icon: "home", show: caps.service && nav.service },
         { href: "/service/interventi", label: "Interventi", icon: "wrench", show: caps.service && nav.interventi },
+        { href: "/service/rapportini", label: "Rapportini", icon: "doc", show: caps.service && nav.rapportini },
         { href: "/service/chat", label: "Chat", icon: "sign", show: caps.service && nav.chat },
         { href: "/service/pianificazione", label: "Pianificazione", icon: "clock", show: caps.service && nav.pianificazione },
         { href: "/service/mappa", label: "Mappa cantieri", icon: "pin", show: caps.service && nav.mappa },

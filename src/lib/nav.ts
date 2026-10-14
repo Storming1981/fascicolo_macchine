@@ -13,6 +13,7 @@ export type NavKey =
   | "persone"
   | "service"
   | "interventi"
+  | "rapportini"
   | "chat"
   | "pianificazione"
   | "mappa"
@@ -25,6 +26,7 @@ export const NAV_ITEMS: { key: NavKey; label: string; group: string }[] = [
   { key: "macchine", label: "Macchine", group: "Fascicolo" },
   { key: "service", label: "Service · Panoramica", group: "Service" },
   { key: "interventi", label: "Service · Interventi", group: "Service" },
+  { key: "rapportini", label: "Service · Rapportini", group: "Service" },
   { key: "chat", label: "Service · Chat", group: "Service" },
   { key: "pianificazione", label: "Service · Pianificazione", group: "Service" },
   { key: "mappa", label: "Service · Mappa cantieri", group: "Service" },
@@ -55,15 +57,16 @@ export const DEFAULT_NAV: NavVisibility = {
     "persone",
     "service",
     "interventi",
+    "rapportini",
     "clienti",
     "knowledge",
   ]),
   MONTATORE: on(["dashboard", "macchine", "persone", "knowledge"]),
   CABLATORE: on(["dashboard", "macchine", "persone", "knowledge"]),
   PROGRAMMATORE: on(["dashboard", "macchine", "persone", "knowledge"]),
-  COLLAUDATORE: on(["dashboard", "macchine", "persone", "service", "interventi", "knowledge"]),
+  COLLAUDATORE: on(["dashboard", "macchine", "persone", "service", "interventi", "rapportini", "knowledge"]),
   // Tecnico di campo: solo gli Interventi (+ knowledge di consultazione).
-  TECNICO_CAMPO: on(["interventi", "knowledge"]),
+  TECNICO_CAMPO: on(["interventi", "rapportini", "knowledge"]),
   LOGISTICA: on(["dashboard", "macchine", "knowledge"]),
   // Visualizzatore: vede tutto, in sola lettura (le scritture le blocca proxy.ts).
   VISUALIZZATORE: on(ALL),
