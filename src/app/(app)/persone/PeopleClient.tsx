@@ -22,6 +22,7 @@ type U = {
   reparto: string | null;
   siteManager: boolean;
   posValidator: boolean;
+  viewerChat: boolean;
   appAccess: string | null;
   signs: number;
   last: string | null;
@@ -478,6 +479,7 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
   const [photo, setPhoto] = useState<string | null>(user.photo);
   const [siteManager, setSiteManager] = useState(user.siteManager);
   const [posValidator, setPosValidator] = useState(user.posValidator);
+  const [viewerChat, setViewerChat] = useState(user.viewerChat);
   const [appAccess, setAppAccess] = useState<string>(user.appAccess ?? "");
   const [saving, setSaving] = useState(false);
   const [e, setE] = useState<string | null>(null);
@@ -508,6 +510,7 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
         zona: f.zona,
         siteManager,
         posValidator,
+        viewerChat,
         appAccess: appAccess || "",
       };
       if (photo !== user.photo) body.photo = photo ?? "";
@@ -627,6 +630,16 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
                 </span>
               </label>
             </div>
+            {f.role === "VISUALIZZATORE" && (
+              <div className="form-row" style={{ justifyContent: "flex-end" }}>
+                <label className="flex-inline" style={{ gap: 8, cursor: "pointer" }}>
+                  <input type="checkbox" checked={viewerChat} onChange={(ev) => setViewerChat(ev.target.checked)} />
+                  <span title="Il visualizzatore vede tutto in sola lettura: questa è l'unica scrittura che gli si può concedere">
+                    Può scrivere nelle chat
+                  </span>
+                </label>
+              </div>
+            )}
             <div className="form-row">
               <label>Nuovo PIN firma (opzionale)</label>
               <input

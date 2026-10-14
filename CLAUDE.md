@@ -158,6 +158,25 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   `DEFAULT_PERMISSIONS` (`permissions.ts`), `DEFAULT_APP_ACCESS`
   (`appAccess.ts`), `DEFAULT_NAV` (`nav.ts`) e la whitelist `ROLES` in
   `api/users/route.ts`.
+- **`VISUALIZZATORE`** — per chi non agisce sulla piattaforma ma deve vedere i
+  dati: vede tutto (fascicoli, service con tutti gli interventi, knowledge,
+  persone) e **non crea, modifica né elimina nulla**. L'unica scrittura
+  concessa è **scrivere in chat** (e ritirare i propri messaggi), spegnibile
+  per ruolo (`chat.send` in matrice) e **per persona** (Persone → *Può
+  scrivere nelle chat*, `User.viewerChat`): alcuni visualizzatori guardano e
+  basta. Aprire, modificare o eliminare conversazioni resta escluso
+  (`userCanManageChat`).
+  - **La sola lettura sta in un punto solo: `src/proxy.ts`.** Ogni richiesta
+    `/api` che non sia GET/HEAD/OPTIONS, col ruolo del cookie di sessione =
+    VISUALIZZATORE, prende 403 — salvo una whitelist di scritture personali
+    (login/logout, proprio profilo, notifiche lette, push, collegamento Gmail)
+    e i messaggi di chat. Le route di scrittura sono un centinaio e alcune
+    controllano solo "autore" o "in squadra": affidarsi ai permessi di
+    ognuna vorrebbe dire che ne basta una dimenticata. Accendere altri
+    permessi al visualizzatore in matrice **non ha effetto**.
+  - Il ruolo nel proxy viene dal JWT: chi viene **declassato** a visualizzatore
+    a sessione aperta resta comunque limitato dai permessi del ruolo nuovo
+    (letti dal DB), ma il blocco totale scatta al login successivo.
 - `Setting` — configurazione runtime (key/value Json): `plantConfig` (tipologie
   e modelli editabili) e `permissions` (matrice permessi per ruolo)
 - `MachineMilestone` — date di cambio stato (key/date/source). Card "Date di

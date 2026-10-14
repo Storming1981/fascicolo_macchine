@@ -4,7 +4,7 @@ import { createNotifications } from "@/lib/notifications";
 import { deliverNotifications } from "@/lib/notifyDeliver";
 import { absoluteUrl } from "@/lib/absoluteUrl";
 import { currentUser } from "@/lib/auth";
-import { userCan } from "@/lib/settings";
+import { userCan, userCanChat } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { backupPhotos } from "@/lib/googlePhotos";
 import { saveFile } from "@/lib/uploads";
@@ -49,7 +49,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  if (!(await userCan(user.role, "chat.send")))
+  if (!(await userCanChat(user)))
     return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
 
   const { id } = await ctx.params;

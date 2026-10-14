@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
-import { userCan } from "@/lib/settings";
+import { userCanManageChat } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  if (!(await userCan(user.role, "chat.send")))
+  if (!(await userCanManageChat(user.role)))
     return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
 
   const { id } = await ctx.params;
@@ -34,7 +34,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  if (!(await userCan(user.role, "chat.send")))
+  if (!(await userCanManageChat(user.role)))
     return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
   const { id } = await ctx.params;
   await prisma.conversation.delete({ where: { id } });

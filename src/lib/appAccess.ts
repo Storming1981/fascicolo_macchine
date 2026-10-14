@@ -33,6 +33,7 @@ export const DEFAULT_APP_ACCESS: AppAccessMatrix = {
   COLLAUDATORE: "field",
   TECNICO_CAMPO: "field",
   LOGISTICA: "field",
+  VISUALIZZATORE: "desktop",
 };
 
 export function mergeAppAccess(stored?: AppAccessMatrix | null): AppAccessMatrix {

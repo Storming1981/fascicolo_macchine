@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
-import { userCan } from "@/lib/settings";
+import { userCan, userCanChat, userCanManageChat } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import ChatClient, { type ConversationRow, type LinkOpts } from "./ChatClient";
 
@@ -16,7 +16,8 @@ export default async function ChatPage({
   if (!(await userCan(user.role, "service.view"))) redirect("/dashboard");
   const { conv } = await searchParams;
 
-  const canSend = await userCan(user.role, "chat.send");
+  const canSend = await userCanChat(user);
+  const canManage = await userCanManageChat(user.role);
   const canImport = await userCan(user.role, "chat.import");
 
   const [convs, customers, interventi] = await Promise.all([
@@ -72,6 +73,7 @@ export default async function ChatPage({
       currentUserId={user.id}
       isAdmin={user.role === "ADMIN"}
       canSend={canSend}
+      canManage={canManage}
       canImport={canImport}
       initialConvId={initialConvId}
     />

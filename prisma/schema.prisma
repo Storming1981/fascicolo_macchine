@@ -19,6 +19,7 @@ enum Role {
   LOGISTICA
   CLIENTE // utente esterno: accesso al portale del proprio cliente (solo chat pubbliche)
   RESPONSABILE_PRODUZIONE
+  VISUALIZZATORE // sola lettura: vede tutto, non crea/modifica/elimina (chat opzionale)
 }
 
 enum MachineStatus {
@@ -92,6 +93,7 @@ model User {
   siteManager    Boolean  @default(false) // responsabile di cantiere
   posValidator   Boolean  @default(false) // puo' validare il P.O.S. degli interventi (responsabile sicurezza)
   photoBackup    Boolean  @default(false) // copia le proprie foto sul suo Google Foto
+  viewerChat     Boolean  @default(true)  // VISUALIZZATORE: puo' scrivere nelle chat (unica scrittura concessa)
   appAccess      String?  // override guscio: "desktop" | "field" (null = default ruolo)
   customerId     String?  // per gli utenti CLIENTE: azienda cliente di appartenenza
   /// Collegamento al dipendente su TeamSystem HR (fascicolo documenti).

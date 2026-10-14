@@ -65,6 +65,8 @@ export const DEFAULT_NAV: NavVisibility = {
   // Tecnico di campo: solo gli Interventi (+ knowledge di consultazione).
   TECNICO_CAMPO: on(["interventi", "knowledge"]),
   LOGISTICA: on(["dashboard", "macchine", "knowledge"]),
+  // Visualizzatore: vede tutto, in sola lettura (le scritture le blocca proxy.ts).
+  VISUALIZZATORE: on(ALL),
 };
 
 /** Completa la matrice fornita con i default per ruoli/voci mancanti. */

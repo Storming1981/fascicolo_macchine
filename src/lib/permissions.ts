@@ -150,7 +150,23 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     "knowledge.ask": true,
   },
   LOGISTICA: { "machine.edit": true, "service.view": true, "knowledge.view": true, "knowledge.ask": true },
+  // Visualizzatore: chi non agisce sulla piattaforma ma deve vedere i dati.
+  // Vede fascicoli, service (tutti gli interventi) e knowledge; l'unica
+  // scrittura concessa e' la chat, spegnibile qui per ruolo e in Persone per
+  // singola persona (User.viewerChat). Qualunque altro permesso acceso in
+  // matrice resta senza effetto: proxy.ts rifiuta le scritture di questo ruolo.
+  VISUALIZZATORE: {
+    "service.view": true,
+    "intervento.viewAll": true,
+    "knowledge.view": true,
+    "chat.send": true,
+  },
 };
+
+/** Ruoli in sola lettura: niente creazioni/modifiche/eliminazioni (salvo chat). */
+export function isReadOnlyRole(role: Role | string): boolean {
+  return role === "VISUALIZZATORE";
+}
 
 /** Valuta un permesso. ADMIN può sempre tutto (non si può autobloccare). */
 export function can(

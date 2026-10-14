@@ -2,6 +2,7 @@ import QRCode from "qrcode";
 import { prisma } from "./db";
 import { currentUser } from "./auth";
 import { ROLE_LABEL } from "./domain";
+import { isReadOnlyRole } from "./permissions";
 import { userCaps } from "./caps";
 import { getPlantConfig } from "./settings";
 import { COMPONENT_GROUPS } from "./components";
@@ -277,7 +278,8 @@ export async function loadMachineDetailProps(code: string) {
       sign: caps["machine.sign"],
       service: caps["service.view"],
       interventoCreate: caps["intervento.create"],
-      chatSend: caps["chat.send"],
+      // "Apri chat" crea una conversazione: non e' scrivere, quindi non per i visualizzatori
+      chatSend: caps["chat.send"] && !!user && !isReadOnlyRole(user.role),
       customerManage: caps["customer.manage"],
     },
   };

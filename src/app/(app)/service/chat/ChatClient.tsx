@@ -70,6 +70,7 @@ export default function ChatClient({
   currentUserId,
   isAdmin = false,
   canSend,
+  canManage,
   canImport,
   initialConvId,
 }: {
@@ -79,6 +80,8 @@ export default function ChatClient({
   currentUserId: string;
   isAdmin?: boolean;
   canSend: boolean;
+  /** aprire / modificare / eliminare conversazioni (non per i visualizzatori) */
+  canManage: boolean;
   canImport: boolean;
   initialConvId?: string | null;
 }) {
@@ -204,7 +207,7 @@ export default function ChatClient({
               <Icon name="upload" size={15} /> Importa storico
             </button>
           )}
-          {canSend && (
+          {canManage && (
             <button className="btn-primary" onClick={() => setShowNew(true)}>
               <Icon name="plus" size={15} /> Nuova conversazione
             </button>
@@ -267,7 +270,7 @@ export default function ChatClient({
                     <ChannelBadge channel={detail.channel} /> {detail.title}
                   </div>
                 </div>
-                {canSend && (
+                {canManage && (
                   <div style={{ display: "flex", gap: 6 }}>
                     <button className="btn-ghost-sm" onClick={() => setShowEdit(true)}>
                       <Icon name="sign" size={14} /> Modifica

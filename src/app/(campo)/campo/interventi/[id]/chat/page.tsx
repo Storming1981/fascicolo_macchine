@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
-import { userCan } from "@/lib/settings";
+import { userCan, userCanChat } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import CampoChat from "./CampoChat";
 
@@ -38,7 +38,7 @@ export default async function CampoInterventoChatPage({
     if (!onTeam) redirect("/campo/interventi");
   }
 
-  const canSend = await userCan(user.role, "chat.send");
+  const canSend = await userCanChat(user);
   const convId = intervento.conversations[0]?.id ?? null;
 
   return (

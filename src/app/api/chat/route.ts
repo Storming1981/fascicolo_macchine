@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
-import { userCan } from "@/lib/settings";
+import { userCan, userCanManageChat } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
@@ -24,7 +24,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  if (!(await userCan(user.role, "chat.send")))
+  if (!(await userCanManageChat(user.role)))
     return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
 
   const b = await req.json().catch(() => null);

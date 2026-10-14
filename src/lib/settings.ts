@@ -6,6 +6,7 @@ import {
   type PermissionMatrix,
   type PermAction,
   can as canPure,
+  isReadOnlyRole,
 } from "./permissions";
 import { mergeNav, type NavVisibility } from "./nav";
 import { mergeAppAccess, type AppAccessMatrix } from "./appAccess";
@@ -105,4 +106,19 @@ export async function userCan(role: Role, action: PermAction): Promise<boolean> 
   if (role === "ADMIN") return true;
   const matrix = await getPermissions();
   return canPure(role, action, matrix);
+}
+
+/**
+ * Puo' scrivere messaggi in chat? Permesso `chat.send` del ruolo e, per i
+ * visualizzatori, anche il si/no della singola persona (User.viewerChat):
+ * alcuni possono scrivere, altri guardano soltanto.
+ */
+export async function userCanChat(user: { role: Role; viewerChat?: boolean | null }): Promise<boolean> {
+  if (!(await userCan(user.role, "chat.send"))) return false;
+  return !isReadOnlyRole(user.role) || user.viewerChat !== false;
+}
+
+/** Puo' aprire/modificare/eliminare conversazioni (non solo scriverci)? */
+export async function userCanManageChat(role: Role): Promise<boolean> {
+  return !isReadOnlyRole(role) && (await userCan(role, "chat.send"));
 }
