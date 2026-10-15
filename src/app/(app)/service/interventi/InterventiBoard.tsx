@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
@@ -33,6 +33,7 @@ export type InterventoRow = {
   assignedTechId: string | null;
   scheduledStart: string | null;
   posValidated: boolean;
+  commessa: string | null;
   /** Notifiche non lette di chi sta guardando, su questo intervento. */
   unread: number;
 };
@@ -68,16 +69,22 @@ export default function InterventiBoard({
   customers,
   canCreate,
   canEdit,
+  initialQuery = "",
 }: {
   interventi: InterventoRow[];
   trashed?: TrashedRow[];
   customers: CustomerOpt[];
   canCreate: boolean;
   canEdit: boolean;
+  initialQuery?: string;
 }) {
   const router = useRouter();
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [filtro, setFiltro] = useState("tutti");
+  // Ricerca locale: restringe kanban, lista e conteggi delle linguette. Arriva
+  // anche dalla ricerca globale in testata ("Vedi tutti negli interventi").
+  const [q, setQ] = useState(initialQuery);
+  useEffect(() => setQ(initialQuery), [initialQuery]);
   const [restoring, setRestoring] = useState<string | null>(null);
 
   async function restore(id: string) {
@@ -101,10 +108,32 @@ export default function InterventiBoard({
     () => interventi.map((i) => (localStatus[i.id] ? { ...i, status: localStatus[i.id] } : i)),
     [interventi, localStatus]
   );
+  const searched = useMemo(() => {
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return effInterventi;
+    return effInterventi.filter((i) => {
+      const hay = [
+        i.code,
+        i.title,
+        i.customer,
+        i.site,
+        i.machineCode,
+        i.machineJob,
+        i.commessa,
+        i.tech,
+        interventoTypeMeta(i.type).label,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      // Tutte le parole, in qualunque ordine: "hoffmann bc14" trova INT-2510.
+      return words.every((w) => hay.includes(w));
+    });
+  }, [effInterventi, q]);
   const filtered = useMemo(() => {
     const f = FILTERS.find((x) => x.key === filtro) ?? FILTERS[0];
-    return effInterventi.filter(f.test);
-  }, [effInterventi, filtro]);
+    return searched.filter(f.test);
+  }, [searched, filtro]);
 
   async function changeStatus(id: string, status: InterventoStatus) {
     const cur = interventi.find((i) => i.id === id);
@@ -167,7 +196,7 @@ export default function InterventiBoard({
               onClick={() => setFiltro(f.key)}
             >
               {f.label}
-              <span className="mono muted">{interventi.filter(f.test).length}</span>
+              <span className="mono muted">{searched.filter(f.test).length}</span>
             </button>
           ))}
           {trashed.length > 0 && (
@@ -180,6 +209,23 @@ export default function InterventiBoard({
             </button>
           )}
         </div>
+        {filtro !== "cestino" && (
+          <div className="search board-search">
+            <Icon name="search" size={15} color="var(--muted)" />
+            <input
+              placeholder="Filtra per codice, cliente, commessa, macchina, tecnico…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setQ("")}
+              aria-label="Filtra interventi"
+            />
+            {q && (
+              <button className="board-search-clear" onClick={() => setQ("")} aria-label="Cancella filtro">
+                <Icon name="x" size={13} />
+              </button>
+            )}
+          </div>
+        )}
         {filtro !== "cestino" && (
           <div className="view-switch">
             {(["kanban", "lista"] as const).map((v) => (
@@ -199,7 +245,9 @@ export default function InterventiBoard({
       {filtro === "cestino" ? (
         <Cestino trashed={trashed} onRestore={restore} restoring={restoring} canEdit={canEdit} />
       ) : filtered.length === 0 ? (
-        <div className="card empty-state">Nessun intervento per questo filtro.</div>
+        <div className="card empty-state">
+          {q.trim() ? `Nessun intervento corrisponde a "${q.trim()}".` : "Nessun intervento per questo filtro."}
+        </div>
       ) : view === "kanban" ? (
         <Kanban
           interventi={filtered}

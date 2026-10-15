@@ -876,8 +876,23 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   l'elenco. Filtro in barra *Operatori / Accessi portale / Tutti*; il ruolo
   `CLIENTE` non e' assegnabile dalla modale "Nuovo operatore" (quegli utenti
   nascono con il `customerId` agganciato).
-- **Ricerca topbar intelligente** (`/api/search`): matricola componente / codice
-  fascicolo / job → apre direttamente la macchina; testo generico → lista filtrata.
+- **Ricerca globale in testata** (`src/components/GlobalSearch.tsx` →
+  `GET /api/search?suggest=1&q=`): mentre si scrive propone i risultati
+  **raggruppati** — Interventi, Rapportini, Macchine, Clienti, 5 per gruppo con
+  "Tutti gli N…" che apre l'elenco già filtrato (`?q=` su
+  `/service/interventi`, `/service/rapportini`, `/service/clienti`,
+  `/macchine`). Prima indovinava una destinazione sola e per tutto ciò che non
+  era un match esatto finiva nell'elenco macchine: "hoffmann" non portava né
+  agli interventi né ai rapportini. Ogni parola deve comparire in qualche
+  campo, in qualunque ordine. Tastiera: ↑/↓, Invio (primo risultato se non se
+  ne sceglie uno), Esc, `/` o Ctrl+K da qualunque pagina. Interventi e
+  rapportini seguono la visibilità del kanban (`intervento.viewAll`), e senza
+  `service.view` si cercano solo le macchine. Senza suggerimenti ancora
+  arrivati resta la vecchia regola (`/api/search` senza `suggest`: match
+  esatto su matricola/job/INT-…/cliente, altrimenti elenco macchine).
+- **Filtro nel board Interventi**: campo nella barra che restringe kanban,
+  lista e conteggi delle linguette (codice, titolo, cliente, cantiere,
+  commessa, macchina, tecnico, tipo).
 - **Tipi di intervento: quattro, commerciali** (`INTERVENTO_TYPE_ORDER` in
   `domain.ts`) — **Installazione · Intervento a pagamento · Intervento in
   garanzia · Servizi**. Hanno sostituito la vecchia targhettizzazione tecnica

@@ -29,11 +29,13 @@ export type CustomerRow = {
 export default function ClientiList({
   clienti,
   canManage,
+  initialQuery = "",
 }: {
   clienti: CustomerRow[];
   canManage: boolean;
+  initialQuery?: string;
 }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQuery);
   const [showNew, setShowNew] = useState(false);
   const [portalFilter, setPortalFilter] = useState<"all" | "yes" | "no">("all");
   const withPortal = clienti.filter((c) => c.portal).length;

@@ -12,7 +12,12 @@ export const dynamic = "force-dynamic";
  * Stessa visibilità del kanban: senza `intervento.viewAll` si vedono solo i
  * rapportini degli interventi in cui si è capo cantiere o in squadra.
  */
-export default async function RapportiniPage() {
+export default async function RapportiniPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q = "" } = await searchParams;
   const user = await currentUser();
   if (!user) redirect("/login");
   if (!(await userCan(user.role, "service.view"))) redirect("/dashboard");
@@ -79,5 +84,5 @@ export default async function RapportiniPage() {
     };
   });
 
-  return <RapportiniList rapportini={rapportini} />;
+  return <RapportiniList rapportini={rapportini} initialQuery={q} />;
 }

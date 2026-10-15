@@ -10,7 +10,12 @@ import InterventiBoard, {
 
 export const dynamic = "force-dynamic";
 
-export default async function InterventiPage() {
+export default async function InterventiPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q = "" } = await searchParams;
   const user = await currentUser();
   if (!user) redirect("/login");
   if (!(await userCan(user.role, "service.view"))) redirect("/dashboard");
@@ -92,6 +97,7 @@ export default async function InterventiPage() {
     assignedTechId: i.assignedTechId,
     scheduledStart: i.scheduledStart ? i.scheduledStart.toISOString() : null,
     posValidated: i.posValidated,
+    commessa: i.commessa,
     unread: unread.get(i.id) ?? 0,
   }));
 
@@ -112,6 +118,7 @@ export default async function InterventiPage() {
       customers={customers}
       canCreate={canCreate}
       canEdit={canEdit}
+      initialQuery={q}
     />
   );
 }

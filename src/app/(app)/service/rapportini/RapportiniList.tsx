@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import { fmtDate, fmtDateTime, fmtHM } from "@/lib/format";
@@ -56,9 +56,16 @@ function inPeriodo(iso: string, p: Periodo): boolean {
   return d >= from;
 }
 
-export default function RapportiniList({ rapportini }: { rapportini: RapportinoRow[] }) {
+export default function RapportiniList({
+  rapportini,
+  initialQuery = "",
+}: {
+  rapportini: RapportinoRow[];
+  initialQuery?: string;
+}) {
   const router = useRouter();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQuery);
+  useEffect(() => setQ(initialQuery), [initialQuery]);
   const [stato, setStato] = useState<Stato>("all");
   const [periodo, setPeriodo] = useState<Periodo>("all");
 
@@ -73,13 +80,13 @@ export default function RapportiniList({ rapportini }: { rapportini: RapportinoR
   );
 
   const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return rapportini.filter((r) => {
       if (stato === "draft" && r.closed) return false;
       if (stato === "signed" && !r.closed) return false;
       if (stato === "unsent" && (!r.closed || r.sentAt)) return false;
       if (!inPeriodo(r.date, periodo)) return false;
-      if (!needle) return true;
+      if (!words.length) return true;
       const hay = [
         r.interventoCode,
         r.interventoTitle,
@@ -97,7 +104,7 @@ export default function RapportiniList({ rapportini }: { rapportini: RapportinoR
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return hay.includes(needle);
+      return words.every((w) => hay.includes(w));
     });
   }, [rapportini, q, stato, periodo]);
 

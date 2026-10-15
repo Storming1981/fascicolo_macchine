@@ -6,7 +6,12 @@ import ClientiList, { type CustomerRow, type PortalAccess } from "./ClientiList"
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientiPage() {
+export default async function ClientiPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q = "" } = await searchParams;
   const user = await currentUser();
   if (!user) redirect("/login");
   if (!(await userCan(user.role, "service.view"))) redirect("/dashboard");
@@ -54,5 +59,5 @@ export default async function ClientiPage() {
     portal: portalByCustomer.get(c.id) ?? null,
   }));
 
-  return <ClientiList clienti={clienti} canManage={canManage} />;
+  return <ClientiList clienti={clienti} canManage={canManage} initialQuery={q} />;
 }

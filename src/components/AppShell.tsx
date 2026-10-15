@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from "./Icon";
 import NotificationBell from "./NotificationBell";
+import GlobalSearch from "./GlobalSearch";
 import { initials } from "@/lib/domain";
 
 type NavKey =
@@ -66,7 +67,6 @@ export default function AppShell({
     }
   }, [canCampo]);
   const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
 
   // Gruppi del menu richiudibili: la scelta resta salvata sul dispositivo, così
   // su tablet/telefono si tiene aperto solo ciò che serve davvero.
@@ -90,37 +90,6 @@ export default function AppShell({
       }
       return next;
     });
-  }
-
-  const [searching, setSearching] = useState(false);
-
-  async function submitSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const term = q.trim();
-    setOpen(false);
-    if (!term) {
-      router.push("/macchine");
-      return;
-    }
-    setSearching(true);
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
-      const d = await res.json().catch(() => null);
-      if (res.ok && d?.type === "machine" && d.code) {
-        router.push(`/macchine/${encodeURIComponent(d.code)}`);
-      } else if (res.ok && d?.type === "intervento" && d.id) {
-        router.push(`/service/interventi/${d.id}`);
-      } else if (res.ok && d?.type === "customer" && d.id) {
-        router.push(`/service/clienti/${d.id}`);
-      } else {
-        router.push(`/macchine?q=${encodeURIComponent(term)}`);
-      }
-    } catch {
-      router.push(`/macchine?q=${encodeURIComponent(term)}`);
-    } finally {
-      setSearching(false);
-      router.refresh();
-    }
   }
 
   const GROUPS: {
@@ -248,15 +217,7 @@ export default function AppShell({
             <button className="hamburger" onClick={() => setOpen(true)} aria-label="Menu">
               <Icon name="menu" size={18} />
             </button>
-            <form className="search" onSubmit={submitSearch}>
-              <Icon name="search" size={15} color="var(--muted)" />
-              <input
-                placeholder={searching ? "Ricerca…" : "Cerca matricola, job, cliente…"}
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                aria-label="Cerca"
-              />
-            </form>
+            <GlobalSearch />
           </div>
           <div className="topbar-actions">
             <Link href="/profilo" className="topbar-profile" title="Il mio profilo" aria-label="Il mio profilo">
