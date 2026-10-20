@@ -26,6 +26,7 @@ type U = {
   posValidator: boolean;
   viewerChat: boolean;
   company: string | null;
+  username: string | null;
   appAccess: string | null;
   signs: number;
   last: string | null;
@@ -305,7 +306,7 @@ export default function PeopleClient({
                       )}
                     </div>
                   </td>
-                  <td className="mono small">{u.email}</td>
+                  <td className="mono small">{u.username ?? u.email}</td>
                   <td>{u.roleLabel}</td>
                   <td className="mono small">{u.matricola ?? "—"}</td>
                   <td>
@@ -501,6 +502,7 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
   const [posValidator, setPosValidator] = useState(user.posValidator);
   const [viewerChat, setViewerChat] = useState(user.viewerChat);
   const [company, setCompany] = useState(user.company ?? "");
+  const [username, setUsername] = useState(user.username ?? "");
   const [appAccess, setAppAccess] = useState<string>(user.appAccess ?? "");
   const [saving, setSaving] = useState(false);
   const [e, setE] = useState<string | null>(null);
@@ -533,6 +535,7 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
         posValidator,
         viewerChat,
         company,
+        username,
         appAccess: appAccess || "",
       };
       if (photo !== user.photo) body.photo = photo ?? "";
@@ -656,6 +659,18 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
               <div className="form-row">
                 <label>Ditta</label>
                 <input className="input" value={company} onChange={(ev) => setCompany(ev.target.value)} placeholder="Es. St.el" />
+              </div>
+            )}
+            {(f.role === "COLLAUDATORE_ESTERNO" || user.username) && (
+              <div className="form-row">
+                <label>Nome utente (per entrare senza e-mail)</label>
+                <input
+                  className="input mono"
+                  value={username}
+                  autoCapitalize="none"
+                  onChange={(ev) => setUsername(ev.target.value.toLowerCase().replace(/\s+/g, ""))}
+                  placeholder="es. elia.presti"
+                />
               </div>
             )}
             {f.role === "VISUALIZZATORE" && (

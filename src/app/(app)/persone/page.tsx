@@ -40,6 +40,7 @@ export default async function PeoplePage() {
       posValidator: u.posValidator,
       viewerChat: u.viewerChat,
       company: u.company,
+      username: u.username,
       appAccess: u.appAccess,
       signs: c?._count._all ?? 0,
       last: c?._max.signedAt ? c._max.signedAt.toISOString() : null,
@@ -51,7 +52,7 @@ export default async function PeoplePage() {
     orderBy: [{ company: "asc" }, { lastName: "asc" }, { firstName: "asc" }],
     include: {
       _count: { select: { collaudi: true } },
-      account: { select: { email: true, active: true } },
+      account: { select: { username: true, email: true, active: true } },
     },
   });
   const externals: ExternalSignerRow[] = ext.map((e) => ({

@@ -204,7 +204,13 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   `compilerName` = "Elia Presti (St.el)".
   - **Nasce dalla scheda esterno** (Persone → Esterni → *Crea accesso*,
     `POST /api/external-signers/[id]/account`): nome e ditta dalla scheda,
-    `User.externalSignerId` + `User.company`. Il ruolo si può anche assegnare a
+    `User.externalSignerId` + `User.company`.
+  - **Si entra col nome utente, non con l'e-mail** (`User.username`, proposto
+    come `nome.cognome`): agli esterni una casella non serve a nulla. Il login
+    accetta "email o nome utente" — senza `@` è un nome utente. L'e-mail resta
+    obbligatoria in anagrafica, quindi se ne mette una interna
+    `<username>@esterni.local`, che le notifiche scartano come non
+    recapitabile (dominio `.local`, `notifyDeliver.ts`). Il ruolo si può anche assegnare a
     mano da Persone (campo *Ditta* nella modifica). Disattivare o modificare la
     scheda esterno aggiorna anche l'accesso.
   - **Nessun permesso in matrice**: la compilazione gli è concessa per ruolo

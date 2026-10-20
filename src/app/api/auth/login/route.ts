@@ -40,12 +40,14 @@ export async function POST(req: Request) {
       ? NextResponse.redirect(absolute(req, loginErr), { status: 303 })
       : NextResponse.json({ error: msg }, { status });
 
-  if (!email || !password) return fail("Email e password obbligatori", 400);
+  if (!email || !password) return fail("Email (o nome utente) e password obbligatori", 400);
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
-    });
+    // Si entra con l'e-mail oppure col nome utente (esterni): senza "@" e' un nome utente.
+    const id = email.toLowerCase().trim();
+    const user = id.includes("@")
+      ? await prisma.user.findUnique({ where: { email: id } })
+      : await prisma.user.findUnique({ where: { username: id } });
     if (!user || !user.active || !(await verifyPassword(password, user.passwordHash))) {
       return fail("Credenziali non valide", 401);
     }

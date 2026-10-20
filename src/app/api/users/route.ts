@@ -3,6 +3,7 @@ import { currentUser, hashPassword, hashPin } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import type { Role } from "@prisma/client";
+import { normalizeUsername } from "@/lib/externalSigners";
 
 const ROLES: Role[] = [
   "ADMIN",
@@ -120,6 +121,20 @@ export async function PATCH(req: Request) {
   // visualizzatore: puo' scrivere in chat (si/no per persona)
   if (typeof b.viewerChat === "boolean") data.viewerChat = b.viewerChat;
   if (typeof b.company === "string") data.company = b.company.trim().slice(0, 120) || null;
+  if (typeof b.username === "string") {
+    if (!b.username.trim()) data.username = null;
+    else {
+      const un = normalizeUsername(b.username);
+      if (!un)
+        return NextResponse.json(
+          { error: "Nome utente: 3-40 caratteri fra lettere minuscole, cifre, punto e trattino" },
+          { status: 400 }
+        );
+      const dup = await prisma.user.findFirst({ where: { username: un, NOT: { id } } });
+      if (dup) return NextResponse.json({ error: "Nome utente già in uso" }, { status: 409 });
+      data.username = un;
+    }
+  }
   if (typeof b.appAccess === "string")
     data.appAccess = b.appAccess === "desktop" || b.appAccess === "field" ? b.appAccess : null;
   if (typeof b.photo === "string") data.photo = b.photo.startsWith("data:image") ? b.photo : b.photo === "" ? null : undefined;

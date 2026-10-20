@@ -96,6 +96,7 @@ model User {
   photoBackup    Boolean  @default(false) // copia le proprie foto sul suo Google Foto
   viewerChat     Boolean  @default(true)  // VISUALIZZATORE: puo' scrivere nelle chat (unica scrittura concessa)
   company        String?  // ditta di appartenenza (collaudatori esterni)
+  username       String?  @unique // nome utente per entrare senza e-mail (esterni)
   externalSignerId String? @unique // scheda in Persone → Esterni da cui e' nato l'accesso
   appAccess      String?  // override guscio: "desktop" | "field" (null = default ruolo)
   customerId     String?  // per gli utenti CLIENTE: azienda cliente di appartenenza

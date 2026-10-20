@@ -11,12 +11,15 @@ export default function LoginForm({ error, portale }: { error?: boolean; portale
       {error && <div className="form-error">Credenziali non valide</div>}
       {portale && <input type="hidden" name="portale" value="1" />}
       <div className="form-row">
-        <label>Email</label>
+        <label>{portale ? "Email" : "Email o nome utente"}</label>
         <input
           className="input"
-          type="email"
+          type={portale ? "email" : "text"}
           name="email"
           autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           placeholder={portale ? "email fornita da ZATO" : "nome@zato.it"}
           required
         />

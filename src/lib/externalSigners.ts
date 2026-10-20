@@ -15,7 +15,7 @@ export type ExternalSignerRow = {
   active: boolean;
   signs: number;
   /** accesso all'app (ruolo Collaudatore esterno), se creato */
-  account?: { email: string; active: boolean } | null;
+  account?: { username: string | null; email: string; active: boolean } | null;
 };
 
 /** "Mario Rossi (ACME Srl)": come compare a verbale e a diario. */
@@ -45,3 +45,31 @@ export function parseExternalSigner(
     return { ok: false, error: "E-mail non valida" };
   return { ok: true, data };
 }
+
+/**
+ * Nome utente per entrare senza e-mail (gli esterni non ne hanno una che
+ * serva): minuscole, cifre, punto, trattino, trattino basso; niente "@",
+ * cosi' il login capisce da solo se gli si e' dato un'e-mail o un nome utente.
+ */
+export function normalizeUsername(v: unknown): string | null {
+  const u = typeof v === "string" ? v.trim().toLowerCase() : "";
+  return /^[a-z0-9._-]{3,40}$/.test(u) ? u : null;
+}
+
+/** Proposta di nome utente dalla scheda: "elia.presti". */
+export function suggestUsername(firstName: string, lastName: string): string {
+  return `${firstName}.${lastName}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, "")
+    .replace(/\.+/g, ".")
+    .replace(/^\.|\.$/g, "");
+}
+
+/**
+ * L'e-mail resta obbligatoria e univoca in anagrafica: per chi entra col nome
+ * utente se ne mette una interna su dominio .local, che le notifiche
+ * riconoscono come non recapitabile (notifyDeliver) e non provano a spedire.
+ */
+export const usernameEmail = (username: string) => `${username}@esterni.local`;

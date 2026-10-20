@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import { initials } from "@/lib/domain";
-import type { ExternalSignerRow } from "@/lib/externalSigners";
+import { suggestUsername, type ExternalSignerRow } from "@/lib/externalSigners";
 
 /**
  * Persone esterne senza account (cliente, ente certificatore, fornitore) che
@@ -183,7 +183,7 @@ function GroupRows({
           <td>
             {s.account ? (
               <span className="small" title="Ruolo Collaudatore esterno: vede le macchine e compila il collaudo">
-                <span className="mono">{s.account.email}</span>
+                <span className="mono">{s.account.username ?? s.account.email}</span>
                 {!s.account.active && <span className="muted"> · disattivo</span>}
               </span>
             ) : canManage ? (
@@ -328,7 +328,7 @@ function AccountModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [email, setEmail] = useState(signer.email ?? "");
+  const [username, setUsername] = useState(suggestUsername(signer.firstName, signer.lastName));
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -339,7 +339,7 @@ function AccountModal({
     const res = await fetch(`/api/external-signers/${signer.id}/account`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     });
     setBusy(false);
     if (res.ok) return onSaved();
@@ -364,8 +364,14 @@ function AccountModal({
             nient&apos;altro.
           </p>
           <div className="form-row">
-            <label>Email (per entrare)</label>
-            <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <label>Nome utente (per entrare)</label>
+            <input
+              className="input mono"
+              value={username}
+              autoCapitalize="none"
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))}
+            />
+            <span className="muted small">Si entra con nome utente e password, senza e-mail.</span>
           </div>
           <div className="form-row">
             <label>Password (min 6)</label>
