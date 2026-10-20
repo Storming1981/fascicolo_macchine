@@ -20,6 +20,7 @@ enum Role {
   CLIENTE // utente esterno: accesso al portale del proprio cliente (solo chat pubbliche)
   RESPONSABILE_PRODUZIONE
   VISUALIZZATORE // sola lettura: vede tutto, non crea/modifica/elimina (chat opzionale)
+  COLLAUDATORE_ESTERNO // persona di altra ditta: vede solo le macchine e compila la check list di collaudo
 }
 
 enum MachineStatus {
@@ -94,6 +95,8 @@ model User {
   posValidator   Boolean  @default(false) // puo' validare il P.O.S. degli interventi (responsabile sicurezza)
   photoBackup    Boolean  @default(false) // copia le proprie foto sul suo Google Foto
   viewerChat     Boolean  @default(true)  // VISUALIZZATORE: puo' scrivere nelle chat (unica scrittura concessa)
+  company        String?  // ditta di appartenenza (collaudatori esterni)
+  externalSignerId String? @unique // scheda in Persone → Esterni da cui e' nato l'accesso
   appAccess      String?  // override guscio: "desktop" | "field" (null = default ruolo)
   customerId     String?  // per gli utenti CLIENTE: azienda cliente di appartenenza
   /// Collegamento al dipendente su TeamSystem HR (fascicolo documenti).
@@ -121,6 +124,7 @@ model User {
   interventoAcks InterventoAck[]    @relation("UserInterventoAcks")
   turni          InterventoTurno[] @relation("UserTurni")
   tsDocs         TsEmployeeDoc[]   @relation("UserTsDocs")
+  externalSigner ExternalSigner?   @relation(fields: [externalSignerId], references: [id], onDelete: SetNull)
 }
 
 /// Token OAuth Google PERSONALE di un utente, per inviare le email dalla propria
@@ -284,6 +288,7 @@ model ExternalSigner {
   updatedAt     DateTime @updatedAt
 
   collaudi Collaudo[]
+  account  User? // accesso all'app (ruolo COLLAUDATORE_ESTERNO), se creato
 
   @@index([company])
 }

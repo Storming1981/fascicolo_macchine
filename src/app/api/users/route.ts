@@ -16,6 +16,7 @@ const ROLES: Role[] = [
   "TECNICO_CAMPO",
   "LOGISTICA",
   "VISUALIZZATORE",
+  "COLLAUDATORE_ESTERNO",
 ];
 
 export async function POST(req: Request) {
@@ -118,6 +119,7 @@ export async function PATCH(req: Request) {
   if (typeof b.posValidator === "boolean") data.posValidator = b.posValidator;
   // visualizzatore: puo' scrivere in chat (si/no per persona)
   if (typeof b.viewerChat === "boolean") data.viewerChat = b.viewerChat;
+  if (typeof b.company === "string") data.company = b.company.trim().slice(0, 120) || null;
   if (typeof b.appAccess === "string")
     data.appAccess = b.appAccess === "desktop" || b.appAccess === "field" ? b.appAccess : null;
   if (typeof b.photo === "string") data.photo = b.photo.startsWith("data:image") ? b.photo : b.photo === "" ? null : undefined;

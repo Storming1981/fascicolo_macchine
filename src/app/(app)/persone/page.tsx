@@ -39,6 +39,7 @@ export default async function PeoplePage() {
       siteManager: u.siteManager,
       posValidator: u.posValidator,
       viewerChat: u.viewerChat,
+      company: u.company,
       appAccess: u.appAccess,
       signs: c?._count._all ?? 0,
       last: c?._max.signedAt ? c._max.signedAt.toISOString() : null,
@@ -48,7 +49,10 @@ export default async function PeoplePage() {
   // Persone esterne senza account che possono firmare (es. approvazione collaudo)
   const ext = await prisma.externalSigner.findMany({
     orderBy: [{ company: "asc" }, { lastName: "asc" }, { firstName: "asc" }],
-    include: { _count: { select: { collaudi: true } } },
+    include: {
+      _count: { select: { collaudi: true } },
+      account: { select: { email: true, active: true } },
+    },
   });
   const externals: ExternalSignerRow[] = ext.map((e) => ({
     id: e.id,
@@ -61,6 +65,7 @@ export default async function PeoplePage() {
     notes: e.notes,
     active: e.active,
     signs: e._count.collaudi,
+    account: e.account,
   }));
 
   return <PeopleClient users={data} externals={externals} isAdmin={canManage} />;

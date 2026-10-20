@@ -25,6 +25,7 @@ type U = {
   siteManager: boolean;
   posValidator: boolean;
   viewerChat: boolean;
+  company: string | null;
   appAccess: string | null;
   signs: number;
   last: string | null;
@@ -291,6 +292,7 @@ export default function PeopleClient({
                         <div className="user-avatar small">{initials(u.name)}</div>
                       )}
                       <span>{u.name}</span>
+                      {u.company && <span className="muted small">· {u.company}</span>}
                       {u.siteManager && (
                         <span className="prio-chip" style={{ background: "#0ea5a322", color: "#0a7d70" }} title="Responsabile di cantiere">
                           <Icon name="pin" size={11} /> Resp. cantiere
@@ -498,6 +500,7 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
   const [siteManager, setSiteManager] = useState(user.siteManager);
   const [posValidator, setPosValidator] = useState(user.posValidator);
   const [viewerChat, setViewerChat] = useState(user.viewerChat);
+  const [company, setCompany] = useState(user.company ?? "");
   const [appAccess, setAppAccess] = useState<string>(user.appAccess ?? "");
   const [saving, setSaving] = useState(false);
   const [e, setE] = useState<string | null>(null);
@@ -529,6 +532,7 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
         siteManager,
         posValidator,
         viewerChat,
+        company,
         appAccess: appAccess || "",
       };
       if (photo !== user.photo) body.photo = photo ?? "";
@@ -648,6 +652,12 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
                 </span>
               </label>
             </div>
+            {f.role === "COLLAUDATORE_ESTERNO" && (
+              <div className="form-row">
+                <label>Ditta</label>
+                <input className="input" value={company} onChange={(ev) => setCompany(ev.target.value)} placeholder="Es. St.el" />
+              </div>
+            )}
             {f.role === "VISUALIZZATORE" && (
               <div className="form-row" style={{ justifyContent: "flex-end" }}>
                 <label className="flex-inline" style={{ gap: 8, cursor: "pointer" }}>

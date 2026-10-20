@@ -2,7 +2,7 @@ import QRCode from "qrcode";
 import { prisma } from "./db";
 import { currentUser } from "./auth";
 import { ROLE_LABEL } from "./domain";
-import { isReadOnlyRole } from "./permissions";
+import { isReadOnlyRole, isExternalTester } from "./permissions";
 import { userCaps } from "./caps";
 import { getPlantConfig } from "./settings";
 import { COMPONENT_GROUPS } from "./components";
@@ -254,13 +254,23 @@ export async function loadMachineDetailProps(code: string) {
       : null,
   };
 
+  // Il collaudatore esterno vede solo la linguetta Collaudo: i dati delle altre
+  // linguette non partono nemmeno verso il browser.
+  const external = !!user && isExternalTester(user.role);
+  if (external) {
+    data.photos = [];
+    data.photoTrash = [];
+    data.documents = [];
+    data.notesLog = [];
+  }
+
   return {
     machine: data,
     plantConfig,
     qrDataUrl,
     service: {
-      interventi: serviceInterventi,
-      chats: serviceChats.map((c) => ({
+      interventi: external ? [] : serviceInterventi,
+      chats: (external ? [] : serviceChats).map((c) => ({
         id: c.id,
         title: c.title,
         channel: c.channel,
@@ -285,6 +295,8 @@ export async function loadMachineDetailProps(code: string) {
       // "Apri chat" crea una conversazione: non e' scrivere, quindi non per i visualizzatori
       chatSend: caps["chat.send"] && !!user && !isReadOnlyRole(user.role),
       customerManage: caps["customer.manage"],
+      collaudoOnly: external,
+      collaudoCompile: caps["machine.intervention"] || external,
     },
   };
 }

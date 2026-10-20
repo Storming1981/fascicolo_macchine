@@ -130,11 +130,16 @@ export default function MachineDetail({
     interventoCreate: boolean;
     chatSend: boolean;
     customerManage?: boolean;
+    /** collaudatore esterno: solo la linguetta Collaudo */
+    collaudoOnly?: boolean;
+    collaudoCompile?: boolean;
   };
 }) {
   const router = useRouter();
-  const tabs = TABS.filter((t) => t.id !== "service" || caps.service);
-  const [tab, setTab] = useState("anagrafica");
+  const tabs = caps.collaudoOnly
+    ? TABS.filter((t) => t.id === "collaudo")
+    : TABS.filter((t) => t.id !== "service" || caps.service);
+  const [tab, setTab] = useState(caps.collaudoOnly ? "collaudo" : "anagrafica");
   const [intervention, setIntervention] = useState<null | { groupId?: string; itemId?: string; itemLabel?: string; oldSerial?: string }>(null);
   const [signRole, setSignRole] = useState<string | null>(null);
   const [collaudoOpen, setCollaudoOpen] = useState<null | "compile" | "approve" | "view">(null);
@@ -241,7 +246,7 @@ export default function MachineDetail({
           machine={machine}
           onSign={caps.sign ? (r) => setSignRole(r) : undefined}
           currentUserId={currentUser.id}
-          canCompile={caps.intervention}
+          canCompile={caps.collaudoCompile ?? caps.intervention}
           canApprove={caps.sign}
           onOpenChecklist={(m) => setCollaudoOpen(m)}
         />

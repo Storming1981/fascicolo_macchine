@@ -137,6 +137,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   TECNICO_CAMPO: "Tecnico campo",
   LOGISTICA: "Logistica",
   VISUALIZZATORE: "Visualizzatore",
+  COLLAUDATORE_ESTERNO: "Collaudatore esterno",
   CLIENTE: "Cliente (portale)",
 };
 

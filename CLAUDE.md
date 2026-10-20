@@ -197,6 +197,26 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   - Il ruolo nel proxy viene dal JWT: chi viene **declassato** a visualizzatore
     a sessione aperta resta comunque limitato dai permessi del ruolo nuovo
     (letti dal DB), ma il blocco totale scatta al login successivo.
+- **`COLLAUDATORE_ESTERNO`** — persona di un'altra ditta che entra con un
+  account suo: vede **solo l'elenco macchine** e, nel fascicolo, **solo la
+  linguetta Collaudo**, dove compila e firma la check list (il verbale lo
+  approva poi un interno con `machine.sign`). A verbale compare con la ditta:
+  `compilerName` = "Elia Presti (St.el)".
+  - **Nasce dalla scheda esterno** (Persone → Esterni → *Crea accesso*,
+    `POST /api/external-signers/[id]/account`): nome e ditta dalla scheda,
+    `User.externalSignerId` + `User.company`. Il ruolo si può anche assegnare a
+    mano da Persone (campo *Ditta* nella modifica). Disattivare o modificare la
+    scheda esterno aggiorna anche l'accesso.
+  - **Nessun permesso in matrice**: la compilazione gli è concessa per ruolo
+    nella route collaudo (`isExternalTester`). Così non eredita
+    `machine.intervention`, che aprirebbe diario, note, componenti e l'app
+    Campo (senza app campo il guscio resta desktop anche da tablet).
+  - **I limiti stanno in `src/proxy.ts`**, come per il Visualizzatore: pagine
+    ammesse solo `/macchine`, `/macchine/[code]`, `/profilo`, `/notifiche`
+    (il resto rimanda a `/macchine`, anche il login atterra lì); scritture
+    ammesse solo `/api/machines/[id]/collaudo` più quelle personali. Il loader
+    del fascicolo non manda nemmeno al browser foto, documenti, note e
+    service.
 - `Setting` — configurazione runtime (key/value Json): `plantConfig` (tipologie
   e modelli editabili) e `permissions` (matrice permessi per ruolo)
 - `MachineMilestone` — date di cambio stato (key/date/source). Card "Date di

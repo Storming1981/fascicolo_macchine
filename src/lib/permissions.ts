@@ -163,6 +163,16 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
   },
 };
 
+/**
+ * Collaudatore esterno: persona di un'altra ditta con un accesso suo. Vede
+ * l'elenco macchine e, nel fascicolo, solo il collaudo, dove compila e firma la
+ * check list. Nessun permesso in matrice: la compilazione gli e' concessa per
+ * ruolo (route collaudo) e tutto il resto lo ferma proxy.ts.
+ */
+export function isExternalTester(role: Role | string): boolean {
+  return role === "COLLAUDATORE_ESTERNO";
+}
+
 /** Ruoli in sola lettura: niente creazioni/modifiche/eliminazioni (salvo chat). */
 export function isReadOnlyRole(role: Role | string): boolean {
   return role === "VISUALIZZATORE";

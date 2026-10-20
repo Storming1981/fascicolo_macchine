@@ -4,6 +4,7 @@ import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { checklistFor, type ChecklistItem } from "@/lib/checklist";
 import { externalSignerLabel } from "@/lib/externalSigners";
+import { isExternalTester } from "@/lib/permissions";
 import type { Prisma, CollaudoStatus } from "@prisma/client";
 
 type Answer = { value: "SI" | "NO" | "NA" | null; note?: string };
@@ -62,7 +63,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const existing = await prisma.collaudo.findUnique({ where: { machineId: id } });
 
   if (action === "save" || action === "submit") {
-    if (!(await userCan(user.role, "machine.intervention"))) {
+    if (!isExternalTester(user.role) && !(await userCan(user.role, "machine.intervention"))) {
       return NextResponse.json({ error: "Permesso negato per compilare il collaudo" }, { status: 403 });
     }
     const answers = sanitizeAnswers(body.answers, items);
@@ -98,7 +99,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         answers: answers as Prisma.InputJsonValue,
         ...(softwareVersion !== undefined ? { softwareVersion } : {}),
         compilerId: user.id,
-        compilerName: user.name,
+        // l'esterno compare con la ditta: "Elia Presti (St.el)"
+        compilerName: user.company ? `${user.name} (${user.company})` : user.name,
         compiledAt: new Date(),
         compilerSignature: signature,
       };

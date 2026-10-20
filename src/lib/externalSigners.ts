@@ -14,6 +14,8 @@ export type ExternalSignerRow = {
   notes: string | null;
   active: boolean;
   signs: number;
+  /** accesso all'app (ruolo Collaudatore esterno), se creato */
+  account?: { email: string; active: boolean } | null;
 };
 
 /** "Mario Rossi (ACME Srl)": come compare a verbale e a diario. */
@@ -27,7 +29,7 @@ const opt = (v: unknown, max: number) => str(v, max) || null;
 /** Valida il corpo di creazione/modifica. Nome, cognome e ditta obbligatori. */
 export function parseExternalSigner(
   b: Record<string, unknown>
-): { ok: true; data: Omit<ExternalSignerRow, "id" | "active" | "signs"> } | { ok: false; error: string } {
+): { ok: true; data: Omit<ExternalSignerRow, "id" | "active" | "signs" | "account"> } | { ok: false; error: string } {
   const data = {
     firstName: str(b.firstName, 80),
     lastName: str(b.lastName, 80),

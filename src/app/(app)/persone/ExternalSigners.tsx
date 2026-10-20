@@ -21,6 +21,7 @@ export default function ExternalSigners({
 }) {
   const router = useRouter();
   const [edit, setEdit] = useState<ExternalSignerRow | "new" | null>(null);
+  const [accountFor, setAccountFor] = useState<ExternalSignerRow | null>(null);
   const [company, setCompany] = useState("");
   const [showInactive, setShowInactive] = useState(false);
 
@@ -93,6 +94,7 @@ export default function ExternalSigners({
                 <th>Email</th>
                 <th>Telefono</th>
                 <th>Firme</th>
+                <th>Accesso app</th>
                 <th>Stato</th>
                 {canManage && <th />}
               </tr>
@@ -100,11 +102,11 @@ export default function ExternalSigners({
             <tbody>
               {groups.map((g) => (
                 <GroupRows key={g.co} company={g.co} rows={g.rows} canManage={canManage}
-                  onEdit={setEdit} onToggle={toggle} onRemove={remove} />
+                  onEdit={setEdit} onToggle={toggle} onRemove={remove} onAccount={setAccountFor} />
               ))}
               {groups.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="muted small" style={{ textAlign: "center", padding: 24 }}>
+                  <td colSpan={8} className="muted small" style={{ textAlign: "center", padding: 24 }}>
                     Nessuna persona esterna. Si aggiungono qui o direttamente dall&apos;approvazione del collaudo.
                   </td>
                 </tr>
@@ -113,6 +115,17 @@ export default function ExternalSigners({
           </table>
         </div>
       </div>
+
+      {accountFor && (
+        <AccountModal
+          signer={accountFor}
+          onClose={() => setAccountFor(null)}
+          onSaved={() => {
+            setAccountFor(null);
+            router.refresh();
+          }}
+        />
+      )}
 
       {edit && (
         <ExternalModal
@@ -136,6 +149,7 @@ function GroupRows({
   onEdit,
   onToggle,
   onRemove,
+  onAccount,
 }: {
   company: string;
   rows: ExternalSignerRow[];
@@ -143,11 +157,12 @@ function GroupRows({
   onEdit: (s: ExternalSignerRow) => void;
   onToggle: (s: ExternalSignerRow) => void;
   onRemove: (s: ExternalSignerRow) => void;
+  onAccount: (s: ExternalSignerRow) => void;
 }) {
   return (
     <>
       <tr>
-        <td colSpan={7} style={{ background: "var(--surface)", fontWeight: 600 }}>
+        <td colSpan={8} style={{ background: "var(--surface)", fontWeight: 600 }}>
           <Icon name="people" size={13} /> {company} <span className="muted small">· {rows.length}</span>
         </td>
       </tr>
@@ -165,6 +180,20 @@ function GroupRows({
           <td className="mono small">{s.email ?? "—"}</td>
           <td className="mono small">{s.phone ?? "—"}</td>
           <td className="mono">{s.signs}</td>
+          <td>
+            {s.account ? (
+              <span className="small" title="Ruolo Collaudatore esterno: vede le macchine e compila il collaudo">
+                <span className="mono">{s.account.email}</span>
+                {!s.account.active && <span className="muted"> · disattivo</span>}
+              </span>
+            ) : canManage ? (
+              <button className="btn-ghost-sm" onClick={() => onAccount(s)}>
+                <Icon name="plus" size={13} /> Crea accesso
+              </button>
+            ) : (
+              <span className="muted small">—</span>
+            )}
+          </td>
           <td>
             <span className="badge">
               <span className="badge-dot" style={{ background: s.active ? "var(--green)" : "var(--muted-2)" }} />
@@ -278,6 +307,77 @@ function ExternalModal({
           </button>
           <button className="btn-primary" disabled={busy} onClick={save}>
             <Icon name="check" size={14} /> {busy ? "Salvo…" : "Salva"}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Crea l'accesso all'app per una persona esterna: ruolo Collaudatore esterno,
+ * nome e ditta dalla scheda. Vedrà solo le macchine e, nel fascicolo, solo il
+ * collaudo, dove compila e firma la check list.
+ */
+function AccountModal({
+  signer,
+  onClose,
+  onSaved,
+}: {
+  signer: ExternalSignerRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [email, setEmail] = useState(signer.email ?? "");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    setErr("");
+    const res = await fetch(`/api/external-signers/${signer.id}/account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    setBusy(false);
+    if (res.ok) return onSaved();
+    const d = await res.json().catch(() => ({}));
+    setErr(d.error || "Errore creazione accesso");
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+        <header className="modal-header">
+          <h2>Accesso per {signer.firstName} {signer.lastName}</h2>
+          <button className="icon-btn" onClick={onClose}>
+            <Icon name="x" size={18} />
+          </button>
+        </header>
+        <div className="modal-body">
+          {err && <div className="form-error">{err}</div>}
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Ruolo <strong>Collaudatore esterno</strong> ({signer.company}): vede l&apos;elenco macchine e, nel
+            fascicolo, solo la linguetta Collaudo, dove compila e firma la check list. Non può modificare
+            nient&apos;altro.
+          </p>
+          <div className="form-row">
+            <label>Email (per entrare)</label>
+            <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <label>Password (min 6)</label>
+            <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+        </div>
+        <footer className="modal-footer">
+          <button className="btn-ghost" onClick={onClose}>
+            Annulla
+          </button>
+          <button className="btn-primary" disabled={busy} onClick={save}>
+            <Icon name="check" size={14} /> {busy ? "Creo…" : "Crea accesso"}
           </button>
         </footer>
       </div>

@@ -19,8 +19,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const { id } = await ctx.params;
   const b = await req.json().catch(() => null);
   if (!b) return NextResponse.json({ error: "Body non valido" }, { status: 400 });
+  // L'accesso all'app segue la scheda: disattivare l'esterno lo chiude fuori.
   if (typeof b.active === "boolean" && Object.keys(b).length === 1) {
     await prisma.externalSigner.update({ where: { id }, data: { active: b.active } });
+    await prisma.user.updateMany({ where: { externalSignerId: id }, data: { active: b.active } });
     return NextResponse.json({ ok: true });
   }
   const p = parseExternalSigner(b);
@@ -28,6 +30,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   await prisma.externalSigner.update({
     where: { id },
     data: { ...p.data, ...(typeof b.active === "boolean" ? { active: b.active } : {}) },
+  });
+  // nome e ditta dell'accesso restano quelli della scheda
+  await prisma.user.updateMany({
+    where: { externalSignerId: id },
+    data: { name: `${p.data.firstName} ${p.data.lastName}`, company: p.data.company },
   });
   return NextResponse.json({ ok: true });
 }
@@ -41,8 +48,11 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (g.res) return g.res;
   const { id } = await ctx.params;
   const signs = await prisma.collaudo.count({ where: { approverExternalId: id } });
-  if (signs > 0) {
+  const account = await prisma.user.findUnique({ where: { externalSignerId: id }, select: { id: true } });
+  if (signs > 0 || account) {
+    // con un accesso puo' aver compilato verbali: si disattiva anche quello
     await prisma.externalSigner.update({ where: { id }, data: { active: false } });
+    await prisma.user.updateMany({ where: { externalSignerId: id }, data: { active: false } });
     return NextResponse.json({ ok: true, deactivated: true });
   }
   await prisma.externalSigner.delete({ where: { id } });

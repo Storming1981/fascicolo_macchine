@@ -70,6 +70,8 @@ export const DEFAULT_NAV: NavVisibility = {
   LOGISTICA: on(["dashboard", "macchine", "knowledge"]),
   // Visualizzatore: vede tutto, in sola lettura (le scritture le blocca proxy.ts).
   VISUALIZZATORE: on(ALL),
+  // Collaudatore esterno: solo le macchine (e nel fascicolo solo il collaudo).
+  COLLAUDATORE_ESTERNO: on(["macchine"]),
 };
 
 /** Completa la matrice fornita con i default per ruoli/voci mancanti. */
