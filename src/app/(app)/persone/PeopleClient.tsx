@@ -5,6 +5,8 @@ import Icon from "@/components/Icon";
 import { initials, ROLE_LABEL } from "@/lib/domain";
 import { fmtDate } from "@/lib/format";
 import type { Role } from "@prisma/client";
+import ExternalSigners from "./ExternalSigners";
+import type { ExternalSignerRow } from "@/lib/externalSigners";
 
 type U = {
   id: string;
@@ -35,7 +37,15 @@ const ROLES = Object.keys(ROLE_LABEL) as Role[];
 // di un accesso portale gia' esistente.
 const STAFF_ROLES = ROLES.filter((r) => r !== "CLIENTE");
 
-export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: boolean }) {
+export default function PeopleClient({
+  users,
+  externals,
+  isAdmin,
+}: {
+  users: U[];
+  externals: ExternalSignerRow[];
+  isAdmin: boolean;
+}) {
   const router = useRouter();
   const [modal, setModal] = useState(false);
   const [editUser, setEditUser] = useState<U | null>(null);
@@ -44,7 +54,8 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
   const [q, setQ] = useState("");
   // Gli accessi al portale sono utenti con ruolo CLIENTE: si gestiscono dalla
   // scheda del cliente, qui riempirebbero solo l'elenco → nascosti di default.
-  const [kind, setKind] = useState<"staff" | "portal" | "all">("staff");
+  // "external": persone di altre ditte senza account, che firmano soltanto
+  const [kind, setKind] = useState<"staff" | "portal" | "all" | "external">("staff");
   const [perPage, setPerPage] = useState(20);
   const [page, setPage] = useState(1);
   const [syncing, setSyncing] = useState(false);
@@ -170,7 +181,7 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
       <div className="view-header">
         <div>
           <h1>Persone &amp; Firme</h1>
-          <p>Operatori autorizzati ad accedere e firmare gli interventi · gli accessi al portale cliente si gestiscono dalla scheda del cliente</p>
+          <p>Operatori autorizzati ad accedere e firmare gli interventi · esterni di altre ditte che firmano senza account · gli accessi al portale cliente si gestiscono dalla scheda del cliente</p>
         </div>
         {isAdmin && (
           <div className="flex-inline" style={{ gap: 8 }}>
@@ -203,6 +214,7 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
               ["staff", "Operatori", staffCount],
               ["portal", "Accessi portale", portalCount],
               ["all", "Tutti", users.length],
+              ["external", "Esterni", externals.filter((e) => e.active).length],
             ] as const
           ).map(([key, label, n]) => (
             <button
@@ -217,6 +229,7 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
             </button>
           ))}
         </div>
+        {kind !== "external" && (
         <span className="flex-inline" style={{ gap: 8, marginLeft: "auto" }}>
           <span className="muted small">Righe</span>
           <select
@@ -243,8 +256,12 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
             ›
           </button>
         </span>
+        )}
       </div>
 
+      {kind === "external" ? (
+        <ExternalSigners signers={externals} canManage={isAdmin} q={q} />
+      ) : (
       <div className="card no-pad">
         <div className="table-wrap">
           <table className="data-table">
@@ -335,6 +352,7 @@ export default function PeopleClient({ users, isAdmin }: { users: U[]; isAdmin: 
           </table>
         </div>
       </div>
+      )}
 
       {!isAdmin && (
         <p className="muted small" style={{ marginTop: 14 }}>

@@ -4,6 +4,7 @@ import { ROLE_LABEL } from "@/lib/domain";
 import { getPermissions } from "@/lib/settings";
 import { can } from "@/lib/permissions";
 import PeopleClient from "./PeopleClient";
+import type { ExternalSignerRow } from "@/lib/externalSigners";
 
 export const dynamic = "force-dynamic";
 
@@ -44,5 +45,23 @@ export default async function PeoplePage() {
     };
   });
 
-  return <PeopleClient users={data} isAdmin={canManage} />;
+  // Persone esterne senza account che possono firmare (es. approvazione collaudo)
+  const ext = await prisma.externalSigner.findMany({
+    orderBy: [{ company: "asc" }, { lastName: "asc" }, { firstName: "asc" }],
+    include: { _count: { select: { collaudi: true } } },
+  });
+  const externals: ExternalSignerRow[] = ext.map((e) => ({
+    id: e.id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    company: e.company,
+    jobTitle: e.jobTitle,
+    email: e.email,
+    phone: e.phone,
+    notes: e.notes,
+    active: e.active,
+    signs: e._count.collaudi,
+  }));
+
+  return <PeopleClient users={data} externals={externals} isAdmin={canManage} />;
 }

@@ -247,14 +247,45 @@ model Collaudo {
   approvedAt        DateTime?
   approverSignature String? // dataURL
   approverRemarks   String?
+  /// Approvazione firmata da una persona ESTERNA (senza account): in quel caso
+  /// approverId e' nullo, approverName porta "Nome Cognome (Ditta)" e chi ha
+  /// raccolto la firma sul proprio dispositivo resta in approvalCollectedBy*.
+  approverExternalId      String?
+  approvalCollectedById   String?
+  approvalCollectedByName String?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
   machine  Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
   compiler User?   @relation("CollaudoCompiler", fields: [compilerId], references: [id])
   approver User?   @relation("CollaudoApprover", fields: [approverId], references: [id])
+  approverExternal ExternalSigner? @relation(fields: [approverExternalId], references: [id])
 
   @@index([machineId])
+}
+
+/// Persona esterna senza account (cliente, ente certificatore, fornitore...)
+/// che puo' firmare, ad esempio, l'approvazione del collaudo. La ditta serve a
+/// gestire persone di aziende diverse. Non si cancella se ha gia' firmato:
+/// si disattiva, cosi' la firma resta agganciata a chi l'ha messa.
+model ExternalSigner {
+  id            String   @id @default(cuid())
+  firstName     String
+  lastName      String
+  company       String
+  jobTitle      String?
+  email         String?
+  phone         String?
+  notes         String?
+  active        Boolean  @default(true)
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  collaudi Collaudo[]
+
+  @@index([company])
 }
 
 // Schede di allestimento BLUE DEVIL (M5.16 Trituratore / M5.17 Container).

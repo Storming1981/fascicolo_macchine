@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { checklistFor, type ChecklistItem } from "@/lib/checklist";
+import { externalSignerLabel } from "@/lib/externalSigners";
 import type { Prisma, CollaudoStatus } from "@prisma/client";
 
 type Answer = { value: "SI" | "NO" | "NA" | null; note?: string };
@@ -146,6 +147,52 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!existing || existing.status !== "PENDING_APPROVAL") {
       return NextResponse.json({ error: "Collaudo non in attesa di approvazione" }, { status: 400 });
     }
+
+    // Approvazione firmata da una persona esterna senza account (cliente,
+    // ente certificatore...): la firma si disegna sul dispositivo di chi la
+    // raccoglie. Il compilatore puo' raccoglierla: non e' lui ad approvare.
+    if (typeof body.externalSignerId === "string" && body.externalSignerId) {
+      const ext = await prisma.externalSigner.findUnique({ where: { id: body.externalSignerId } });
+      if (!ext || !ext.active)
+        return NextResponse.json({ error: "Persona esterna non trovata o disattivata" }, { status: 400 });
+      const sig =
+        typeof body.approverSignature === "string" && body.approverSignature.startsWith("data:image")
+          ? body.approverSignature
+          : null;
+      if (!sig)
+        return NextResponse.json({ error: "Manca la firma della persona esterna" }, { status: 400 });
+      const name = externalSignerLabel(ext);
+      const remarks = typeof body.remarks === "string" ? body.remarks.slice(0, 2000) : null;
+      await prisma.collaudo.update({
+        where: { machineId: id },
+        data: {
+          status: "APPROVED",
+          approverId: null,
+          approverName: name,
+          approverExternalId: ext.id,
+          approvalCollectedById: user.id,
+          approvalCollectedByName: user.name,
+          approvedAt: new Date(),
+          approverSignature: sig,
+          approverRemarks: remarks,
+        },
+      });
+      await prisma.diaryEvent.create({
+        data: {
+          machineId: id,
+          phase: "TESTING",
+          type: "milestone",
+          title: "Verbale di collaudo approvato",
+          note:
+            `Firma esterna: ${name}${ext.jobTitle ? ` · ${ext.jobTitle}` : ""}. Firma raccolta da ${user.name}.` +
+            (remarks ? `\n${remarks}` : ""),
+          actorName: name,
+          authorId: user.id,
+        },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
     if (existing.compilerId === user.id) {
       return NextResponse.json(
         { error: "Il compilatore non può approvare il proprio collaudo" },
@@ -177,6 +224,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         status: "APPROVED",
         approverId: user.id,
         approverName: user.name,
+        approverExternalId: null,
+        approvalCollectedById: null,
+        approvalCollectedByName: null,
         approvedAt: new Date(),
         approverSignature: signature,
         approverRemarks: remarks,

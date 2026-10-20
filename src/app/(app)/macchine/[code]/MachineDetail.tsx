@@ -86,6 +86,9 @@ type Machine = {
     compiledAt: string | null;
     compilerSignature: string | null;
     approverName: string | null;
+    /** approvazione firmata da una persona esterna (anagrafica Persone → Esterni) */
+    approverExternal?: boolean;
+    approvalCollectedByName?: string | null;
     approvedAt: string | null;
     approverSignature: string | null;
     approverRemarks: string | null;
@@ -2198,9 +2201,13 @@ function TabCollaudo({
                   <button className="btn-ghost" onClick={() => onOpenChecklist("view")}>
                     <Icon name="doc" size={14} /> Vedi check list
                   </button>
-                  {canApprove && !isCompiler && (
-                    <button className="btn-success" onClick={() => onOpenChecklist("approve")}>
-                      <Icon name="check" size={14} /> Approva
+                  {canApprove && (
+                    <button
+                      className="btn-success"
+                      onClick={() => onOpenChecklist("approve")}
+                      title={isCompiler ? "Hai compilato tu il verbale: puoi raccogliere la firma di una persona esterna" : ""}
+                    >
+                      <Icon name="check" size={14} /> {isCompiler ? "Firma esterna" : "Approva"}
                     </button>
                   )}
                 </>
@@ -2225,6 +2232,9 @@ function TabCollaudo({
                 <div className="muted small">
                   Approvato da <strong style={{ color: "var(--text)" }}>{c.approverName}</strong>{" "}
                   il <span className="mono">{fmtDate(c.approvedAt)}</span>
+                  {c.approverExternal && (
+                    <> · firma esterna{c.approvalCollectedByName ? `, raccolta da ${c.approvalCollectedByName}` : ""}</>
+                  )}
                 </div>
               )}
             </div>
@@ -3249,6 +3259,12 @@ function CollaudoModal({
   });
 
   const [remarks, setRemarks] = useState("");
+  // Chi approva: l'utente collegato oppure una persona esterna senza account.
+  // Il compilatore non approva il proprio verbale, quindi per lui resta solo
+  // la firma esterna.
+  const isCompiler = !!c?.compilerId && c.compilerId === currentUser.id;
+  const [approverKind, setApproverKind] = useState<"me" | "external">(isCompiler ? "external" : "me");
+  const [externalId, setExternalId] = useState("");
   const [software, setSoftware] = useState(c?.softwareVersion ?? "");
   const [busy, setBusy] = useState(false);
   const [useSavedSig, setUseSavedSig] = useState(currentUser.hasSignature);
@@ -3315,7 +3331,11 @@ function CollaudoModal({
 
   async function approve() {
     let signatureData: string | null = null;
-    if (useSavedSig && currentUser.hasSignature) {
+    if (approverKind === "external") {
+      if (!externalId) return onError("Scegli la persona esterna che firma");
+      if (sigRef.current?.isEmpty()) return onError("Manca la firma della persona esterna");
+      signatureData = sigRef.current?.toDataURL() || null;
+    } else if (useSavedSig && currentUser.hasSignature) {
       signatureData = null;
     } else {
       if (sigRef.current?.isEmpty()) return onError("Apporre la firma dell'approvatore");
@@ -3328,7 +3348,8 @@ function CollaudoModal({
       body: JSON.stringify({
         action: "approve",
         approverSignature: signatureData,
-        saveSignature: !!signatureData && saveSignature,
+        saveSignature: approverKind === "me" && !!signatureData && saveSignature,
+        externalSignerId: approverKind === "external" ? externalId : undefined,
         remarks: remarks || null,
       }),
     });
@@ -3594,16 +3615,46 @@ function CollaudoModal({
                 <h4 className="check-group-h" style={{ margin: "0 0 12px" }}>
                   Approvato da
                 </h4>
-                <div className="form-grid">
-                  <div className="form-row">
-                    <label>Nome approvatore</label>
-                    <input
-                      className="input"
-                      readOnly
-                      value={c?.approverName || (mode === "approve" ? currentUser.name : "")}
-                      placeholder="—"
-                    />
+                {mode === "approve" && (
+                  <div className="filters" style={{ marginBottom: 12 }}>
+                    {!isCompiler && (
+                      <button
+                        type="button"
+                        className={"chip-btn" + (approverKind === "me" ? " active" : "")}
+                        onClick={() => setApproverKind("me")}
+                      >
+                        Approvo io ({currentUser.name})
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={"chip-btn" + (approverKind === "external" ? " active" : "")}
+                      onClick={() => setApproverKind("external")}
+                    >
+                      Firma una persona esterna
+                    </button>
                   </div>
+                )}
+                {mode === "approve" && approverKind === "external" && (
+                  <ExternalSignerPicker value={externalId} onChange={setExternalId} onError={onError} />
+                )}
+                <div className="form-grid">
+                  {!(mode === "approve" && approverKind === "external") && (
+                    <div className="form-row">
+                      <label>Nome approvatore</label>
+                      <input
+                        className="input"
+                        readOnly
+                        value={c?.approverName || (mode === "approve" ? currentUser.name : "")}
+                        placeholder="—"
+                      />
+                      {c?.approverExternal && (
+                        <span className="muted small">
+                          Firma esterna{c.approvalCollectedByName ? ` · raccolta da ${c.approvalCollectedByName}` : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="form-row">
                     <label>Data approvazione</label>
                     <input
@@ -3639,6 +3690,16 @@ function CollaudoModal({
                       alt="firma approvatore"
                       style={{ maxHeight: 80, background: "#fff", border: "1px solid var(--border)", borderRadius: 6, padding: 4 }}
                     />
+                  ) : mode === "approve" && approverKind === "external" ? (
+                    <div>
+                      <SignaturePad ref={sigRef} height={140} />
+                      <div className="sig-actions">
+                        <button className="btn-ghost-sm" type="button" onClick={() => sigRef.current?.clear()}>
+                          Cancella
+                        </button>
+                        <span className="muted small">Firma della persona esterna, sul tuo dispositivo</span>
+                      </div>
+                    </div>
                   ) : mode === "approve" ? (
                     currentUser.hasSignature && useSavedSig ? (
                       <div
@@ -3729,6 +3790,114 @@ function CollaudoModal({
           )}
         </footer>
       </div>
+    </div>
+  );
+}
+
+
+/**
+ * Scelta della persona esterna che firma l'approvazione del collaudo, dalla
+ * anagrafica Persone → Esterni, raggruppata per ditta. Se non c'è ancora la si
+ * aggiunge qui: il collaudatore davanti all'ispettore non deve aspettare un
+ * amministratore.
+ */
+function ExternalSignerPicker({
+  value,
+  onChange,
+  onError,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  onError: (msg: string) => void;
+}) {
+  type S = { id: string; firstName: string; lastName: string; company: string; jobTitle: string | null };
+  const [list, setList] = useState<S[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [f, setF] = useState({ firstName: "", lastName: "", company: "", jobTitle: "" });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/external-signers")
+      .then((r) => r.json())
+      .then((d) => setList(d.signers ?? []))
+      .catch(() => setList([]));
+  }, []);
+
+  const companies = Array.from(new Set((list ?? []).map((s) => s.company)));
+
+  async function add() {
+    setBusy(true);
+    const res = await fetch("/api/external-signers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(f),
+    });
+    const d = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) return onError(d.error || "Errore creazione persona esterna");
+    setList((l) => [...(l ?? []), d.signer]);
+    onChange(d.signer.id);
+    setAdding(false);
+    setF({ firstName: "", lastName: "", company: "", jobTitle: "" });
+  }
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div className="form-row">
+        <label>Persona esterna che firma</label>
+        <div className="flex-inline" style={{ gap: 8 }}>
+          <select className="input" value={value} onChange={(e) => onChange(e.target.value)} style={{ flex: 1 }}>
+            <option value="">{list === null ? "Caricamento…" : "— scegli —"}</option>
+            {companies.map((co) => (
+              <optgroup key={co} label={co}>
+                {(list ?? [])
+                  .filter((s) => s.company === co)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.lastName} {s.firstName}
+                      {s.jobTitle ? ` · ${s.jobTitle}` : ""}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </select>
+          <button type="button" className="btn-ghost-sm" onClick={() => setAdding((a) => !a)}>
+            <Icon name="plus" size={13} /> Nuova
+          </button>
+        </div>
+      </div>
+      {adding && (
+        <div className="form-grid" style={{ marginTop: 8 }}>
+          {(
+            [
+              ["firstName", "Nome"],
+              ["lastName", "Cognome"],
+              ["company", "Ditta"],
+              ["jobTitle", "Qualifica (opzionale)"],
+            ] as const
+          ).map(([k, label]) => (
+            <div className="form-row" key={k}>
+              <label>{label}</label>
+              <input
+                className="input"
+                value={f[k]}
+                list={k === "company" ? "ext-companies" : undefined}
+                onChange={(e) => setF({ ...f, [k]: e.target.value })}
+              />
+            </div>
+          ))}
+          <datalist id="ext-companies">
+            {companies.map((co) => (
+              <option key={co} value={co} />
+            ))}
+          </datalist>
+          <div className="form-row" style={{ justifyContent: "flex-end" }}>
+            <button type="button" className="btn-primary" disabled={busy} onClick={add}>
+              <Icon name="check" size={14} /> {busy ? "Salvo…" : "Aggiungi e scegli"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

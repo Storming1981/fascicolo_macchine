@@ -949,6 +949,24 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   con firma approvatore. API: `/api/machines/[id]/collaudo` (save/submit/approve)
   + `/api/users/me` per la firma personale. Vincolo: il compilatore non può
   approvare il proprio verbale.
+  - **Approvazione firmata da una persona esterna** (cliente, ente
+    certificatore, fornitore): chi ha `machine.sign` sceglie *Firma una persona
+    esterna*, la persona disegna la firma **sul dispositivo di chi la
+    raccoglie** (non ha un account, quindi niente firma salvata né PIN).
+    Sul collaudo: `approverId` nullo, `approverName` = "Nome Cognome (Ditta)",
+    `approverExternalId`, e chi ha raccolto la firma in
+    `approvalCollectedById/Name` (anche a diario). Il compilatore **può**
+    raccoglierla — non è lui ad approvare — ma non può approvare a nome suo.
+    Le milestone leggono `approvedAt` come sempre.
+  - **Anagrafica esterni** (`ExternalSigner`: nome, cognome, **ditta**,
+    qualifica, email, telefono, note): Persone → filtro **Esterni**,
+    raggruppati e filtrabili per ditta. La gestisce chi ha `users.manage`; dal
+    collaudo la può **aggiungere al volo** anche chi ha `machine.sign`
+    (l'ispettore è davanti al collaudatore, non si aspetta un amministratore).
+    Chi ha già firmato **non si cancella, si disattiva**: il verbale resta
+    agganciato al firmatario. API `GET|POST /api/external-signers` ·
+    `PATCH|DELETE /api/external-signers/[id]`. Il modello è generico: per far
+    firmare un esterno altrove (rapportini, schede) basta riusarlo.
   - **Versione software installata** (`Collaudo.softwareVersion`): campo in
     testa alla check list, scritto da chi compila (permesso
     `machine.intervention`, come il resto del verbale) e **in sola lettura**

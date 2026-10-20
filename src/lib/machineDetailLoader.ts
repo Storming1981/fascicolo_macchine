@@ -244,6 +244,8 @@ export async function loadMachineDetailProps(code: string) {
           compiledAt: machine.collaudo.compiledAt?.toISOString() || null,
           compilerSignature: machine.collaudo.compilerSignature,
           approverName: machine.collaudo.approverName,
+          approverExternal: !!machine.collaudo.approverExternalId,
+          approvalCollectedByName: machine.collaudo.approvalCollectedByName,
           approvedAt: machine.collaudo.approvedAt?.toISOString() || null,
           approverSignature: machine.collaudo.approverSignature,
           approverRemarks: machine.collaudo.approverRemarks,
