@@ -7,7 +7,7 @@ import {
   MATRICOLA_LABEL,
   sheetCtx,
   sheetDef,
-  inlineRow,
+  inlineRows,
   NA_VALUE,
   serialLimit,
   visibleRows,
@@ -29,6 +29,8 @@ export type AllestimentoPdfInput = {
   header: SheetHeader;
   values: SheetValues;
   components: { groupId: string; serials: string[] }[];
+  /** Blocchi ripetibili (nastri della linea di separazione), già in ordine. */
+  belts?: { label: string; spec: string; serials: string[] }[];
   compilerName: string | null;
   compiledAt: Date | null;
   compilerSignature: string | null;
@@ -214,10 +216,37 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
 
   for (const section of def.sections) {
     const rows = visibleRows(section, ctx, input.values);
-    if (!rows.length) continue;
+    const belts = section.repeat === "belt" ? input.belts ?? [] : [];
+    if (!rows.length && !belts.length) continue;
     // la testata di sezione non resta orfana in fondo alla pagina
     if (y - 22 - LINE_H < bottom) newPage(false);
     sectionHead(section.title, section.subtitle);
+
+    // Sezione a blocchi: una riga per nastro, con i suoi dati e le sue
+    // matricole. Sul modulo cartaceo i nastri si scrivevano a mano in coda.
+    for (const b of belts) {
+      const sub = Math.max(1, b.serials.length);
+      const lines = Math.max(
+        wrap(b.label, font, FS, COLS[0] - 8).length,
+        wrap(b.spec, font, FS, COLS[1] - 8).length
+      );
+      const h = Math.max(sub * LINE_H, lines * (FS + 2) + 2.5);
+      if (y - h < bottom) {
+        newPage(false);
+        sectionHead(section.title, section.subtitle);
+      }
+      box(COLX[0], y, COLS[0], h);
+      cellText(b.label, COLX[0], COLS[0], y, h);
+      box(COLX[1], y, COLS[1], h);
+      cellText(b.spec, COLX[1], COLS[1], y, h);
+      const sh = h / sub;
+      for (let i = 0; i < sub; i++) {
+        box(COLX[2], y - i * sh, COLS[2], sh);
+        if (b.serials[i]) cellText(b.serials[i], COLX[2], COLS[2], y - i * sh, sh, { align: "center" });
+      }
+      box(COLX[3], y, COLS[3], h);
+      y -= h;
+    }
 
     for (const row of rows) {
       const v = input.values[row.key] ?? {};
@@ -232,8 +261,10 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
       const serials = lim === null ? all : all.filter((s, i) => i < lim || !!s.trim());
       // riga senza specifica (lotto albero): la colonna resta vuota; dove N.A.
       // e' il default (specifiche speciali) il vuoto si stampa come N.a.
-      const sub = inlineRow(def, row.key);
-      const subSpec = sub ? (input.values[sub.key]?.spec ?? "").trim() : "";
+      const subSpec = inlineRows(def, row.key)
+        .map((r) => (input.values[r.key]?.spec ?? "").trim())
+        .filter(Boolean)
+        .join(" · ");
       const spec = row.noSpec
         ? ""
         : [(v.spec ?? "") || (row.naDefault ? NA_VALUE : ""), subSpec].filter(Boolean).join(" · ");

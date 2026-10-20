@@ -1,5 +1,12 @@
 import "server-only";
-import { hasAllestimentoSheets, sheetCommessa, sheetDef, type SheetKind } from "./allestimento";
+import {
+  BELT_FIELDS,
+  hasAllestimentoSheets,
+  sheetCommessa,
+  sheetDef,
+  type SheetKind,
+} from "./allestimento";
+import { isBeltGroup } from "./components";
 import { loadSheet } from "./allestimentoService";
 import { generateAllestimentoPdf } from "./allestimentoPdf";
 
@@ -24,6 +31,25 @@ export async function renderSheetPdf(
     header: s.header,
     model: m.model,
     values: s.values,
+    // I nastri della linea di separazione: ognuno è un componente a sé, quindi
+    // non entra nelle righe fisse ma in un elenco suo.
+    belts: m.components
+      .filter((c) => isBeltGroup(c.groupId))
+      .sort((a, b) => Number(a.groupId.replace(/\D+/g, "")) - Number(b.groupId.replace(/\D+/g, "")))
+      .map((c) => {
+        const extra = (c.extra && typeof c.extra === "object" ? c.extra : {}) as Record<string, string>;
+        const spec = BELT_FIELDS.map((f) => {
+          const v = (f.key === "brand" ? c.brand : extra[f.key]) ?? "";
+          return v.trim() ? `${f.label}: ${v.trim()}` : "";
+        })
+          .filter(Boolean)
+          .join(" · ");
+        return {
+          label: c.label ?? "Nastro",
+          spec,
+          serials: c.items.map((i) => [i.serial ?? "", i.lot ?? ""].filter(Boolean).join(" · ")),
+        };
+      }),
     components: m.components.map((c) => ({
       groupId: c.groupId,
       // il lotto punzonato accanto alla matricola (es. 09/26) va stampato con lei

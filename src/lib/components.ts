@@ -207,6 +207,64 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     slots: ["Blocco"],
     excel: { serialCols: [] },
   },
+  // ── Linea di separazione (BLUE SORTER) ──────────────────────────────
+  {
+    id: "frame",
+    label: "Carpenteria",
+    en: "FRAME",
+    icon: "box",
+    slots: [], // solo il fornitore: la carpenteria non ha una matricola
+    excel: { serialCols: [] },
+  },
+  {
+    id: "vibro",
+    label: "Piano vibrante",
+    en: "VIBRATING FEEDER",
+    icon: "rotor",
+    slots: ["Piano vibrante"],
+    extra: [
+      { key: "larghezza", label: "Larghezza (mm)" },
+      { key: "lunghezza", label: "Lunghezza (mm)" },
+    ],
+    excel: { serialCols: [] },
+  },
+  {
+    id: "magnet",
+    label: "Tamburo magnetico",
+    en: "MAGNETIC DRUM",
+    icon: "rotor",
+    slots: ["Tamburo"],
+    extra: [
+      { key: "larghezza", label: "Larghezza (mm)" },
+      { key: "lunghezza", label: "Lunghezza (mm)" },
+    ],
+    excel: { serialCols: [] },
+  },
+  {
+    id: "overbelt",
+    label: "Overbelt",
+    en: "OVERBELT",
+    icon: "rotor",
+    slots: ["Overbelt"],
+    extra: [
+      { key: "larghezza", label: "Larghezza (mm)" },
+      { key: "lunghezza", label: "Lunghezza (mm)" },
+    ],
+    excel: { serialCols: [] },
+  },
+  {
+    id: "ecs",
+    label: "ECS",
+    en: "EDDY CURRENT SEPARATOR",
+    icon: "bolt",
+    slots: ["ECS"],
+    extra: [
+      { key: "modello", label: "Modello" },
+      { key: "larghezza", label: "Larghezza (mm)" },
+      { key: "lunghezza", label: "Lunghezza (mm)" },
+    ],
+    excel: { serialCols: [] },
+  },
   {
     id: "remote",
     label: "Radiocomando",
@@ -228,6 +286,15 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     excel: { brandCol: "BB", serialCols: [], extraCols: { type: "BC", lot: "BD" } },
   },
 ];
+
+/**
+ * I **nastri** di una linea di separazione non sono un gruppo solo: ogni linea
+ * ne ha un numero diverso, quindi ognuno è un componente a sé con groupId
+ * `belt-1`, `belt-2`, … (il vincolo unico è su machineId+groupId, non si
+ * possono avere due gruppi uguali sulla stessa macchina).
+ */
+export const BELT_PREFIX = "belt-";
+export const isBeltGroup = (groupId: string) => groupId.startsWith(BELT_PREFIX);
 
 /** Etichetta del campo lotto di un gruppo, se quel componente ne ha uno. */
 export function lotLabel(groupId: string | null | undefined): string | undefined {

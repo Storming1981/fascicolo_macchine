@@ -13,8 +13,8 @@
 
 import type { KitFlag } from "./kits";
 
-export type SheetKind = "TRITURATORE" | "CONTAINER" | "MULINO" | "CESOIA";
-export const SHEET_KINDS: SheetKind[] = ["TRITURATORE", "CONTAINER", "MULINO", "CESOIA"];
+export type SheetKind = "TRITURATORE" | "CONTAINER" | "MULINO" | "CESOIA" | "SEPARAZIONE";
+export const SHEET_KINDS: SheetKind[] = ["TRITURATORE", "CONTAINER", "MULINO", "CESOIA", "SEPARAZIONE"];
 
 export type SheetInput = "text" | "yesno" | "yesnona";
 export type SheetCtx = { diesel: boolean };
@@ -71,7 +71,21 @@ export type SheetRow = {
   when?: (ctx: SheetCtx) => boolean;
 };
 
-export type SheetSection = { key: string; title: string; subtitle?: string; icon: string; rows: SheetRow[] };
+export type SheetSection = {
+  key: string;
+  title: string;
+  subtitle?: string;
+  icon: string;
+  rows: SheetRow[];
+  /**
+   * Sezione a blocchi **ripetibili**: non righe fisse, ma un componente per
+   * ogni pezzo montato, aggiunto col "+" (i nastri di una linea di separazione
+   * sono diversi di numero su ogni impianto). Ogni blocco è un `Component` a
+   * sé — `belt-1`, `belt-2`, … — perché su una macchina non possono esistere
+   * due gruppi con lo stesso id.
+   */
+  repeat?: "belt";
+};
 
 export type SheetDef = {
   kind: SheetKind;
@@ -464,11 +478,110 @@ export const SHEET_CESOIA: SheetDef = {
   ],
 };
 
+/**
+ * Campi di un nastro. Stanno sul componente — il produttore in `brand`, il
+ * resto in `extra` — invece che nei valori della scheda, perché un nastro è un
+ * pezzo montato sulla macchina, con la sua matricola e le sue foto, non una
+ * voce di modulo.
+ */
+export type BeltField = {
+  key: string;
+  label: string;
+  /** Elenco con voci aggiungibili (come le specifiche delle altre schede). */
+  list?: string;
+  suggest?: string[];
+};
+
+export const BELT_FIELDS: BeltField[] = [
+  { key: "brand", label: "Produttore", list: "nastri_produttore", suggest: ["ROULUNDS", "AMMERAAL"] },
+  { key: "macchina", label: "Macchina", list: "nastri_macchina" },
+  { key: "materiale", label: "Tipo di materiale", list: "nastri_materiale", suggest: ["PVC", "PU", "GOMMA"] },
+  { key: "larghezza", label: "Larghezza nastro (mm)" },
+  { key: "lunghezza", label: "Lunghezza nastro (mm)" },
+  { key: "tipo", label: "Tipo di nastro", list: "nastri_tipo", suggest: ["LISCIO", "CON TRAVERSINI", "A SPINA"] },
+  { key: "moto_marca", label: "Motoriduttore · marca", list: "motoriduttore_marca", suggest: ["BONFIGLIOLI", "SEW"] },
+  { key: "moto_modello", label: "Motoriduttore · modello" },
+  { key: "moto_kw", label: "Motoriduttore · potenza (kW)" },
+  { key: "moto_volt", label: "Motoriduttore · voltaggio (V)", list: "tensione", suggest: ["400", "480", "690"] },
+  { key: "moto_hz", label: "Motoriduttore · frequenza (Hz)", list: "frequenza", suggest: ["50", "60"] },
+];
+
+/**
+ * Slot di un nastro: due matricole che si leggono dalla foto della targhetta
+ * (nastro e motoriduttore) e la **scheda di lubrificazione**, che è solo una
+ * foto — non ha un numero da trascrivere, si allega e basta.
+ */
+export const BELT_SLOTS: { label: string; photoOnly?: boolean }[] = [
+  { label: "Matricola nastro" },
+  { label: "Motoriduttore" },
+  { label: "Scheda di lubrificazione", photoOnly: true },
+];
+
+export const SHEET_SEPARAZIONE: SheetDef = {
+  kind: "SEPARAZIONE",
+  code: "M5.19",
+  title: "SCHEDA ALLESTIMENTO LINEA DI SEPARAZIONE",
+  rev: "rev.00",
+  plantTypes: ["BLUE SORTER"],
+  typeLabel: "TIPO LINEA",
+  headerFields: ["matricola"],
+  sections: [
+    {
+      key: "carpenteria",
+      title: "CARPENTERIA",
+      icon: "box",
+      rows: [
+        { key: "carpenteria", label: "Fornitore carpenteria", bind: { group: "frame", field: "brand" }, suggest: ["STAM"] },
+        { key: "verniciatura_linea", label: "Verniciatura", suggest: PAINT, list: "verniciatura" },
+        { key: "colore_linea", label: "Colore", suggest: COLORS, list: "colori" },
+      ],
+    },
+    {
+      key: "nastri",
+      title: "NASTRI",
+      subtitle: "Un blocco per nastro: il numero cambia da linea a linea",
+      icon: "rotor",
+      repeat: "belt",
+      rows: [],
+    },
+    {
+      key: "separatori",
+      title: "SEPARATORI E ALIMENTAZIONE",
+      icon: "bolt",
+      rows: [
+        { key: "vibro", label: "Piano vibrante", bind: { group: "vibro", field: "brand" }, serials: "vibro", specLabel: "Fornitore" },
+        { key: "vibro_larghezza", label: "Larghezza (mm)", inlineWith: "vibro", bind: { group: "vibro", field: "extra", extraKey: "larghezza" }, free: true },
+        { key: "vibro_lunghezza", label: "Lunghezza (mm)", inlineWith: "vibro", bind: { group: "vibro", field: "extra", extraKey: "lunghezza" }, free: true },
+
+        { key: "magnet", label: "Tamburo magnetico", bind: { group: "magnet", field: "brand" }, serials: "magnet", specLabel: "Fornitore" },
+        { key: "magnet_larghezza", label: "Larghezza (mm)", inlineWith: "magnet", bind: { group: "magnet", field: "extra", extraKey: "larghezza" }, free: true },
+        { key: "magnet_lunghezza", label: "Lunghezza (mm)", inlineWith: "magnet", bind: { group: "magnet", field: "extra", extraKey: "lunghezza" }, free: true },
+
+        { key: "overbelt", label: "Overbelt", bind: { group: "overbelt", field: "brand" }, serials: "overbelt", specLabel: "Fornitore" },
+        { key: "overbelt_larghezza", label: "Larghezza (mm)", inlineWith: "overbelt", bind: { group: "overbelt", field: "extra", extraKey: "larghezza" }, free: true },
+        { key: "overbelt_lunghezza", label: "Lunghezza (mm)", inlineWith: "overbelt", bind: { group: "overbelt", field: "extra", extraKey: "lunghezza" }, free: true },
+
+        { key: "ecs", label: "ECS", bind: { group: "ecs", field: "brand" }, serials: "ecs", specLabel: "Fornitore" },
+        { key: "ecs_modello", label: "Modello", inlineWith: "ecs", bind: { group: "ecs", field: "extra", extraKey: "modello" }, suggest: ["SIS", "VIS"] },
+        { key: "ecs_larghezza", label: "Larghezza (mm)", inlineWith: "ecs", bind: { group: "ecs", field: "extra", extraKey: "larghezza" }, free: true },
+        { key: "ecs_lunghezza", label: "Lunghezza (mm)", inlineWith: "ecs", bind: { group: "ecs", field: "extra", extraKey: "lunghezza" }, free: true },
+      ],
+    },
+    {
+      key: "note_linea",
+      title: "NOTE",
+      icon: "doc",
+      rows: [{ key: "note_linea", label: "Specifiche speciali", free: true, naButton: true, naDefault: true, wide: true }],
+    },
+  ],
+};
+
 const SHEET_DEFS: Record<SheetKind, SheetDef> = {
   TRITURATORE: SHEET_TRITURATORE,
   CONTAINER: SHEET_CONTAINER,
   MULINO: SHEET_MULINO,
   CESOIA: SHEET_CESOIA,
+  SEPARAZIONE: SHEET_SEPARAZIONE,
 };
 
 export function sheetDef(kind: SheetKind): SheetDef {
@@ -481,6 +594,7 @@ const norm = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
 export const MATRICOLA_LABEL: Partial<Record<SheetKind, string>> = {
   MULINO: "Matricola impianto",
   CESOIA: "Matricola macchina",
+  SEPARAZIONE: "Matricola linea",
 };
 
 /** Schede previste per una tipologia impianto (vuoto = nessuna, per ora). */
@@ -531,9 +645,14 @@ export function visibleRows(section: SheetSection, ctx: SheetCtx, values?: Sheet
   });
 }
 
-/** La seconda specifica di una riga, se ne ha una (pompa di riempimento). */
-export function inlineRow(def: SheetDef, key: string): SheetRow | undefined {
-  return allRows(def).find((r) => r.inlineWith === key);
+/**
+ * Le specifiche "in linea" di una riga: la pompa di riempimento ne ha una
+ * (marca pompa), i separatori della linea anche tre (larghezza, lunghezza,
+ * modello). Sono righe vere — si salvano e si leggono come le altre — ma le
+ * disegna la riga genitore, nella sua colonna.
+ */
+export function inlineRows(def: SheetDef, key: string): SheetRow[] {
+  return allRows(def).filter((r) => r.inlineWith === key);
 }
 
 /**
@@ -574,12 +693,18 @@ export function allListKeys(): Set<string> {
       if (isListRow(r)) keys.add(listKey(kind, r));
       if (r.serialList) keys.add(serialListKey(kind, r));
     }
+  for (const f of BELT_FIELDS) if (f.list) keys.add(f.list);
   return keys;
 }
 
 /** Voci di un elenco: quelle di partenza più le aggiunte, senza doppioni. */
 export function listOptions(kind: SheetKind, row: SheetRow, custom: SheetOptions): string[] {
   return mergeOptions(row.suggest ?? [], custom[listKey(kind, row)] ?? []);
+}
+
+/** Voci dell'elenco di un campo nastro: quelle di partenza più le aggiunte. */
+export function beltOptions(f: BeltField, custom: SheetOptions): string[] {
+  return mergeOptions(f.suggest ?? [], (f.list && custom[f.list]) || []);
 }
 
 /** Voci dell'elenco nella colonna Matricola. */
@@ -602,6 +727,7 @@ function mergeOptions(base: string[], added: string[]): string[] {
 /** Gruppi componente usati dalle schede indicate (per crearli sulle macchine). */
 export function sheetGroupIds(kinds: SheetKind[] = SHEET_KINDS): string[] {
   const ids = new Set<string>();
+  // i blocchi ripetibili (nastri) nascono col "+", non si creano in anticipo
   for (const kind of kinds)
     for (const r of allRows(SHEET_DEFS[kind])) {
       if (r.bind) ids.add(r.bind.group);

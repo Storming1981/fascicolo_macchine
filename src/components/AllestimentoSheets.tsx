@@ -3,9 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Icon from "@/components/Icon";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import {
+  BELT_FIELDS,
+  BELT_SLOTS,
+  beltOptions,
   CONTAINER_TYPES,
   containerType,
-  inlineRow,
+  inlineRows,
   MATRICOLA_LABEL,
   NA_VALUE,
   YES_NO,
@@ -30,7 +33,14 @@ import { fmtDateTime } from "@/lib/format";
 import { kitDef, type KitFlag } from "@/lib/kits";
 
 type Item = { id: string; position: number; label: string; serial: string | null; lot: string | null; note: string | null };
-type Comp = { id: string; groupId: string; items: Item[] };
+type Comp = {
+  id: string;
+  groupId: string;
+  label?: string | null;
+  brand?: string | null;
+  extra?: Record<string, string> | null;
+  items: Item[];
+};
 
 type SheetDTO = {
   kind: SheetKind;
@@ -49,6 +59,7 @@ const KIND_META: Record<SheetKind, { label: string; icon: string }> = {
   CONTAINER: { label: "Container", icon: "box" },
   MULINO: { label: "Mulino", icon: "rotor" },
   CESOIA: { label: "Cesoia", icon: "blade" },
+  SEPARAZIONE: { label: "Linea di separazione", icon: "rotor" },
 };
 
 const filled = (v: string | undefined) => !!(v ?? "").trim();
@@ -218,7 +229,7 @@ export default function AllestimentoSheets({
       // sezione risultava completa mentre un dato mancava ancora.
       return { s, rows, scored: rows, done: rows.filter((r) => rowFilled(r)).length };
     })
-    .filter((x) => x.rows.length);
+    .filter((x) => x.rows.length || x.s.repeat);
   const total = sections.reduce((a, x) => a + x.scored.length, 0);
   const done = sections.reduce((a, x) => a + x.done, 0);
   const pct = total ? Math.round((done / total) * 100) : 0;
@@ -596,14 +607,38 @@ export default function AllestimentoSheets({
               <span className="al-sec-meter">
                 <span className="al-sec-meter-bar" style={{ width: `${x.scored.length ? (d / x.scored.length) * 100 : 0}%` }} />
               </span>
-              <span className={"al-count" + (complete ? " done" : "")}>
-                {complete && <Icon name="check" size={12} />}
-                {d}/{x.scored.length}
+              <span className={"al-count" + (complete && !s.repeat ? " done" : "")}>
+                {s.repeat ? (
+                  `${machine.components.filter((c) => c.groupId.startsWith("belt-")).length} nastri`
+                ) : (
+                  <>
+                    {complete && <Icon name="check" size={12} />}
+                    {d}/{x.scored.length}
+                  </>
+                )}
               </span>
               <Icon name={isOpen ? "chev-down" : "chev-right"} size={16} />
             </button>
 
-            {isOpen && (
+            {isOpen && s.repeat === "belt" && (
+              <BeltsSection
+                machineId={machine.id}
+                belts={machine.components
+                  .filter((c) => c.groupId.startsWith("belt-"))
+                  .sort((a, b) => Number(a.groupId.slice(5)) - Number(b.groupId.slice(5)))}
+                disabled={disabled}
+                options={options}
+                canManageOptions={canManageOptions}
+                renderSerial={renderSerial}
+                renderPhoto={renderPhoto}
+                addOption={addOption}
+                removeOption={removeOption}
+                onDone={onDone}
+                notify={notify}
+              />
+            )}
+
+            {isOpen && !s.repeat && (
               <div className="al-rows">
                 <div className="al-row al-row-head" aria-hidden>
                   <span>Voce</span>
@@ -633,20 +668,23 @@ export default function AllestimentoSheets({
                     <div className="al-row-spec">
                       <div className="al-spec-line">
                         {(() => {
-                          const sub = inlineRow(def, row.key);
-                          if (!sub) return specControl(row);
-                          // Due costruttori, una voce sola: le specifiche stanno
-                          // affiancate nella stessa colonna, non in due righe.
+                          const subs = inlineRows(def, row.key);
+                          if (!subs.length) return specControl(row);
+                          // Un componente solo con piu' dati (fornitore,
+                          // larghezza, lunghezza, modello): stanno nella stessa
+                          // colonna, non in tante righe che sembrano pezzi diversi.
                           return (
                             <div className="al-spec-dual">
                               <label>
                                 <span>{row.specLabel ?? "Specifica"}</span>
                                 {specControl(row)}
                               </label>
-                              <label>
-                                <span>{sub.label}</span>
-                                {specControl(sub)}
-                              </label>
+                              {subs.map((sub) => (
+                                <label key={sub.key}>
+                                  <span>{sub.label}</span>
+                                  {specControl(sub)}
+                                </label>
+                              ))}
                             </div>
                           );
                         })()}
@@ -1189,5 +1227,176 @@ function KitFlagBox({
       <input type="checkbox" checked={on} disabled={disabled || busy} onChange={(e) => toggle(e.target.checked)} />
       <span>{def.label}</span>
     </label>
+  );
+}
+
+
+/**
+ * I nastri di una linea di separazione: un blocco per nastro, aggiunto col "+".
+ * Non sono righe di modulo ma **componenti** — ognuno con produttore, misure,
+ * motoriduttore, le sue due matricole lette dalla foto e la scheda di
+ * lubrificazione allegata — perche' ogni linea ne monta un numero diverso e
+ * una riga fissa non puo' rappresentarli.
+ *
+ * I campi si salvano **uscendo dal campo** (un PATCH per nastro): sono dati del
+ * componente, non della scheda, e non devono aspettare "Salva modifiche".
+ */
+function BeltsSection({
+  machineId,
+  belts,
+  disabled,
+  options,
+  canManageOptions,
+  renderSerial,
+  renderPhoto,
+  addOption,
+  removeOption,
+  onDone,
+  notify,
+}: {
+  machineId: string;
+  belts: Comp[];
+  disabled: boolean;
+  options: SheetOptions;
+  canManageOptions: boolean;
+  renderSerial: (item: Item, groupId: string) => ReactNode;
+  renderPhoto: (itemId: string, title: string) => ReactNode;
+  addOption: (list: string, value: string) => Promise<boolean>;
+  removeOption: (list: string, value: string) => void;
+  onDone: () => void;
+  notify: (m: string, k?: "ok" | "err") => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  // valori in corso di modifica: la riga mostra quello che si sta scrivendo
+  const [draft, setDraft] = useState<Record<string, Record<string, string>>>({});
+
+  const valueOf = (b: Comp, key: string) =>
+    draft[b.id]?.[key] ?? (key === "brand" ? b.brand ?? "" : (b.extra ?? {})[key] ?? "");
+
+  async function save(b: Comp, key: string, value: string) {
+    const body: Record<string, unknown> = { componentId: b.id };
+    if (key === "brand") body.brand = value;
+    else body.extra = { [key]: value };
+    const res = await fetch(`/api/machines/${machineId}/belts`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) onDone();
+    else notify("Nastro non salvato", "err");
+  }
+
+  async function addBelt() {
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machineId}/belts`, { method: "POST" });
+    setBusy(false);
+    if (res.ok) {
+      onDone();
+      notify("Nastro aggiunto");
+    } else {
+      const d = await res.json().catch(() => ({}));
+      notify(d.error || "Nastro non aggiunto", "err");
+    }
+  }
+
+  async function removeBelt(b: Comp) {
+    if (!confirm(`Eliminare ${b.label ?? "il nastro"}? Le matricole restano scritte a diario.`)) return;
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machineId}/belts?componentId=${b.id}`, { method: "DELETE" });
+    setBusy(false);
+    if (res.ok) {
+      onDone();
+      notify("Nastro eliminato");
+    } else notify("Nastro non eliminato", "err");
+  }
+
+  return (
+    <div className="belts">
+      {belts.length === 0 && (
+        <p className="muted small belts-empty">
+          Nessun nastro ancora: aggiungi il primo col pulsante qui sotto.
+        </p>
+      )}
+
+      {belts.map((b) => (
+        <section key={b.id} className="belt-card">
+          <header className="belt-head">
+            <strong>{b.label ?? "Nastro"}</strong>
+            {!disabled && (
+              <button className="btn-ghost-sm danger" disabled={busy} onClick={() => removeBelt(b)}>
+                <Icon name="trash" size={13} /> Elimina
+              </button>
+            )}
+          </header>
+
+          <div className="belt-grid">
+            {BELT_FIELDS.map((f) => {
+              const v = valueOf(b, f.key);
+              const set = (nv: string) =>
+                setDraft((d) => ({ ...d, [b.id]: { ...(d[b.id] ?? {}), [f.key]: nv } }));
+              return (
+                <label key={f.key} className="belt-field">
+                  <span>{f.label}</span>
+                  {f.list ? (
+                    <Combobox
+                      value={v}
+                      options={beltOptions(f, options)}
+                      custom={options[f.list] ?? []}
+                      disabled={disabled}
+                      canRemove={canManageOptions}
+                      onChange={(nv) => {
+                        set(nv);
+                        void save(b, f.key, nv);
+                      }}
+                      onAdd={async (nv) => {
+                        if (await addOption(f.list!, nv)) {
+                          set(nv);
+                          void save(b, f.key, nv);
+                        }
+                      }}
+                      onRemove={(nv) => removeOption(f.list!, nv)}
+                    />
+                  ) : (
+                    <input
+                      className="al-input"
+                      value={v}
+                      disabled={disabled}
+                      placeholder="\u2014"
+                      onChange={(e) => set(e.target.value)}
+                      onBlur={(e) => void save(b, f.key, e.target.value)}
+                    />
+                  )}
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="belt-slots">
+            {b.items.map((it, i) => {
+              const slot = BELT_SLOTS[i] ?? { label: it.label };
+              return (
+                <div key={it.id} className={"al-serial" + (it.serial ? " ok" : "")}>
+                  <span className="al-serial-label">{it.label}</span>
+                  <div className="al-serial-cell">
+                    {slot.photoOnly ? (
+                      <span className="muted small">Solo foto: si allega la scheda, non c'\u00e8 un numero</span>
+                    ) : (
+                      renderSerial(it, b.groupId)
+                    )}
+                  </div>
+                  <div className="al-serial-photo">{renderPhoto(it.id, `${b.label ?? "Nastro"} \u2014 ${it.label}`)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+
+      {!disabled && (
+        <button className="btn-primary-sm belts-add" disabled={busy} onClick={addBelt}>
+          <Icon name="plus" size={14} /> Aggiungi nastro
+        </button>
+      )}
+    </div>
   );
 }
