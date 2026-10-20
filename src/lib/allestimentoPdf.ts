@@ -29,8 +29,8 @@ export type AllestimentoPdfInput = {
   header: SheetHeader;
   values: SheetValues;
   components: { groupId: string; serials: string[] }[];
-  /** Blocchi ripetibili (nastri della linea di separazione), già in ordine. */
-  belts?: { label: string; spec: string; serials: string[] }[];
+  /** Componenti ripetibili (nastri, separatori), già in ordine. */
+  blocks?: { kind: string; label: string; spec: string; serials: string[] }[];
   compilerName: string | null;
   compiledAt: Date | null;
   compilerSignature: string | null;
@@ -216,15 +216,17 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
 
   for (const section of def.sections) {
     const rows = visibleRows(section, ctx, input.values);
-    const belts = section.repeat === "belt" ? input.belts ?? [] : [];
-    if (!rows.length && !belts.length) continue;
+    const blocks = section.repeat
+      ? (input.blocks ?? []).filter((b) => section.repeat!.includes(b.kind))
+      : [];
+    if (!rows.length && !blocks.length) continue;
     // la testata di sezione non resta orfana in fondo alla pagina
     if (y - 22 - LINE_H < bottom) newPage(false);
     sectionHead(section.title, section.subtitle);
 
-    // Sezione a blocchi: una riga per nastro, con i suoi dati e le sue
-    // matricole. Sul modulo cartaceo i nastri si scrivevano a mano in coda.
-    for (const b of belts) {
+    // Sezione a blocchi: una riga per componente montato, con i suoi dati e le
+    // sue matricole. Sul modulo cartaceo si scrivevano a mano in coda.
+    for (const b of blocks) {
       const sub = Math.max(1, b.serials.length);
       const lines = Math.max(
         wrap(b.label, font, FS, COLS[0] - 8).length,

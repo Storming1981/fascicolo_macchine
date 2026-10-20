@@ -32,6 +32,11 @@ export type SheetRow = {
   bind?: { group: string; field: "brand" } | { group: string; field: "extra"; extraKey: string };
   /** Gruppo componente i cui slot forniscono le matricole della riga. */
   serials?: string;
+  /**
+   * Gruppo componente usato **solo per le foto**: la carpenteria e la cabina
+   * di cernita non hanno una matricola da trascrivere, ma vanno fotografate.
+   */
+  photos?: string;
   /** Matricola singola salvata nella scheda (es. targhetta CE). */
   serialField?: boolean;
   /** La colonna Matricola è un elenco (marca/fornitore), non un testo libero. */
@@ -79,12 +84,14 @@ export type SheetSection = {
   rows: SheetRow[];
   /**
    * Sezione a blocchi **ripetibili**: non righe fisse, ma un componente per
-   * ogni pezzo montato, aggiunto col "+" (i nastri di una linea di separazione
-   * sono diversi di numero su ogni impianto). Ogni blocco è un `Component` a
-   * sé — `belt-1`, `belt-2`, … — perché su una macchina non possono esistere
-   * due gruppi con lo stesso id.
+   * ogni pezzo montato, aggiunto col "+". Elenca i tipi che si possono
+   * aggiungere (`BLOCKS`): i nastri di una linea sono diversi di numero su
+   * ogni impianto, e i separatori **possono anche non esserci** — una riga
+   * fissa per tipo chiederebbe la matricola di macchine mai montate.
+   * Ogni blocco è un `Component` a sé — `belt-1`, `overbelt-2`, … — perché su
+   * una macchina non possono esistere due gruppi con lo stesso id.
    */
-  repeat?: "belt";
+  repeat?: string[];
 };
 
 export type SheetDef = {
@@ -517,6 +524,51 @@ export const BELT_SLOTS: { label: string; photoOnly?: boolean }[] = [
   { label: "Scheda di lubrificazione", photoOnly: true },
 ];
 
+const SEP_FIELDS: BeltField[] = [
+  { key: "brand", label: "Fornitore", list: "separatori_fornitore" },
+  { key: "larghezza", label: "Larghezza (mm)" },
+  { key: "lunghezza", label: "Lunghezza (mm)" },
+];
+
+/**
+ * Tipi di blocco ripetibile. La chiave è anche il **prefisso del groupId**
+ * (`belt-1`, `ecs-2`): leggendo l'id si sa che pezzo è, senza una tabella in
+ * più e senza fidarsi di un campo che si può riscrivere.
+ */
+export type RepeatBlock = {
+  key: string;
+  label: string;
+  fields: BeltField[];
+  slots: { label: string; photoOnly?: boolean }[];
+};
+
+export const BLOCKS: Record<string, RepeatBlock> = {
+  belt: { key: "belt", label: "Nastro", fields: BELT_FIELDS, slots: BELT_SLOTS },
+  vibro: { key: "vibro", label: "Piano vibrante", fields: SEP_FIELDS, slots: [{ label: "Matricola" }] },
+  magnet: { key: "magnet", label: "Tamburo magnetico", fields: SEP_FIELDS, slots: [{ label: "Matricola" }] },
+  overbelt: { key: "overbelt", label: "Overbelt", fields: SEP_FIELDS, slots: [{ label: "Matricola" }] },
+  ecs: {
+    key: "ecs",
+    label: "ECS",
+    // l'ECS esiste in piu' tipologie (SIS, VIS): senza il modello non si sa
+    // quale separatore e' montato
+    fields: [
+      SEP_FIELDS[0],
+      { key: "modello", label: "Modello", list: "ecs_modello", suggest: ["SIS", "VIS"] },
+      ...SEP_FIELDS.slice(1),
+    ],
+    slots: [{ label: "Matricola" }],
+  },
+};
+
+/** Il gruppo è un blocco ripetibile? Ritorna il tipo (belt, ecs, …) o null. */
+export function blockKindOf(groupId: string): RepeatBlock | null {
+  const m = /^([a-z]+)-(\d+)$/.exec(groupId);
+  return m && BLOCKS[m[1]] ? BLOCKS[m[1]] : null;
+}
+
+export const blockNumberOf = (groupId: string) => Number(groupId.replace(/^[a-z]+-/, "")) || 0;
+
 export const SHEET_SEPARAZIONE: SheetDef = {
   kind: "SEPARAZIONE",
   code: "M5.19",
@@ -531,7 +583,7 @@ export const SHEET_SEPARAZIONE: SheetDef = {
       title: "CARPENTERIA",
       icon: "box",
       rows: [
-        { key: "carpenteria", label: "Fornitore carpenteria", bind: { group: "frame", field: "brand" }, suggest: ["STAM"] },
+        { key: "carpenteria", label: "Fornitore carpenteria", bind: { group: "frame", field: "brand" }, suggest: ["STAM"], photos: "frame" },
         { key: "verniciatura_linea", label: "Verniciatura", suggest: PAINT, list: "verniciatura" },
         { key: "colore_linea", label: "Colore", suggest: COLORS, list: "colori" },
       ],
@@ -541,30 +593,28 @@ export const SHEET_SEPARAZIONE: SheetDef = {
       title: "NASTRI",
       subtitle: "Un blocco per nastro: il numero cambia da linea a linea",
       icon: "rotor",
-      repeat: "belt",
+      repeat: ["belt"],
       rows: [],
     },
     {
       key: "separatori",
       title: "SEPARATORI E ALIMENTAZIONE",
+      subtitle: "Si aggiungono quelli montati: una linea puo' non averli, o averne piu' d'uno",
       icon: "bolt",
+      repeat: ["vibro", "magnet", "overbelt", "ecs"],
+      rows: [],
+    },
+    {
+      key: "cabina",
+      title: "CABINA DI CERNITA",
+      icon: "box",
       rows: [
-        { key: "vibro", label: "Piano vibrante", bind: { group: "vibro", field: "brand" }, serials: "vibro", specLabel: "Fornitore" },
-        { key: "vibro_larghezza", label: "Larghezza (mm)", inlineWith: "vibro", bind: { group: "vibro", field: "extra", extraKey: "larghezza" }, free: true },
-        { key: "vibro_lunghezza", label: "Lunghezza (mm)", inlineWith: "vibro", bind: { group: "vibro", field: "extra", extraKey: "lunghezza" }, free: true },
-
-        { key: "magnet", label: "Tamburo magnetico", bind: { group: "magnet", field: "brand" }, serials: "magnet", specLabel: "Fornitore" },
-        { key: "magnet_larghezza", label: "Larghezza (mm)", inlineWith: "magnet", bind: { group: "magnet", field: "extra", extraKey: "larghezza" }, free: true },
-        { key: "magnet_lunghezza", label: "Lunghezza (mm)", inlineWith: "magnet", bind: { group: "magnet", field: "extra", extraKey: "lunghezza" }, free: true },
-
-        { key: "overbelt", label: "Overbelt", bind: { group: "overbelt", field: "brand" }, serials: "overbelt", specLabel: "Fornitore" },
-        { key: "overbelt_larghezza", label: "Larghezza (mm)", inlineWith: "overbelt", bind: { group: "overbelt", field: "extra", extraKey: "larghezza" }, free: true },
-        { key: "overbelt_lunghezza", label: "Lunghezza (mm)", inlineWith: "overbelt", bind: { group: "overbelt", field: "extra", extraKey: "lunghezza" }, free: true },
-
-        { key: "ecs", label: "ECS", bind: { group: "ecs", field: "brand" }, serials: "ecs", specLabel: "Fornitore" },
-        { key: "ecs_modello", label: "Modello", inlineWith: "ecs", bind: { group: "ecs", field: "extra", extraKey: "modello" }, suggest: ["SIS", "VIS"] },
-        { key: "ecs_larghezza", label: "Larghezza (mm)", inlineWith: "ecs", bind: { group: "ecs", field: "extra", extraKey: "larghezza" }, free: true },
-        { key: "ecs_lunghezza", label: "Lunghezza (mm)", inlineWith: "ecs", bind: { group: "ecs", field: "extra", extraKey: "lunghezza" }, free: true },
+        {
+          key: "cabina",
+          label: "Fornitore cabina di cernita",
+          bind: { group: "cabin", field: "brand" },
+          photos: "cabin",
+        },
       ],
     },
     {
@@ -693,7 +743,7 @@ export function allListKeys(): Set<string> {
       if (isListRow(r)) keys.add(listKey(kind, r));
       if (r.serialList) keys.add(serialListKey(kind, r));
     }
-  for (const f of BELT_FIELDS) if (f.list) keys.add(f.list);
+  for (const b of Object.values(BLOCKS)) for (const f of b.fields) if (f.list) keys.add(f.list);
   return keys;
 }
 
@@ -732,6 +782,7 @@ export function sheetGroupIds(kinds: SheetKind[] = SHEET_KINDS): string[] {
     for (const r of allRows(SHEET_DEFS[kind])) {
       if (r.bind) ids.add(r.bind.group);
       if (r.serials) ids.add(r.serials);
+      if (r.photos) ids.add(r.photos);
     }
   return [...ids];
 }

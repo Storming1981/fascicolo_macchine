@@ -213,9 +213,22 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     label: "Carpenteria",
     en: "FRAME",
     icon: "box",
-    slots: [], // solo il fornitore: la carpenteria non ha una matricola
+    // Nessuna matricola: lo slot serve solo a tenere le foto della carpenteria
+    slots: ["Carpenteria"],
     excel: { serialCols: [] },
   },
+  {
+    id: "cabin",
+    label: "Cabina di cernita",
+    en: "SORTING CABIN",
+    icon: "box",
+    slots: ["Cabina di cernita"],
+    excel: { serialCols: [] },
+  },
+  // Piano vibrante, tamburo magnetico, overbelt ed ECS sono **blocchi
+  // ripetibili** (groupId `vibro-1`, `overbelt-2`, …): queste voci restano come
+  // catalogo — etichetta e campi extra — e come riferimento dei fascicoli
+  // compilati con la prima versione della scheda.
   {
     id: "vibro",
     label: "Piano vibrante",
@@ -286,15 +299,6 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     excel: { brandCol: "BB", serialCols: [], extraCols: { type: "BC", lot: "BD" } },
   },
 ];
-
-/**
- * I **nastri** di una linea di separazione non sono un gruppo solo: ogni linea
- * ne ha un numero diverso, quindi ognuno è un componente a sé con groupId
- * `belt-1`, `belt-2`, … (il vincolo unico è su machineId+groupId, non si
- * possono avere due gruppi uguali sulla stessa macchina).
- */
-export const BELT_PREFIX = "belt-";
-export const isBeltGroup = (groupId: string) => groupId.startsWith(BELT_PREFIX);
 
 /** Etichetta del campo lotto di un gruppo, se quel componente ne ha uno. */
 export function lotLabel(groupId: string | null | undefined): string | undefined {

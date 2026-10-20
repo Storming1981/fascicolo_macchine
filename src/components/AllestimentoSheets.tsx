@@ -3,9 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Icon from "@/components/Icon";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import {
-  BELT_FIELDS,
-  BELT_SLOTS,
   beltOptions,
+  BLOCKS,
+  blockKindOf,
+  blockNumberOf,
   CONTAINER_TYPES,
   containerType,
   inlineRows,
@@ -219,6 +220,18 @@ export default function AllestimentoSheets({
     return <div className="al-loading muted">Caricamento schede di allestimento…</div>;
 
   const compOf = (groupId: string) => machine.components.find((c) => c.groupId === groupId);
+  /** Componenti ripetibili di una sezione, nell'ordine in cui sono stati aggiunti. */
+  const blocksOf = (kinds: string[]) =>
+    machine.components
+      .filter((c) => {
+        const b = blockKindOf(c.groupId);
+        return !!b && kinds.includes(b.key);
+      })
+      .sort(
+        (a, b) =>
+          kinds.indexOf(blockKindOf(a.groupId)!.key) - kinds.indexOf(blockKindOf(b.groupId)!.key) ||
+          blockNumberOf(a.groupId) - blockNumberOf(b.groupId)
+      );
   const disabled = !canEdit || busy;
 
   const sections = def.sections
@@ -346,6 +359,25 @@ export default function AllestimentoSheets({
           {note}
         </div>
       );
+    // Riga con sole foto: niente matricola da trascrivere, ma la foto serve
+    if (row.photos) {
+      const pc = compOf(row.photos);
+      const it = pc?.items[0];
+      return (
+        <div className="al-side-stack">
+          {it ? (
+            <div className="al-serial">
+              <span className="al-serial-label">Foto</span>
+              <div className="al-serial-cell muted small">Nessuna matricola: solo foto</div>
+              <div className="al-serial-photo">{renderPhoto(it.id, row.label)}</div>
+            </div>
+          ) : (
+            <span className="muted small">Gruppo in creazione…</span>
+          )}
+          {note}
+        </div>
+      );
+    }
     if (!row.serials) return note;
     const c = compOf(row.serials);
     // slot oltre il numero dichiarato (es. un solo motore elettrico): nascosti
@@ -609,7 +641,7 @@ export default function AllestimentoSheets({
               </span>
               <span className={"al-count" + (complete && !s.repeat ? " done" : "")}>
                 {s.repeat ? (
-                  `${machine.components.filter((c) => c.groupId.startsWith("belt-")).length} nastri`
+                  `${blocksOf(s.repeat).length} componenti`
                 ) : (
                   <>
                     {complete && <Icon name="check" size={12} />}
@@ -620,12 +652,11 @@ export default function AllestimentoSheets({
               <Icon name={isOpen ? "chev-down" : "chev-right"} size={16} />
             </button>
 
-            {isOpen && s.repeat === "belt" && (
-              <BeltsSection
+            {isOpen && s.repeat && (
+              <BlocksSection
                 machineId={machine.id}
-                belts={machine.components
-                  .filter((c) => c.groupId.startsWith("belt-"))
-                  .sort((a, b) => Number(a.groupId.slice(5)) - Number(b.groupId.slice(5)))}
+                kinds={s.repeat}
+                blocks={blocksOf(s.repeat)}
                 disabled={disabled}
                 options={options}
                 canManageOptions={canManageOptions}
@@ -1232,18 +1263,19 @@ function KitFlagBox({
 
 
 /**
- * I nastri di una linea di separazione: un blocco per nastro, aggiunto col "+".
- * Non sono righe di modulo ma **componenti** — ognuno con produttore, misure,
- * motoriduttore, le sue due matricole lette dalla foto e la scheda di
- * lubrificazione allegata — perche' ogni linea ne monta un numero diverso e
- * una riga fissa non puo' rappresentarli.
+ * Blocchi ripetibili di una scheda: i nastri di una linea e i separatori
+ * montati. Non sono righe di modulo ma **componenti** — ognuno coi suoi campi,
+ * le sue matricole lette dalla foto e i suoi allegati — perche' ogni linea ne
+ * monta un numero diverso e alcuni possono non esserci affatto: una riga fissa
+ * per tipo chiederebbe la matricola di macchine mai montate.
  *
- * I campi si salvano **uscendo dal campo** (un PATCH per nastro): sono dati del
- * componente, non della scheda, e non devono aspettare "Salva modifiche".
+ * I campi si salvano **uscendo dal campo** (un PATCH per componente): sono dati
+ * del componente, non della scheda, e non devono aspettare "Salva modifiche".
  */
-function BeltsSection({
+function BlocksSection({
   machineId,
-  belts,
+  kinds,
+  blocks,
   disabled,
   options,
   canManageOptions,
@@ -1255,7 +1287,8 @@ function BeltsSection({
   notify,
 }: {
   machineId: string;
-  belts: Comp[];
+  kinds: string[];
+  blocks: Comp[];
   disabled: boolean;
   options: SheetOptions;
   canManageOptions: boolean;
@@ -1277,125 +1310,137 @@ function BeltsSection({
     const body: Record<string, unknown> = { componentId: b.id };
     if (key === "brand") body.brand = value;
     else body.extra = { [key]: value };
-    const res = await fetch(`/api/machines/${machineId}/belts`, {
+    const res = await fetch(`/api/machines/${machineId}/blocks`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (res.ok) onDone();
-    else notify("Nastro non salvato", "err");
+    else notify("Componente non salvato", "err");
   }
 
-  async function addBelt() {
+  async function addBlock(kind: string) {
     setBusy(true);
-    const res = await fetch(`/api/machines/${machineId}/belts`, { method: "POST" });
+    const res = await fetch(`/api/machines/${machineId}/blocks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind }),
+    });
+    const d = await res.json().catch(() => ({}));
     setBusy(false);
     if (res.ok) {
       onDone();
-      notify("Nastro aggiunto");
-    } else {
-      const d = await res.json().catch(() => ({}));
-      notify(d.error || "Nastro non aggiunto", "err");
-    }
+      notify(`${d.label ?? "Componente"} aggiunto`);
+    } else notify(d.error || "Componente non aggiunto", "err");
   }
 
-  async function removeBelt(b: Comp) {
-    if (!confirm(`Eliminare ${b.label ?? "il nastro"}? Le matricole restano scritte a diario.`)) return;
+  async function removeBlock(b: Comp) {
+    if (!confirm(`Eliminare ${b.label ?? "il componente"}? Le matricole restano scritte a diario.`)) return;
     setBusy(true);
-    const res = await fetch(`/api/machines/${machineId}/belts?componentId=${b.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/machines/${machineId}/blocks?componentId=${b.id}`, { method: "DELETE" });
     setBusy(false);
     if (res.ok) {
       onDone();
-      notify("Nastro eliminato");
-    } else notify("Nastro non eliminato", "err");
+      notify("Componente eliminato");
+    } else notify("Componente non eliminato", "err");
   }
 
   return (
     <div className="belts">
-      {belts.length === 0 && (
+      {blocks.length === 0 && (
         <p className="muted small belts-empty">
-          Nessun nastro ancora: aggiungi il primo col pulsante qui sotto.
+          Niente ancora: aggiungi con i pulsanti qui sotto quello che c'e' davvero su questa linea.
         </p>
       )}
 
-      {belts.map((b) => (
-        <section key={b.id} className="belt-card">
-          <header className="belt-head">
-            <strong>{b.label ?? "Nastro"}</strong>
-            {!disabled && (
-              <button className="btn-ghost-sm danger" disabled={busy} onClick={() => removeBelt(b)}>
-                <Icon name="trash" size={13} /> Elimina
-              </button>
-            )}
-          </header>
+      {blocks.map((b) => {
+        const def = blockKindOf(b.groupId);
+        if (!def) return null;
+        return (
+          <section key={b.id} className="belt-card">
+            <header className="belt-head">
+              <strong>{b.label ?? def.label}</strong>
+              {!disabled && (
+                <button className="btn-ghost-sm danger" disabled={busy} onClick={() => removeBlock(b)}>
+                  <Icon name="trash" size={13} /> Elimina
+                </button>
+              )}
+            </header>
 
-          <div className="belt-grid">
-            {BELT_FIELDS.map((f) => {
-              const v = valueOf(b, f.key);
-              const set = (nv: string) =>
-                setDraft((d) => ({ ...d, [b.id]: { ...(d[b.id] ?? {}), [f.key]: nv } }));
-              return (
-                <label key={f.key} className="belt-field">
-                  <span>{f.label}</span>
-                  {f.list ? (
-                    <Combobox
-                      value={v}
-                      options={beltOptions(f, options)}
-                      custom={options[f.list] ?? []}
-                      disabled={disabled}
-                      canRemove={canManageOptions}
-                      onChange={(nv) => {
-                        set(nv);
-                        void save(b, f.key, nv);
-                      }}
-                      onAdd={async (nv) => {
-                        if (await addOption(f.list!, nv)) {
+            <div className="belt-grid">
+              {def.fields.map((f) => {
+                const v = valueOf(b, f.key);
+                const set = (nv: string) =>
+                  setDraft((d) => ({ ...d, [b.id]: { ...(d[b.id] ?? {}), [f.key]: nv } }));
+                return (
+                  <label key={f.key} className="belt-field">
+                    <span>{f.label}</span>
+                    {f.list ? (
+                      <Combobox
+                        value={v}
+                        options={beltOptions(f, options)}
+                        custom={options[f.list] ?? []}
+                        disabled={disabled}
+                        canRemove={canManageOptions}
+                        onChange={(nv) => {
                           set(nv);
                           void save(b, f.key, nv);
-                        }
-                      }}
-                      onRemove={(nv) => removeOption(f.list!, nv)}
-                    />
-                  ) : (
-                    <input
-                      className="al-input"
-                      value={v}
-                      disabled={disabled}
-                      placeholder="\u2014"
-                      onChange={(e) => set(e.target.value)}
-                      onBlur={(e) => void save(b, f.key, e.target.value)}
-                    />
-                  )}
-                </label>
-              );
-            })}
-          </div>
-
-          <div className="belt-slots">
-            {b.items.map((it, i) => {
-              const slot = BELT_SLOTS[i] ?? { label: it.label };
-              return (
-                <div key={it.id} className={"al-serial" + (it.serial ? " ok" : "")}>
-                  <span className="al-serial-label">{it.label}</span>
-                  <div className="al-serial-cell">
-                    {slot.photoOnly ? (
-                      <span className="muted small">Solo foto: si allega la scheda, non c'\u00e8 un numero</span>
+                        }}
+                        onAdd={async (nv) => {
+                          if (await addOption(f.list!, nv)) {
+                            set(nv);
+                            void save(b, f.key, nv);
+                          }
+                        }}
+                        onRemove={(nv) => removeOption(f.list!, nv)}
+                      />
                     ) : (
-                      renderSerial(it, b.groupId)
+                      <input
+                        className="al-input"
+                        value={v}
+                        disabled={disabled}
+                        placeholder="—"
+                        onChange={(e) => set(e.target.value)}
+                        onBlur={(e) => void save(b, f.key, e.target.value)}
+                      />
                     )}
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="belt-slots">
+              {b.items.map((it, i) => {
+                const slot = def.slots[i] ?? { label: it.label };
+                return (
+                  <div key={it.id} className={"al-serial" + (it.serial ? " ok" : "")}>
+                    <span className="al-serial-label">{it.label}</span>
+                    <div className="al-serial-cell">
+                      {slot.photoOnly ? (
+                        <span className="muted small">Solo foto: si allega la scheda, non c'è un numero</span>
+                      ) : (
+                        renderSerial(it, b.groupId)
+                      )}
+                    </div>
+                    <div className="al-serial-photo">
+                      {renderPhoto(it.id, `${b.label ?? def.label} — ${it.label}`)}
+                    </div>
                   </div>
-                  <div className="al-serial-photo">{renderPhoto(it.id, `${b.label ?? "Nastro"} \u2014 ${it.label}`)}</div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
 
       {!disabled && (
-        <button className="btn-primary-sm belts-add" disabled={busy} onClick={addBelt}>
-          <Icon name="plus" size={14} /> Aggiungi nastro
-        </button>
+        <div className="belts-add-row">
+          {kinds.map((k) => (
+            <button key={k} className="btn-primary-sm" disabled={busy} onClick={() => addBlock(k)}>
+              <Icon name="plus" size={14} /> {BLOCKS[k]?.label ?? k}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

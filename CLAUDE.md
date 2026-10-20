@@ -798,30 +798,39 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   API: `GET|PUT|POST /api/machines/[id]/allestimento` ·
   `GET /api/machines/[id]/allestimento/[kind]/pdf`.
 - **Scheda linea di separazione** (M5.19, `BLUE SORTER`) — non ha niente a che
-  vedere con i BLUE DEVIL: carpenteria, **nastri** e separatori.
-  - **I nastri sono blocchi ripetibili, non righe** (`SheetSection.repeat`): ogni
-    linea ne monta un numero diverso, quindi non esiste una riga fissa che li
-    rappresenti. Si aggiungono col **+** e ognuno è un `Component` a sé —
-    `belt-1`, `belt-2`, … — perché il vincolo unico è su (machineId, groupId) e
-    due gruppi uguali sulla stessa macchina non possono esistere. I numeri
-    **non si riciclano**: cancellando il terzo di tre, il prossimo è il quarto,
-    altrimenti una foto vecchia finirebbe sotto l'etichetta di un nastro
-    diverso.
+  vedere con i BLUE DEVIL: carpenteria, **nastri**, separatori e cabina di
+  cernita.
+  - **Niente è una riga fissa, tutto si aggiunge** (`SheetSection.repeat:
+    string[]`, catalogo `BLOCKS` in `allestimento.ts`): ogni linea monta un
+    numero diverso di nastri **e** può non avere affatto un piano vibrante o un
+    ECS. Una riga per tipo chiedeva la matricola di macchine mai montate e
+    lasciava la scheda incompleta per sempre. Ogni pezzo è un `Component` a sé —
+    `belt-1`, `overbelt-2`, … — perché il vincolo unico è su (machineId,
+    groupId) e due gruppi uguali sulla stessa macchina non possono esistere; il
+    prefisso dice che pezzo è (`blockKindOf`). I numeri **non si riciclano**:
+    cancellando il terzo di tre, il prossimo è il quarto, altrimenti una foto
+    vecchia finirebbe sotto l'etichetta di un pezzo diverso.
+  - Blocchi previsti: **Nastro** (sezione NASTRI) e **Piano vibrante · Tamburo
+    magnetico · Overbelt · ECS** (sezione SEPARATORI E ALIMENTAZIONE, un
+    pulsante per tipo). Separatori: fornitore, larghezza, lunghezza, matricola
+    da foto; l'ECS ha in più il **modello** (SIS, VIS).
   - Campi del nastro (`BELT_FIELDS`): produttore, macchina, tipo di materiale,
     larghezza, lunghezza, tipo di nastro e il **motoriduttore** (marca, modello,
     kW, V, Hz). Stanno sul componente — produttore in `brand`, il resto in
     `extra` — non nei valori della scheda: un nastro è un pezzo montato, con le
     sue matricole e le sue foto, non una voce di modulo. Si salvano **uscendo
-    dal campo** (`PATCH /api/machines/[id]/belts`), senza aspettare *Salva*.
+    dal campo** (`PATCH /api/machines/[id]/blocks`), senza aspettare *Salva*.
   - Tre slot per nastro (`BELT_SLOTS`): **matricola nastro** e **motoriduttore**
     con foto e OCR come ovunque, e la **scheda di lubrificazione**, che è solo
     una foto — non ha un numero da trascrivere, si allega e basta.
-  - **Piano vibrante · Tamburo magnetico · Overbelt · ECS**: una riga ciascuno
-    con fornitore + matricola da foto, e larghezza/lunghezza come specifiche in
-    linea nella stessa colonna (`inlineWith`, che ora regge **più figli**). L'ECS
-    ha in più il **modello** (SIS, VIS).
-  - API: `POST|PATCH|DELETE /api/machines/[id]/belts`. Eliminando un nastro le
-    sue matricole restano scritte a diario: la riga sparisce, la storia no.
+  - **Righe con sole foto** (`SheetRow.photos`): carpenteria e **cabina di
+    cernita** hanno il fornitore e la foto, ma nessun numero da trascrivere —
+    prima la carpenteria aveva solo la nota, e la foto del telaio non aveva dove
+    stare. La foto si appoggia al primo slot del gruppo (`frame`, `cabin`),
+    quindi riusa cella e caricamento di tutte le altre.
+  - API: `POST|PATCH|DELETE /api/machines/[id]/blocks` (`POST {kind}`).
+    Eliminando un blocco le sue matricole restano scritte a diario: la riga
+    sparisce, la storia no.
   - Il codice modulo **M5.19 è provvisorio**: se nel sistema qualità la scheda ha
     un altro numero, si cambia in `SHEET_SEPARAZIONE.code`.
 - **Invio schede via e-mail** (pulsante *Invia via e-mail* nelle schede di
