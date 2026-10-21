@@ -47,6 +47,39 @@ export function hasDualJob(plant?: string | null): boolean {
   return plant === "BLUE DEVIL";
 }
 
+/**
+ * Job di produzione del fascicolo, per tipologia impianto.
+ *
+ * Il BLUE DEVIL si compone di due pezzi che hanno ciascuno la propria
+ * commessa: **Job Body** (corpo trituratore) e **Job Container**. Mulini,
+ * cesoie, spaccabinari e linee di separazione sono una macchina sola: hanno un
+ * **Job Pro** (commessa di produzione) e basta — chiedere due job significava
+ * lasciarne uno sempre vuoto.
+ *
+ * Il Job Pro vive nella colonna `jobBody`: i dati esistenti stanno già lì
+ * (mulini, cesoia e linee hanno il `jobBody` compilato e il `jobContainer`
+ * vuoto), quindi il campo cambia nome e non cambia posto.
+ */
+export type JobFieldKey = "jobBody" | "jobContainer";
+export type JobFieldDef = { key: JobFieldKey; label: string; hint: string; placeholder: string };
+
+const DUAL_JOB_FIELDS: JobFieldDef[] = [
+  { key: "jobBody", label: "Job Body", hint: "corpo trituratore", placeholder: "Commessa / ordine corpo" },
+  { key: "jobContainer", label: "Job Container", hint: "container", placeholder: "Commessa / ordine container" },
+];
+const SINGLE_JOB_FIELDS: JobFieldDef[] = [
+  { key: "jobBody", label: "Job Pro", hint: "commessa produzione", placeholder: "Commessa di produzione" },
+];
+
+export function jobFields(plant?: string | null): JobFieldDef[] {
+  return hasDualJob(plant) ? DUAL_JOB_FIELDS : SINGLE_JOB_FIELDS;
+}
+
+/** Ruolo dell'ordine di produzione legato al job di produzione principale. */
+export function mainOrderRole(plant?: string | null): string {
+  return hasDualJob(plant) ? "Corpo" : "Produzione";
+}
+
 /** Il kit opzionale "tirante giunto" esiste solo sui BLUE DEVIL. */
 export function hasTiranteGiunto(plant?: string | null): boolean {
   return plant === "BLUE DEVIL";

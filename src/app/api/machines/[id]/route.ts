@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { resolveCountry, statusToPhase } from "@/lib/domain";
+import { jobFields } from "@/lib/plant";
 import { resolveCustomerLink } from "@/lib/machineService";
 import type { MachineStatus } from "@prisma/client";
 
@@ -52,6 +53,15 @@ const FIELD_LABEL: Record<string, string> = {
   plateVoltage: "Tensione",
   pressureSettings: "Settaggi pressione",
 };
+
+/** Su mulini, cesoie e linee il `jobBody` è il **Job Pro**: a diario va così. */
+function fieldLabel(key: string, plantType: string | null): string {
+  if (key === "jobBody" || key === "jobContainer") {
+    const def = jobFields(plantType).find((j) => j.key === key);
+    if (def) return def.label;
+  }
+  return FIELD_LABEL[key];
+}
 
 const fmt = (v: unknown) =>
   v === null || v === undefined || v === ""
@@ -141,7 +151,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       const next = (machine as unknown as Record<string, unknown>)[k];
       const a = fmt(prev);
       const bv = fmt(next);
-      return a === bv ? null : `${FIELD_LABEL[k]}: ${a} → ${bv}`;
+      return a === bv ? null : `${fieldLabel(k, machine.plantType)}: ${a} → ${bv}`;
     })
     .filter(Boolean) as string[];
 

@@ -14,7 +14,13 @@ import {
   PRIORITY_META,
   COUNTRIES,
 } from "@/lib/domain";
-import { CUSTOM_MODEL } from "@/lib/plant";
+import { CUSTOM_MODEL, jobFields } from "@/lib/plant";
+import {
+  anagraficaFields,
+  groupScore,
+  type AnagraficaField,
+  type AnagraficaGroup,
+} from "@/lib/machineProgress";
 import { hasAllestimentoSheets } from "@/lib/allestimento";
 import AllestimentoSheets from "@/components/AllestimentoSheets";
 import HoursAnalysisCard from "@/components/HoursAnalysisCard";
@@ -411,6 +417,24 @@ function ProgressBlock({
 }
 
 /* ── Tab Anagrafica ─────────────────────────────────────── */
+/**
+ * Contatore dei campi compilati di una card dell'Anagrafica — stessa lettura
+ * del "N / M voci compilate" delle schede di allestimento. Il titolo elenca
+ * quelli che mancano, così non serve cercarli a occhio fra le righe.
+ */
+function FieldCount({ fields, group }: { fields: AnagraficaField[]; group: AnagraficaGroup }) {
+  const { done, total, missing } = groupScore(fields, group);
+  if (!total) return null;
+  return (
+    <span
+      className={"cmp-count-pill" + (done === total ? " full" : done ? " partial" : "")}
+      title={missing.length ? `Da compilare: ${missing.map((m) => m.label).join(", ")}` : "Tutti i campi compilati"}
+    >
+      {done} / {total} campi
+    </span>
+  );
+}
+
 function TabAnagrafica({
   machine,
   plantConfig,
@@ -481,9 +505,12 @@ function TabAnagrafica({
   const initForm = () => {
     const pt = machine.plantType || plantNames[0] || "";
     const known = modelsFor(pt).includes(machine.model);
+    // Tipologia a job singolo: il Job Pro è il `jobBody`; se per errore il
+    // numero stava nel container lo si recupera invece di perderlo.
+    const single = jobFields(pt).length === 1;
     return {
       job: machine.job,
-      jobBody: machine.jobBody || "",
+      jobBody: (single ? machine.jobBody || machine.jobContainer : machine.jobBody) || "",
       jobContainer: machine.jobContainer || "",
       plantType: pt,
       model: known ? machine.model : CUSTOM_MODEL,
@@ -534,14 +561,16 @@ function TabAnagrafica({
     const year = Number(form.year);
     if (!Number.isInteger(year) || year < 1900 || year > 2100)
       return notify("Anno non valido", "err");
+    const jobKeys = jobFields(form.plantType).map((j) => j.key);
     setBusy(true);
     const res = await fetch(`/api/machines/${machine.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         job: form.job,
-        jobBody: form.jobBody,
-        jobContainer: form.jobContainer,
+        // i job non previsti dalla tipologia si svuotano (il cambio va a diario)
+        jobBody: jobKeys.includes("jobBody") ? form.jobBody : "",
+        jobContainer: jobKeys.includes("jobContainer") ? form.jobContainer : "",
         plantType: form.plantType,
         model,
         year,
@@ -569,6 +598,9 @@ function TabAnagrafica({
       notify(d.error || "Errore salvataggio", "err");
     }
   }
+
+  // Campi da compilare, come il contatore delle schede di allestimento
+  const anaFields = anagraficaFields(machine);
 
   /** Pulsanti Modifica / Annulla+Salva ripetuti sulle card modificabili. */
   const editButtons = !canEdit ? null : edit ? (
@@ -605,6 +637,7 @@ function TabAnagrafica({
         <section className="card">
           <div className="card-header">
             <h3>Anagrafica macchina</h3>
+            <FieldCount fields={anaFields} group="macchina" />
             {editButtons}
           </div>
           <dl className="kv">
@@ -681,36 +714,25 @@ function TabAnagrafica({
                 )}
               </dd>
             </div>
-            <div>
-              <dt>Job Body (corpo trituratore)</dt>
-              <dd className="mono">
-                {edit ? (
-                  <input
-                    className="input mono"
-                    value={form.jobBody}
-                    placeholder="—"
-                    onChange={(e) => setFF("jobBody", e.target.value)}
-                  />
-                ) : (
-                  machine.jobBody || "—"
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Job Container (container)</dt>
-              <dd className="mono">
-                {edit ? (
-                  <input
-                    className="input mono"
-                    value={form.jobContainer}
-                    placeholder="—"
-                    onChange={(e) => setFF("jobContainer", e.target.value)}
-                  />
-                ) : (
-                  machine.jobContainer || "—"
-                )}
-              </dd>
-            </div>
+            {jobFields(edit ? form.plantType : machine.plantType).map((j) => (
+              <div key={j.key}>
+                <dt>
+                  {j.label} ({j.hint})
+                </dt>
+                <dd className="mono">
+                  {edit ? (
+                    <input
+                      className="input mono"
+                      value={form[j.key]}
+                      placeholder="—"
+                      onChange={(e) => setFF(j.key, e.target.value)}
+                    />
+                  ) : (
+                    machine[j.key] || "—"
+                  )}
+                </dd>
+              </div>
+            ))}
             <div>
               <dt>
                 Versione software
@@ -740,6 +762,7 @@ function TabAnagrafica({
         <section className="card">
           <div className="card-header">
             <h3>Cliente e destinazione</h3>
+            <FieldCount fields={anaFields} group="cliente" />
             {editButtons}
           </div>
           <dl className="kv">

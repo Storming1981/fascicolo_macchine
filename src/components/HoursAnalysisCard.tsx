@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/Icon";
 import { fmtDate, fmtDateTime, fmtHM } from "@/lib/format";
+import { hasDualJob, mainOrderRole } from "@/lib/plant";
+import { ordiniRequired } from "@/lib/machineProgress";
 import type { HoursAnalysis, SiteLink } from "@/lib/hoursAnalysis";
 
 /**
@@ -62,6 +64,8 @@ function fillMonths(src: Month[]): Month[] {
 
 export type HoursMachine = {
   id: string;
+  /** Serve a sapere quanti job di produzione ha il fascicolo (BLUE DEVIL: due). */
+  plantType: string | null;
   job: string | null;
   jobBody: string | null;
   jobContainer: string | null;
@@ -91,6 +95,15 @@ export default function HoursAnalysisCard({
   const [showOps, setShowOps] = useState(false);
   // ordine di cui si stanno guardando le timbrature (riquadro sopra la card)
   const [orderOpen, setOrderOpen] = useState<ErpOrderDto | null>(null);
+
+  // Layout dei job: il BLUE DEVIL ha corpo + container, le altre tipologie un
+  // Job Pro solo. Il gestionale continua a chiamare "Corpo" quell'ordine.
+  const dual = hasDualJob(machine.plantType);
+  const ordini = (() => {
+    const fields = ordiniRequired(machine);
+    return { done: fields.filter((f) => f.filled).length, total: fields.length, missing: fields.filter((f) => !f.filled) };
+  })();
+  const roleLabel = (role: string) => (role === "Corpo" ? mainOrderRole(machine.plantType) : role);
 
   async function load(method: "GET" | "POST" = "GET") {
     if (method === "POST") setRefreshing(true);
@@ -292,19 +305,37 @@ export default function HoursAnalysisCard({
 
           {/* Ordini di produzione: per gli impianti nuovi la commessa è la
               generica 999999999 e le ore stanno sull'ORDINE, non sulla commessa */}
-          {(isGeneric(machine.jobBody) || isGeneric(machine.jobContainer)) && (
+          {(isGeneric(machine.jobBody) || (dual && isGeneric(machine.jobContainer))) && (
             <div style={{ marginTop: 12 }}>
-              <div className="muted small" style={{ fontWeight: 600, marginBottom: 6 }}>
-                Ordini di produzione (impianto nuovo, commessa {GENERIC_COMMESSA})
+              <div className="muted small" style={{ fontWeight: 600, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Ordini di produzione (impianto nuovo, commessa {GENERIC_COMMESSA})</span>
+                {ordini.total > 0 && (
+                  <span
+                    className={"cmp-count-pill" + (ordini.done === ordini.total ? " full" : ordini.done ? " partial" : "")}
+                    title={
+                      ordini.missing.length
+                        ? `Da collegare: ${ordini.missing.map((m) => m.label).join(", ")}`
+                        : "Ordini collegati"
+                    }
+                  >
+                    {ordini.done} / {ordini.total} collegati
+                  </span>
+                )}
               </div>
               {isGeneric(machine.jobBody) && (
-                <OrderPicker machineId={machine.id} role="Corpo" field="erpBodyOrder" currentKey={machine.erpBodyOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
+                <OrderPicker machineId={machine.id} role={mainOrderRole(machine.plantType)} field="erpBodyOrder" currentKey={machine.erpBodyOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
               )}
-              {isGeneric(machine.jobContainer) && (
+              {dual && isGeneric(machine.jobContainer) && (
                 <OrderPicker machineId={machine.id} role="Container" field="erpContainerOrder" currentKey={machine.erpContainerOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
               )}
-              <OrderPicker machineId={machine.id} role="Cavalletto" field="erpStandOrder" currentKey={machine.erpStandOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
-              <OrderPicker machineId={machine.id} role="Lame" field="erpBladesOrder" currentKey={machine.erpBladesOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
+              {/* Cavalletto e lame sono pezzi del trituratore: sulle altre
+                  tipologie sarebbero due tendine che non si compilano mai. */}
+              {dual && (
+                <>
+                  <OrderPicker machineId={machine.id} role="Cavalletto" field="erpStandOrder" currentKey={machine.erpStandOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
+                  <OrderPicker machineId={machine.id} role="Lame" field="erpBladesOrder" currentKey={machine.erpBladesOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
+                </>
+              )}
             </div>
           )}
 
@@ -323,7 +354,7 @@ export default function HoursAnalysisCard({
                 }
               >
                 <span className="muted small" style={{ fontWeight: 600 }}>
-                  Articoli ordine {o.role} — {o.tipork}/{o.anno}/{o.num}
+                  Articoli ordine {roleLabel(o.role)} — {o.tipork}/{o.anno}/{o.num}
                   {o.articles.length > 0 || o.hours > 0 ? (
                     <>
                       {" · "}

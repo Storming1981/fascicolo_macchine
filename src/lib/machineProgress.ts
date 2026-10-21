@@ -13,6 +13,8 @@
 //
 // Modulo puro (client + server): niente import server-only.
 
+import { jobFields } from "./plant";
+
 export type CollaudoState = "NONE" | "DRAFT" | "COMPILED" | "APPROVED";
 
 /**
@@ -60,30 +62,69 @@ export type ProgressStep = {
 
 const has = (v: unknown) => (typeof v === "number" ? !!v : !!(v && String(v).trim()));
 
+/** Le card dell'Anagrafica, così ognuna può mostrare il proprio contatore. */
+export type AnagraficaGroup = "macchina" | "cliente" | "ordini";
+export type AnagraficaField = { key: string; label: string; group: AnagraficaGroup; filled: boolean };
+
 /**
- * Quota dei campi anagrafici compilati. Job corpo e container contano **solo
- * sui BLUE DEVIL**: sulle altre tipologie non esistono, e chiederli
- * abbasserebbe per sempre l'avanzamento di fascicoli completi.
+ * Ordini di produzione da agganciare: si chiedono **solo dove servono**, cioè
+ * sugli impianti nuovi, che stanno tutti sotto la commessa di stock. Chi ha una
+ * commessa sua non deve restare incompleto per un campo che non lo riguarda.
  */
-export function anagraficaScore(a: AnagraficaFields): { done: number; total: number } {
-  const fields: unknown[] = [
-    a.plantType,
-    a.model,
-    a.year,
-    a.job,
-    a.customer,
-    a.country,
-    a.site,
-    a.productionStart,
-    a.deliveryDate,
+export function ordiniRequired(a: {
+  plantType: string | null;
+  jobBody: string | null;
+  jobContainer: string | null;
+  erpBodyOrder: string | null;
+  erpContainerOrder: string | null;
+}): AnagraficaField[] {
+  const out: AnagraficaField[] = [];
+  const jobs = jobFields(a.plantType);
+  for (const f of jobs) {
+    if ((a[f.key] ?? "").trim() !== STOCK_COMMESSA) continue;
+    const key = f.key === "jobBody" ? "erpBodyOrder" : "erpContainerOrder";
+    const role = f.key === "jobBody" ? (jobs.length > 1 ? "Corpo" : "Produzione") : "Container";
+    out.push({ key, label: `Ordine ${role}`, group: "ordini", filled: has(a[key]) });
+  }
+  return out;
+}
+
+/**
+ * I campi anagrafici che contano come "compilati", uno per uno: così la card
+ * può dire quanti ne mancano e quali, come fanno le schede di allestimento.
+ * I job seguono il **layout della tipologia** (`jobFields`): sui BLUE DEVIL
+ * corpo + container, sulle altre il solo Job Pro.
+ */
+export function anagraficaFields(a: AnagraficaFields): AnagraficaField[] {
+  const f = (key: string, label: string, group: AnagraficaGroup, value: unknown): AnagraficaField => ({
+    key,
+    label,
+    group,
+    filled: has(value),
+  });
+  return [
+    f("plantType", "Tipologia impianto", "macchina", a.plantType),
+    f("model", "Modello", "macchina", a.model),
+    f("job", "Job Number", "macchina", a.job),
+    ...jobFields(a.plantType).map((j) => f(j.key, j.label, "macchina", a[j.key])),
+    f("year", "Anno", "macchina", a.year),
+    f("customer", "Cliente", "cliente", a.customer),
+    f("country", "Paese", "cliente", a.country),
+    f("site", "Sito", "cliente", a.site),
+    f("productionStart", "Inizio produzione", "cliente", a.productionStart),
+    f("deliveryDate", "Data consegna", "cliente", a.deliveryDate),
+    ...ordiniRequired(a),
   ];
-  if (a.plantType === "BLUE DEVIL") fields.push(a.jobBody, a.jobContainer);
-  // L'ordine di produzione si chiede solo dove serve: sugli impianti nuovi,
-  // che stanno tutti sotto la commessa di stock. Chi ha una commessa sua non
-  // deve restare incompleto per un campo che non lo riguarda.
-  if ((a.jobBody ?? "").trim() === STOCK_COMMESSA) fields.push(a.erpBodyOrder);
-  if ((a.jobContainer ?? "").trim() === STOCK_COMMESSA) fields.push(a.erpContainerOrder);
-  return { done: fields.filter(has).length, total: fields.length };
+}
+
+export function groupScore(fields: AnagraficaField[], group: AnagraficaGroup) {
+  const g = fields.filter((x) => x.group === group);
+  return { done: g.filter((x) => x.filled).length, total: g.length, missing: g.filter((x) => !x.filled) };
+}
+
+export function anagraficaScore(a: AnagraficaFields): { done: number; total: number } {
+  const fields = anagraficaFields(a);
+  return { done: fields.filter((x) => x.filled).length, total: fields.length };
 }
 
 const COLLAUDO_SCORE: Record<CollaudoState, number> = {

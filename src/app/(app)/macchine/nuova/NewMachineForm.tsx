@@ -5,7 +5,7 @@ import Link from "next/link";
 import Icon from "@/components/Icon";
 import CustomerPicker, { type CustomerHit } from "@/components/CustomerPicker";
 import { COUNTRIES } from "@/lib/domain";
-import { hasDualJob, CUSTOM_MODEL } from "@/lib/plant";
+import { hasDualJob, jobFields, CUSTOM_MODEL } from "@/lib/plant";
 
 type PlantConfig = { name: string; models: string[] }[];
 
@@ -98,7 +98,18 @@ export default function NewMachineForm({
     setNewCust(null);
   }
   const setPlant = (pt: string) =>
-    setF((s) => ({ ...s, plantType: pt, model: modelsForPlant(pt)[0], customModel: "" }));
+    setF((s) => ({
+      ...s,
+      plantType: pt,
+      model: modelsForPlant(pt)[0],
+      customModel: "",
+      // i job non previsti dalla nuova tipologia non restano scritti di nascosto
+      ...Object.fromEntries(
+        (["jobBody", "jobContainer"] as const)
+          .filter((k) => !jobFields(pt).some((j) => j.key === k))
+          .map((k) => [k, ""])
+      ),
+    }));
   const modelOptions = modelsForPlant(f.plantType);
 
   async function submit() {
@@ -229,28 +240,19 @@ export default function NewMachineForm({
                 placeholder="es. 1260200"
               />
             </div>
-            <div className="form-row">
-              <label>
-                Job Body{hasDualJob(f.plantType) ? " — corpo trituratore" : ""}
-              </label>
-              <input
-                className="input mono"
-                value={f.jobBody}
-                onChange={(e) => set("jobBody", e.target.value)}
-                placeholder="Ordine / commessa corpo"
-              />
-            </div>
-            <div className="form-row">
-              <label>
-                Job Container{hasDualJob(f.plantType) ? " — container" : ""}
-              </label>
-              <input
-                className="input mono"
-                value={f.jobContainer}
-                onChange={(e) => set("jobContainer", e.target.value)}
-                placeholder="Ordine / commessa container"
-              />
-            </div>
+            {jobFields(f.plantType).map((j) => (
+              <div className="form-row" key={j.key}>
+                <label>
+                  {j.label} — {j.hint}
+                </label>
+                <input
+                  className="input mono"
+                  value={f[j.key]}
+                  onChange={(e) => set(j.key, e.target.value)}
+                  placeholder={j.placeholder}
+                />
+              </div>
+            ))}
             {hasDualJob(f.plantType) && (
               <div className="form-ok" style={{ gridColumn: "1 / -1" }}>
                 Un impianto <strong>BLUE DEVIL</strong> si compone di{" "}

@@ -54,6 +54,27 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   CORPO TRITURATORE (`jobBody`) e di un CONTAINER (`jobContainer`): per le
   macchine importate questi sono numeri di commessa, per le future saranno
   numeri di ordine di produzione.
+- **Quanti job ha un fascicolo lo dice la tipologia** (`jobFields()` in
+  `plant.ts`): il BLUE DEVIL ha **Job Body** + **Job Container** (due pezzi, due
+  commesse), mulini, cesoie, spaccabinari e linee di separazione sono una
+  macchina sola e hanno il solo **Job Pro** (commessa di produzione). Chiedere
+  due job dove ce n'è uno lasciava per sempre un campo vuoto e un fascicolo
+  incompleto.
+  - **Il Job Pro vive nella colonna `jobBody`**: niente campo nuovo, i dati
+    stavano già lì (i 6 fascicoli non-BLUE DEVIL avevano `jobBody` compilato e
+    `jobContainer` vuoto), quindi ERP, schede di allestimento e Analisi ore
+    continuano a leggere la stessa colonna. Cambia il nome, non il posto.
+  - Salvando l'anagrafica i job **non previsti dalla tipologia si svuotano**
+    (il cambio va a diario, quindi resta tracciato) e il wizard li azzera al
+    cambio tipologia: un numero nascosto in un campo che non si vede più
+    finirebbe lo stesso nelle query del gestionale.
+  - A diario il campo si chiama come in pagina (`fieldLabel()` in
+    `api/machines/[id]/route.ts`): "Job Pro" su mulini, cesoie e linee.
+  - In **Analisi ore** l'ordine di produzione del job principale si chiama
+    *Ordine Produzione* invece di *Ordine Corpo* (`mainOrderRole()`); le tendine
+    **Container, Cavalletto e Lame** compaiono solo sui BLUE DEVIL, dove quei
+    pezzi esistono. Lato gestionale il ruolo resta la chiave `"Corpo"`: cambiarla
+    vorrebbe dire aggiornare anche il sync-agent per una pura etichetta.
 
 ### Integrazione gestionale ZATO (ERP — SQL Server, read-only)
 
@@ -897,6 +918,12 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   scheda la percentuale si apre e mostra le tre voci col loro dettaglio
   ("35 di 56 matricole"), perché su un numero che non si modifica a mano
   l'unica cosa utile è spiegare da dove viene.
+  - **Contatore per card** (`anagraficaFields()` / `groupScore()`), come il
+    "N / M voci compilate" delle schede di allestimento: *Anagrafica macchina*
+    e *Cliente e destinazione* mostrano in testata quanti campi mancano, e il
+    titolo della targhetta li elenca ("Da compilare: Sito, Data consegna") —
+    senza, il fascicolo diceva di essere incompleto ma non dove. Stessa
+    targhetta sugli **ordini di produzione** in Analisi ore (gruppo `ordini`).
   - **Un solo punto di calcolo** (`progressForMachines`, due query per N
     fascicoli — le matricole si contano in **SQL aggregato**, caricare diecimila
     slot per contarli in JavaScript sarebbe il modo più lento di ottenere due
