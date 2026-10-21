@@ -62,6 +62,7 @@ type Machine = {
   progress: { percent: number; steps: { key: string; label: string; weight: number; done: number; detail: string }[] };
   productionStart: string | null; deliveryDate: string | null; pressureSettings: string | null;
   plateWeight: string | null; platePower: string | null; plateVoltage: string | null; notes: string | null;
+  anagraficaSignedByName: string | null; anagraficaSignedAt: string | null; anagraficaSignature: string | null;
   tiranteGiunto: boolean;
   filtroMaggiorato: boolean;
   components: Comp[];
@@ -220,6 +221,7 @@ export default function MachineDetail({
       {tab === "anagrafica" && (
         <TabAnagrafica
           machine={machine}
+          hasSavedSignature={currentUser.hasSignature}
           plantConfig={plantConfig}
           canEdit={caps.edit}
           onDone={refresh}
@@ -422,8 +424,10 @@ function ProgressBlock({
  * del "N / M voci compilate" delle schede di allestimento. Il titolo elenca
  * quelli che mancano, così non serve cercarli a occhio fra le righe.
  */
-function FieldCount({ fields, group }: { fields: AnagraficaField[]; group: AnagraficaGroup }) {
-  const { done, total, missing } = groupScore(fields, group);
+function FieldCount({ fields, group }: { fields: AnagraficaField[]; group?: AnagraficaGroup }) {
+  const { done, total, missing } = group
+    ? groupScore(fields, group)
+    : { done: fields.filter((f) => f.filled).length, total: fields.length, missing: fields.filter((f) => !f.filled) };
   if (!total) return null;
   return (
     <span
@@ -435,16 +439,91 @@ function FieldCount({ fields, group }: { fields: AnagraficaField[]; group: Anagr
   );
 }
 
+/** Firma della convalida anagrafica: penna sul momento o firma personale. */
+function AnagraficaSignModal({
+  hasSavedSignature,
+  onClose,
+  onSign,
+}: {
+  hasSavedSignature: boolean;
+  onClose: () => void;
+  onSign: (body: { signature?: string; saveSignature?: boolean }) => Promise<boolean>;
+}) {
+  const [useSaved, setUseSaved] = useState(hasSavedSignature);
+  const [saveSig, setSaveSig] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const sigRef = useRef<SignaturePadHandle>(null);
+
+  async function confirm() {
+    setErr(null);
+    let body: { signature?: string; saveSignature?: boolean } = {};
+    if (!useSaved) {
+      if (sigRef.current?.isEmpty()) return setErr("Disegna la firma prima di confermare.");
+      body = { signature: sigRef.current?.toDataURL(), saveSignature: saveSig };
+    }
+    setBusy(true);
+    await onSign(body);
+    setBusy(false);
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Convalida anagrafica</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Chiudi">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        <div className="modal-body">
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Dichiari che l'anagrafica del fascicolo è compilata e corretta. Nome, data e firma
+            restano sulla scheda e a diario; se l'anagrafica viene modificata dopo, la convalida
+            decade.
+          </p>
+          {hasSavedSignature && (
+            <label style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+              <input type="checkbox" checked={useSaved} onChange={(e) => setUseSaved(e.target.checked)} />
+              Usa la mia firma personale salvata
+            </label>
+          )}
+          {!useSaved && (
+            <>
+              <SignaturePad ref={sigRef} height={150} />
+              <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+                <input type="checkbox" checked={saveSig} onChange={(e) => setSaveSig(e.target.checked)} />
+                Salva come firma personale
+              </label>
+            </>
+          )}
+          {err && <div className="form-error" style={{ marginTop: 10 }}>{err}</div>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn-ghost" onClick={onClose} disabled={busy}>
+            Annulla
+          </button>
+          <button className="btn-primary" onClick={confirm} disabled={busy}>
+            {busy ? "Firma…" : "Firma e convalida"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TabAnagrafica({
   machine,
   plantConfig,
   canEdit,
+  hasSavedSignature,
   onDone,
   notify,
 }: {
   machine: Machine;
   plantConfig: PlantConfig;
   canEdit: boolean;
+  hasSavedSignature: boolean;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
@@ -601,6 +680,41 @@ function TabAnagrafica({
 
   // Campi da compilare, come il contatore delle schede di allestimento
   const anaFields = anagraficaFields(machine);
+  // La convalida attesta le due card compilate a mano: gli ordini di
+  // produzione stanno in Analisi ore e non fanno parte della dichiarazione.
+  const signFields = anaFields.filter((f) => f.group !== "ordini");
+  const signMissing = signFields.filter((f) => !f.filled);
+  const [signOpen, setSignOpen] = useState(false);
+
+  async function signAnagrafica(body: { signature?: string; saveSignature?: boolean }) {
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/anagrafica-sign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setSignOpen(false);
+      onDone();
+      notify("Anagrafica convalidata");
+      return true;
+    }
+    notify(d.error || "Errore firma convalida", "err");
+    return false;
+  }
+
+  async function revokeAnagrafica() {
+    if (!confirm("Revocare la convalida dell'anagrafica?")) return;
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/anagrafica-sign`, { method: "DELETE" });
+    setBusy(false);
+    if (res.ok) {
+      onDone();
+      notify("Convalida revocata");
+    } else notify("Errore revoca convalida", "err");
+  }
 
   /** Pulsanti Modifica / Annulla+Salva ripetuti sulle card modificabili. */
   const editButtons = !canEdit ? null : edit ? (
@@ -907,6 +1021,62 @@ function TabAnagrafica({
             </div>
           </dl>
         </section>
+
+        <section className="card" style={{ gridColumn: "1 / -1" }}>
+          <div className="card-header">
+            <h3>Convalida anagrafica</h3>
+            <FieldCount fields={signFields} />
+          </div>
+          <div className="al-hero-foot" style={{ marginTop: 0 }}>
+            <p className="muted small" style={{ margin: 0, maxWidth: 560 }}>
+              Firma di chi dichiara l'anagrafica <strong>compilata e corretta</strong>. Se dopo la
+              firma qualcuno modifica l'anagrafica la convalida decade, e va rifirmata.
+            </p>
+            {machine.anagraficaSignedAt ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div className="al-signed">
+                  {machine.anagraficaSignature && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={machine.anagraficaSignature} alt="Firma" className="al-sig-img" />
+                  )}
+                  <span>
+                    <strong>{machine.anagraficaSignedByName}</strong>
+                    <span className="muted small"> · {fmtDateTime(machine.anagraficaSignedAt)}</span>
+                  </span>
+                </div>
+                {canEdit && (
+                  <button className="btn-ghost-sm danger" disabled={busy} onClick={revokeAnagrafica}>
+                    <Icon name="x" size={13} /> Revoca
+                  </button>
+                )}
+              </div>
+            ) : canEdit ? (
+              <button
+                className="btn-primary-sm"
+                disabled={busy || signMissing.length > 0}
+                title={
+                  signMissing.length
+                    ? `Prima completa: ${signMissing.map((m) => m.label).join(", ")}`
+                    : "Firma la convalida dell'anagrafica"
+                }
+                onClick={() => setSignOpen(true)}
+              >
+                <Icon name="sign" size={13} />{" "}
+                {signMissing.length ? `Mancano ${signMissing.length} campi` : "Firma convalida"}
+              </button>
+            ) : (
+              <span className="muted small">Non ancora convalidata.</span>
+            )}
+          </div>
+        </section>
+
+        {signOpen && (
+          <AnagraficaSignModal
+            hasSavedSignature={hasSavedSignature}
+            onClose={() => setSignOpen(false)}
+            onSign={signAnagrafica}
+          />
+        )}
 
         <HoursAnalysisCard machine={machine} canEdit={canEdit} onDone={onDone} notify={notify} />
 

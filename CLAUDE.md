@@ -918,6 +918,17 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   scheda la percentuale si apre e mostra le tre voci col loro dettaglio
   ("35 di 56 matricole"), perché su un numero che non si modifica a mano
   l'unica cosa utile è spiegare da dove viene.
+  - **Convalida dell'anagrafica** (card *Convalida anagrafica*, campi
+    `Machine.anagraficaSigned*`): la firma di chi dichiara le due card
+    compilate e corrette — penna sul momento o firma personale, come le schede
+    di allestimento. Si firma **solo con l'anagrafica completa** (altrimenti la
+    firma direbbe il falso: la route risponde 400 elencando cosa manca e il
+    pulsante dice "Mancano N campi") e **decade da sola** se l'anagrafica viene
+    modificata dopo: `PATCH /api/machines/[id]` azzera la firma e lo scrive
+    nella stessa nota a diario della modifica. Gli ordini di produzione (gruppo
+    `ordini`, card Analisi ore) non fanno parte di ciò che la firma attesta.
+    API: `POST|DELETE /api/machines/[id]/anagrafica-sign`, permesso
+    `machine.edit` — lo stesso che apre il pulsante *Modifica*.
   - **Contatore per card** (`anagraficaFields()` / `groupScore()`), come il
     "N / M voci compilate" delle schede di allestimento: *Anagrafica macchina*
     e *Cliente e destinazione* mostrano in testata quanti campi mancano, e il

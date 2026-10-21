@@ -195,6 +195,12 @@ model Machine {
   productionStart DateTime?
   deliveryDate    DateTime?
   pressureSettings String?
+  // Convalida dell'anagrafica: chi dichiara la compilazione completa, con
+  // firma. Decade se l'anagrafica viene modificata dopo (api/machines/[id]).
+  anagraficaSignedById   String?
+  anagraficaSignedByName String?
+  anagraficaSignedAt     DateTime?
+  anagraficaSignature    String?       @db.Text // dataURL
   tiranteGiunto   Boolean       @default(false) // kit tirante giunto montato (solo BLUE DEVIL)
   filtroMaggiorato Boolean      @default(false) // centrale idraulica con filtro maggiorato
   plateWeight     String?

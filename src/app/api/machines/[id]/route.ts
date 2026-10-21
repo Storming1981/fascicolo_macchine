@@ -155,6 +155,23 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     })
     .filter(Boolean) as string[];
 
+  // Una convalida che sopravvive alle correzioni non convalida più niente:
+  // se l'anagrafica cambia dopo la firma, la firma decade e va rifatta.
+  if (changes.length && before.anagraficaSignedAt) {
+    await prisma.machine.update({
+      where: { id },
+      data: {
+        anagraficaSignedById: null,
+        anagraficaSignedByName: null,
+        anagraficaSignedAt: null,
+        anagraficaSignature: null,
+      },
+    });
+    changes.push(
+      `Convalida anagrafica decaduta (era firmata da ${before.anagraficaSignedByName ?? "—"})`
+    );
+  }
+
   if (changes.length) {
     await prisma.diaryEvent.create({
       data: {
