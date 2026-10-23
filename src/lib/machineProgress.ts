@@ -18,11 +18,13 @@ import { jobFields } from "./plant";
 export type CollaudoState = "NONE" | "DRAFT" | "COMPILED" | "APPROVED";
 
 /**
- * Campi dell'anagrafica che contano come "compilati": quelli delle due card che
- * si riempiono a mano (*Anagrafica macchina* e *Cliente e destinazione*) più
- * gli **ordini di produzione** agganciati in *Analisi ore*. Fuori la targa
- * tecnica (i suoi dati stanno nelle schede di allestimento) e i documenti, che
- * sono allegati e non campi.
+ * I dati dell'anagrafica che servono al calcolo. **Non tutti fanno punteggio**:
+ * quali contino lo decide `anagraficaFields()` — tutta la card *Anagrafica
+ * macchina*, il solo **Cliente** di *Cliente e destinazione*, e gli **ordini di
+ * produzione** agganciati in *Analisi ore* dove servono. Paese, sito e date
+ * restano qui perché la card li mostra e la firma di convalida li legge.
+ * Fuori la targa tecnica (i suoi dati stanno nelle schede di allestimento) e i
+ * documenti, che sono allegati e non campi.
  */
 export type AnagraficaFields = {
   plantType: string | null;
@@ -94,6 +96,9 @@ export function ordiniRequired(a: {
  * può dire quanti ne mancano e quali, come fanno le schede di allestimento.
  * I job seguono il **layout della tipologia** (`jobFields`): sui BLUE DEVIL
  * corpo + container, sulle altre il solo Job Pro.
+ *
+ * Non tutto ciò che sta in pagina fa punteggio: della card *Cliente e
+ * destinazione* conta il solo **Cliente** (vedi sotto).
  */
 export function anagraficaFields(a: AnagraficaFields): AnagraficaField[] {
   const f = (key: string, label: string, group: AnagraficaGroup, value: unknown): AnagraficaField => ({
@@ -108,11 +113,12 @@ export function anagraficaFields(a: AnagraficaFields): AnagraficaField[] {
     f("job", "Job Number", "macchina", a.job),
     ...jobFields(a.plantType).map((j) => f(j.key, j.label, "macchina", a[j.key])),
     f("year", "Anno", "macchina", a.year),
+    // Di *Cliente e destinazione* conta il solo **Cliente**: paese, sito e le
+    // due date si sanno in momenti diversi della commessa (e certe volte non
+    // si sanno affatto), quindi tenerle fra gli obbligatori lasciava fascicoli
+    // incompleti per sempre e bloccava la convalida. Restano in pagina, si
+    // compilano: semplicemente non fanno punteggio.
     f("customer", "Cliente", "cliente", a.customer),
-    f("country", "Paese", "cliente", a.country),
-    f("site", "Sito", "cliente", a.site),
-    f("productionStart", "Inizio produzione", "cliente", a.productionStart),
-    f("deliveryDate", "Data consegna", "cliente", a.deliveryDate),
     ...ordiniRequired(a),
   ];
 }

@@ -923,14 +923,18 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   stato** — ma lo stato della macchina si legge già nella colonna *Stato*, e
   ripeterlo in una barra non aggiungeva niente. Il dato che serve è **quanto
   manca da compilare**, diviso nelle tre cose che si compilano a mano:
-  - **Anagrafica**: le due card che si compilano a mano (*Anagrafica macchina*
-    e *Cliente e destinazione*) più gli **ordini di produzione** agganciati in
-    *Analisi ore*. Fuori la targa tecnica (quei dati stanno nelle schede di
-    allestimento, dove si compilano davvero — la card non c'è più) e i
+  - **Anagrafica**: tutta la card *Anagrafica macchina*, di *Cliente e
+    destinazione* il **solo Cliente**, più gli **ordini di produzione**
+    agganciati in *Analisi ore*. Fuori la targa tecnica (quei dati stanno nelle
+    schede di allestimento, dove si compilano davvero — la card non c'è più) e i
     documenti, che sono allegati e non campi. Job corpo e container contano
     **solo sui BLUE DEVIL**; l'ordine di produzione **solo dove serve**, cioè
     sugli impianti nuovi sotto la commessa di stock 999999999: chi ha una
     commessa sua non deve restare incompleto per un campo che non lo riguarda.
+    **Paese, sito e le due date non fanno punteggio**: si sanno in momenti
+    diversi della commessa e certe volte non si sanno affatto, quindi tenerle
+    fra gli obbligatori lasciava fascicoli incompleti per sempre e bloccava la
+    convalida. Restano in pagina e si compilano: semplicemente non contano.
   - **Componenti e matricole**: slot con matricola sul totale degli slot.
   - **Collaudo**: 0 → bozza 40% → compilata e firmata 70% → approvata 100%.
 
