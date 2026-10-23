@@ -16,6 +16,12 @@ export type ComponentGroup = {
    * lo slot ha un secondo campo e l'OCR lo legge dalla stessa foto.
    */
   lot?: { label: string };
+  /**
+   * Gli slot del gruppo tengono **solo foto** (la carpenteria di una linea):
+   * non c'è un numero da trascrivere, quindi non entrano nel conteggio delle
+   * matricole — altrimenti il fascicolo non arriverebbe mai al 100%.
+   */
+  photoOnly?: boolean;
   /** Lettere colonna Excel (R3+ = dati) per il parser di import */
   excel: { brandCol?: string; serialCols: string[]; extraCols?: Record<string, string> };
 };
@@ -215,14 +221,7 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     icon: "box",
     // Nessuna matricola: lo slot serve solo a tenere le foto della carpenteria
     slots: ["Carpenteria"],
-    excel: { serialCols: [] },
-  },
-  {
-    id: "cabin",
-    label: "Cabina di cernita",
-    en: "SORTING CABIN",
-    icon: "box",
-    slots: ["Cabina di cernita"],
+    photoOnly: true,
     excel: { serialCols: [] },
   },
   // Piano vibrante, tamburo magnetico, overbelt ed ECS sono **blocchi

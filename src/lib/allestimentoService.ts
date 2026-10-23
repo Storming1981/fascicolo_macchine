@@ -108,7 +108,7 @@ export async function ensureSheetComponents(machineId: string): Promise<number> 
         data: {
           machineId,
           groupId: gid,
-          items: { create: g.slots.map((label, position) => ({ position, label })) },
+          items: { create: g.slots.map((label, position) => ({ position, label, photoOnly: !!g.photoOnly })) },
         },
       });
       if (gid === "shaft") await moveShaftLot(machineId);
@@ -147,7 +147,9 @@ async function ensureSheetSlots(machineId: string, groupIds: string[]): Promise<
     if (unnamed) await prisma.componentItem.update({ where: { id: unnamed.id }, data: { label: g.slots[0] } });
     if (c.items.length >= g.slots.length) continue;
     const next = c.items.reduce((m, i) => Math.max(m, i.position), -1) + 1;
-    const missing = g.slots.slice(c.items.length).map((label, i) => ({ componentId: c.id, position: next + i, label }));
+    const missing = g.slots
+      .slice(c.items.length)
+      .map((label, i) => ({ componentId: c.id, position: next + i, label, photoOnly: !!g.photoOnly }));
     await prisma.componentItem.createMany({ data: missing });
     added += missing.length;
   }

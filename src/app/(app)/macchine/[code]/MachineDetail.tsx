@@ -21,7 +21,7 @@ import {
   type AnagraficaField,
   type AnagraficaGroup,
 } from "@/lib/machineProgress";
-import { hasAllestimentoSheets } from "@/lib/allestimento";
+import { blockKindOf, hasAllestimentoSheets } from "@/lib/allestimento";
 import AllestimentoSheets from "@/components/AllestimentoSheets";
 import HoursAnalysisCard from "@/components/HoursAnalysisCard";
 import { MILESTONES, milestoneDef, SOURCE_LABEL, isAutoSource } from "@/lib/milestones";
@@ -1220,9 +1220,12 @@ function TabComponenti({
     0
   );
 
-  // gruppi custom = quelli non presenti nel catalogo
+  // Gruppi custom = quelli che non stanno nel catalogo **e** non sono blocchi
+  // di una scheda (nastri, separatori, cabina): quelli si compilano dentro la
+  // loro scheda, e farli comparire anche qui voleva dire due posti dove
+  // scrivere la stessa matricola e caricare la stessa foto.
   const customComps = machine.components.filter(
-    (c) => !COMPONENT_GROUPS.some((g) => g.id === c.groupId)
+    (c) => !COMPONENT_GROUPS.some((g) => g.id === c.groupId) && !blockKindOf(c.groupId)
   );
 
   async function addField(componentId: string, label: string) {

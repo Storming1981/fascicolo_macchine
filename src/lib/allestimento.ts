@@ -559,6 +559,14 @@ export const BLOCKS: Record<string, RepeatBlock> = {
     ],
     slots: [{ label: "Matricola" }],
   },
+  // La cabina non ha una matricola: si fotografa e basta. Ed e' un blocco come
+  // gli altri perche' non tutte le linee ne hanno una.
+  cabin: {
+    key: "cabin",
+    label: "Cabina di cernita",
+    fields: [{ key: "brand", label: "Fornitore", list: "cabina_fornitore" }],
+    slots: [{ label: "Foto cabina", photoOnly: true }],
+  },
 };
 
 /** Il gruppo è un blocco ripetibile? Ritorna il tipo (belt, ecs, …) o null. */
@@ -607,15 +615,10 @@ export const SHEET_SEPARAZIONE: SheetDef = {
     {
       key: "cabina",
       title: "CABINA DI CERNITA",
+      subtitle: "Si aggiunge se la linea ce l'ha",
       icon: "box",
-      rows: [
-        {
-          key: "cabina",
-          label: "Fornitore cabina di cernita",
-          bind: { group: "cabin", field: "brand" },
-          photos: "cabin",
-        },
-      ],
+      repeat: ["cabin"],
+      rows: [],
     },
     {
       key: "note_linea",

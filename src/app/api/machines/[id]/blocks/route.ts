@@ -56,7 +56,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       machineId: id,
       groupId: `${kind}-${next}`,
       label,
-      items: { create: block.slots.map((s, i) => ({ position: i, label: s.label })) },
+      // lo slot di sola foto (scheda di lubrificazione, cabina) non ha un numero
+      // da trascrivere: resta fuori dal conteggio delle matricole
+      items: {
+        create: block.slots.map((s, i) => ({ position: i, label: s.label, photoOnly: !!s.photoOnly })),
+      },
     },
   });
 

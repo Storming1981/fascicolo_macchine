@@ -831,10 +831,12 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     prefisso dice che pezzo è (`blockKindOf`). I numeri **non si riciclano**:
     cancellando il terzo di tre, il prossimo è il quarto, altrimenti una foto
     vecchia finirebbe sotto l'etichetta di un pezzo diverso.
-  - Blocchi previsti: **Nastro** (sezione NASTRI) e **Piano vibrante · Tamburo
+  - Blocchi previsti: **Nastro** (sezione NASTRI), **Piano vibrante · Tamburo
     magnetico · Overbelt · ECS** (sezione SEPARATORI E ALIMENTAZIONE, un
-    pulsante per tipo). Separatori: fornitore, larghezza, lunghezza, matricola
-    da foto; l'ECS ha in più il **modello** (SIS, VIS).
+    pulsante per tipo) e **Cabina di cernita**. Separatori: fornitore,
+    larghezza, lunghezza, matricola da foto; l'ECS ha in più il **modello**
+    (SIS, VIS). La cabina ha il fornitore e la foto, e nemmeno lei è una riga
+    fissa: non tutte le linee ne montano una.
   - Campi del nastro (`BELT_FIELDS`): produttore, macchina, tipo di materiale,
     larghezza, lunghezza, tipo di nastro e il **motoriduttore** (marca, modello,
     kW, V, Hz). Stanno sul componente — produttore in `brand`, il resto in
@@ -844,11 +846,22 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   - Tre slot per nastro (`BELT_SLOTS`): **matricola nastro** e **motoriduttore**
     con foto e OCR come ovunque, e la **scheda di lubrificazione**, che è solo
     una foto — non ha un numero da trascrivere, si allega e basta.
-  - **Righe con sole foto** (`SheetRow.photos`): carpenteria e **cabina di
-    cernita** hanno il fornitore e la foto, ma nessun numero da trascrivere —
-    prima la carpenteria aveva solo la nota, e la foto del telaio non aveva dove
-    stare. La foto si appoggia al primo slot del gruppo (`frame`, `cabin`),
-    quindi riusa cella e caricamento di tutte le altre.
+  - **Righe con sole foto** (`SheetRow.photos`): la carpenteria ha il fornitore
+    e la foto, ma nessun numero da trascrivere — prima aveva solo la nota, e la
+    foto del telaio non aveva dove stare. La foto si appoggia al primo slot del
+    gruppo (`frame`), quindi riusa cella e caricamento di tutte le altre.
+  - **Un componente sta in un posto solo.** I blocchi non stanno nel catalogo
+    `COMPONENT_GROUPS`, quindi finivano in *Componenti personalizzati* sotto la
+    scheda: lo stesso nastro appariva due volte, con due celle matricola e due
+    caricamenti foto per lo stesso slot. `customComps` ora scarta anche i
+    blocchi (`blockKindOf`).
+  - **Uno slot di sola foto non conta fra le matricole**
+    (`ComponentItem.photoOnly`, escluso dalla query di `progressService`): la
+    scheda di lubrificazione, la carpenteria e la cabina non hanno un numero da
+    trascrivere, quindi contarle avrebbe tenuto il fascicolo sotto al 100% per
+    sempre — lo stesso errore delle *specifiche speciali* senza N.A. Lo
+    dichiara il blocco (`slots[].photoOnly`) o il gruppo
+    (`ComponentGroup.photoOnly`, oggi `frame`).
   - API: `POST|PATCH|DELETE /api/machines/[id]/blocks` (`POST {kind}`).
     Eliminando un blocco le sue matricole restano scritte a diario: la riga
     sparisce, la storia no.

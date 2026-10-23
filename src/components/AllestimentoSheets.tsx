@@ -1417,7 +1417,7 @@ function BlocksSection({
                     <span className="al-serial-label">{it.label}</span>
                     <div className="al-serial-cell">
                       {slot.photoOnly ? (
-                        <span className="muted small">Solo foto: si allega la scheda, non c'è un numero</span>
+                        <span className="muted small">Solo foto: non c'è un numero da trascrivere</span>
                       ) : (
                         renderSerial(it, b.groupId)
                       )}

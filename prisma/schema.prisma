@@ -361,6 +361,9 @@ model ComponentItem {
   serial      String?
   lot         String? // data o numero di lotto stampato accanto alla matricola (es. 09/26)
   note        String?
+  // slot che tiene solo foto (scheda di lubrificazione, carpenteria, cabina):
+  // non ha un numero da trascrivere, quindi non conta fra le matricole
+  photoOnly   Boolean @default(false)
   component   Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
   photos      Photo[]
 
