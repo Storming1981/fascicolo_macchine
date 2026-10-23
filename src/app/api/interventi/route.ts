@@ -3,7 +3,11 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { nextInterventoCode } from "@/lib/interventoService";
-import { loadInterventoBrief, buildPosToUploadNotices } from "@/lib/interventoNotify";
+import {
+  loadInterventoBrief,
+  buildPosToUploadNotices,
+  buildA1ToUploadNotices,
+} from "@/lib/interventoNotify";
 import { createNotifications } from "@/lib/notifications";
 import { deliverNotifications } from "@/lib/notifyDeliver";
 import { absoluteUrl } from "@/lib/absoluteUrl";
@@ -103,7 +107,14 @@ export async function POST(req: Request) {
   try {
     const brief = await loadInterventoBrief(intervento.id);
     if (brief) {
-      const notices = await buildPosToUploadNotices(brief, { id: user.id, name: user.name });
+      // Due cose servono da subito su un intervento nuovo: il P.O.S. (che lo
+      // sblocca) e i documenti A1 dei tecnici. Chi se ne occupa è in
+      // anagrafica, non per intervento.
+      const actor = { id: user.id, name: user.name };
+      const notices = [
+        ...(await buildPosToUploadNotices(brief, actor)),
+        ...(await buildA1ToUploadNotices(brief, actor)),
+      ];
       if (notices.length) {
         const ids = await createNotifications(notices.map((n) => n.notification));
         const base = absoluteUrl(req, "");

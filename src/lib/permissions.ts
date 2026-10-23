@@ -161,6 +161,16 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     "knowledge.view": true,
     "chat.send": true,
   },
+  // Data entry: vede come il visualizzatore e in piu' tiene i documenti A1
+  // degli interventi. Il caricamento NON passa dalla matrice (sarebbe un
+  // permesso per un solo pulsante): lo concede il flag `User.a1Manager` in
+  // anagrafica, come la validazione del P.O.S.
+  DATA_ENTRY: {
+    "service.view": true,
+    "intervento.viewAll": true,
+    "knowledge.view": true,
+    "chat.send": true,
+  },
 };
 
 /**
@@ -173,9 +183,13 @@ export function isExternalTester(role: Role | string): boolean {
   return role === "COLLAUDATORE_ESTERNO";
 }
 
-/** Ruoli in sola lettura: niente creazioni/modifiche/eliminazioni (salvo chat). */
+/**
+ * Ruoli in sola lettura: niente creazioni/modifiche/eliminazioni (salvo chat).
+ * Il data entry ci rientra: l'unica scrittura che gli e' concessa sono i
+ * documenti A1, aperti per path in `src/proxy.ts`.
+ */
 export function isReadOnlyRole(role: Role | string): boolean {
-  return role === "VISUALIZZATORE";
+  return role === "VISUALIZZATORE" || role === "DATA_ENTRY";
 }
 
 /** Valuta un permesso. ADMIN può sempre tutto (non si può autobloccare). */

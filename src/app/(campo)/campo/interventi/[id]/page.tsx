@@ -46,6 +46,8 @@ export default async function CampoInterventoPage({
       canSign={canSign}
       canChecklist={false}
       canValidatePos={canValidatePos(user)}
+      canUploadA1={user.a1Manager || canEdit}
+      a1Managers={data.a1Managers}
       googleConfigured={googleConfigured}
       googleSender={googleSender}
       campo

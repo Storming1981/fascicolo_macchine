@@ -49,6 +49,8 @@ export default async function InterventoDetailPage({
       canSign={canSign}
       canChecklist={canChecklist}
       canValidatePos={canPos}
+      canUploadA1={user.a1Manager || canEdit}
+      a1Managers={data.a1Managers}
       googleConfigured={googleConfigured}
       googleSender={googleSender}
     />

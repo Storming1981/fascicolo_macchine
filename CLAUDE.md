@@ -218,6 +218,14 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   - Il ruolo nel proxy viene dal JWT: chi viene **declassato** a visualizzatore
     a sessione aperta resta comunque limitato dai permessi del ruolo nuovo
     (letti dal DB), ma il blocco totale scatta al login successivo.
+- **`DATA_ENTRY`** — chi tiene aggiornati i documenti e basta. Oggi: carica i
+  **documenti A1** degli interventi; per tutto il resto è un visualizzatore
+  (vede fascicoli, service, knowledge; scrive in chat se glielo si lascia).
+  I limiti stanno in `src/proxy.ts` come per il Visualizzatore, con **un solo
+  path aperto in più**: `/api/interventi/<id>/a1`. È la ragione per cui gli A1
+  hanno una rotta loro invece di passare dagli allegati generici — il proxy
+  apre le scritture **per path** e non può guardare dentro al corpo della
+  richiesta per distinguere una categoria di documento.
 - **`COLLAUDATORE_ESTERNO`** — persona di un'altra ditta che entra con un
   account suo: vede **solo l'elenco macchine** e, nel fascicolo, **solo la
   linguetta Collaudo**, dove compila e firma la check list (il verbale lo
@@ -1029,22 +1037,20 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   tecnico a cui si riferisce, riusando `InterventoDocument.userId`). La card
   c'è **sempre**, anche vuota: è un elenco da riempire, non un allegato
   facoltativo. A differenza del P.O.S. **non blocca niente**.
-  - **Ha un incaricato, non è di tutti**: `Intervento.a1Assignee*` (+ `a1Note`
-    per dirgli cosa serve). Una cartella senza un nome sopra non la riempie
-    nessuno — stessa ragione per cui il P.O.S. ha un responsabile.
-    `POST|DELETE /api/interventi/[id]/a1` (permesso `intervento.edit`).
-  - **L'incaricato può caricare senza `intervento.edit`**: di solito è
-    l'ufficio, non chi gestisce i cantieri. L'eccezione vale **solo** per la
-    categoria `a1` del proprio intervento (upload e cancellazione), verificata
-    in `…/documents`; su ogni altra cartella resta un 403.
-  - **Non si assegna a un ruolo in sola lettura** (VISUALIZZATORE,
-    COLLAUDATORE_ESTERNO, CLIENTE): `src/proxy.ts` rifiuterebbe comunque il
-    caricamento, quindi l'incarico si rifiuta subito con un messaggio chiaro
-    invece di lasciare qualcuno davanti a un pulsante che non funziona.
-  - Notifiche: `A1_DA_CARICARE` all'incaricato quando riceve il compito,
-    `A1_CARICATI` **solo al primo file** a chi gliel'ha dato — un avviso per
-    ogni certificato di una cartella che se ne riempie uno per tecnico sarebbe
-    rumore.
+  - **Chi li carica si decide in anagrafica, non per intervento**: flag
+    **`User.a1Manager`** (Persone → *Gestisce i documenti A1*), una persona per
+    **tutti** gli interventi — oggi **Jasmin Ladonna Antwi Adjei**, con ruolo
+    `DATA_ENTRY`. È lo stesso schema del validatore P.O.S. (Fausto Zanotti):
+    un incarico per singolo intervento sarebbe stato un secondo modo di dire la
+    stessa cosa, da ricordarsi di compilare ogni volta.
+  - **Rotta dedicata** `POST|DELETE /api/interventi/[id]/a1`, separata dagli
+    allegati generici: chi carica è un profilo in sola lettura e `src/proxy.ts`
+    apre le scritture per path. Vi accede chi ha `a1Manager` o `intervento.edit`.
+  - Notifiche: `A1_DA_CARICARE` a chi gestisce gli A1 **alla creazione
+    dell'intervento** (insieme a quella del P.O.S.: sono le due cose che
+    servono subito), `A1_CARICATI` **solo al primo file** a chi ha aperto
+    l'intervento — un avviso per ogni certificato di una cartella che si riempie
+    un tecnico alla volta sarebbe rumore.
 - **P.O.S. — Piano Operativo di Sicurezza (vincolo di pianificazione)**:
   ogni intervento nasce nello stato **DOCUMENTAZIONE** ("Documentazione da
   validare"). Finché il P.O.S. non è **caricato** (file Word/PDF compilato a

@@ -70,6 +70,9 @@ export const DEFAULT_NAV: NavVisibility = {
   LOGISTICA: on(["dashboard", "macchine", "knowledge"]),
   // Visualizzatore: vede tutto, in sola lettura (le scritture le blocca proxy.ts).
   VISUALIZZATORE: on(ALL),
+  // Data entry: come il visualizzatore (deve poter aprire ogni intervento per
+  // caricarci i documenti A1).
+  DATA_ENTRY: on(ALL),
   // Collaudatore esterno: solo le macchine (e nel fascicolo solo il collaudo).
   COLLAUDATORE_ESTERNO: on(["macchine"]),
 };

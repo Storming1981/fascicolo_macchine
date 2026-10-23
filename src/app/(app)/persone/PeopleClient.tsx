@@ -24,6 +24,7 @@ type U = {
   reparto: string | null;
   siteManager: boolean;
   posValidator: boolean;
+  a1Manager: boolean;
   viewerChat: boolean;
   company: string | null;
   username: string | null;
@@ -304,6 +305,11 @@ export default function PeopleClient({
                           <Icon name="flag" size={11} /> Valida P.O.S.
                         </span>
                       )}
+                      {u.a1Manager && (
+                        <span className="prio-chip" style={{ background: "#7c3aed22", color: "#6d28d9" }} title="Gestisce i documenti A1 degli interventi">
+                          <Icon name="doc" size={11} /> Documenti A1
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="mono small">{u.username ?? u.email}</td>
@@ -500,6 +506,7 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
   const [photo, setPhoto] = useState<string | null>(user.photo);
   const [siteManager, setSiteManager] = useState(user.siteManager);
   const [posValidator, setPosValidator] = useState(user.posValidator);
+  const [a1Manager, setA1Manager] = useState(user.a1Manager);
   const [viewerChat, setViewerChat] = useState(user.viewerChat);
   const [company, setCompany] = useState(user.company ?? "");
   const [username, setUsername] = useState(user.username ?? "");
@@ -533,6 +540,7 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
         zona: f.zona,
         siteManager,
         posValidator,
+        a1Manager,
         viewerChat,
         company,
         username,
@@ -652,6 +660,18 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
                 />
                 <span title="Può mettere flag e firma sul P.O.S., sbloccando la pianificazione">
                   Validatore P.O.S. (sicurezza)
+                </span>
+              </label>
+            </div>
+            <div className="form-row" style={{ justifyContent: "flex-end" }}>
+              <label className="flex-inline" style={{ gap: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={a1Manager}
+                  onChange={(ev) => setA1Manager(ev.target.checked)}
+                />
+                <span title="Carica i documenti A1 nella cartella di ogni intervento">
+                  Gestisce i documenti A1
                 </span>
               </label>
             </div>

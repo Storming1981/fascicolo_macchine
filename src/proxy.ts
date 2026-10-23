@@ -12,6 +12,10 @@ import { jwtVerify } from "jose";
  * - VISUALIZZATORE: ogni scrittura /api viene rifiutata, salvo le poche
  *   scritture personali e i messaggi di chat (che le route verificano ancora
  *   col si/no della persona).
+ * - DATA_ENTRY: come il visualizzatore, piu' i **documenti A1** degli
+ *   interventi. Hanno una rotta loro (`/api/interventi/<id>/a1`) proprio per
+ *   questo: qui si apre un path, non si guarda dentro al corpo della
+ *   richiesta, quindi una categoria di allegato non si potrebbe distinguere.
  * - COLLAUDATORE_ESTERNO: persona di un'altra ditta. Pagine: solo elenco e
  *   fascicolo macchine, profilo e notifiche (il resto rimanda alle macchine).
  *   Scritture: solo la check list di collaudo, piu' quelle personali.
@@ -33,6 +37,11 @@ const PERSONAL: RegExp[] = [
 const VIEWER_WRITES: RegExp[] = [
   ...PERSONAL,
   /^\/api\/chat\/[^/]+\/messages(\/[^/]+)?$/, // scrivere (e ritirare i propri) messaggi
+];
+
+const DATA_ENTRY_WRITES: RegExp[] = [
+  ...VIEWER_WRITES,
+  /^\/api\/interventi\/[^/]+\/a1$/, // documenti A1: caricamento ed eliminazione
 ];
 
 const EXTERNAL_WRITES: RegExp[] = [...PERSONAL, /^\/api\/machines\/[^/]+\/collaudo$/];
@@ -66,6 +75,11 @@ export async function proxy(req: NextRequest) {
   if (role === "VISUALIZZATORE") {
     if (!isApi || VIEWER_WRITES.some((re) => re.test(path))) return NextResponse.next();
     return denied("Profilo visualizzatore: accesso in sola lettura.");
+  }
+
+  if (role === "DATA_ENTRY") {
+    if (!isApi || DATA_ENTRY_WRITES.some((re) => re.test(path))) return NextResponse.next();
+    return denied("Profilo data entry: si possono caricare solo i documenti A1.");
   }
 
   if (role === "COLLAUDATORE_ESTERNO") {

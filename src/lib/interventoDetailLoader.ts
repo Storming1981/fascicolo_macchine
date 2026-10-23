@@ -20,7 +20,6 @@ export async function loadInterventoDetail(id: string) {
       site: { select: { id: true, name: true, city: true } },
       machine: { select: { id: true, code: true, job: true, model: true } },
       tech: { select: { id: true, name: true } },
-      a1Assignee: { select: { id: true, name: true } },
       participants: { select: { id: true, name: true } },
       rapportini: {
         orderBy: { date: "asc" },
@@ -37,7 +36,7 @@ export async function loadInterventoDetail(id: string) {
   });
   if (!intervento) return null;
 
-  const [techs, machines, commesseRows] = await Promise.all([
+  const [techs, machines, a1Managers, commesseRows] = await Promise.all([
     prisma.user.findMany({
       where: { active: true },
       orderBy: [{ siteManager: "desc" }, { name: "asc" }],
@@ -46,6 +45,11 @@ export async function loadInterventoDetail(id: string) {
     prisma.machine.findMany({
       orderBy: { code: "asc" },
       select: { id: true, code: true, job: true, customer: true, customerId: true },
+    }),
+    prisma.user.findMany({
+      where: { active: true, a1Manager: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
     }),
     prisma.techPresence.findMany({
       where: { commessa: { not: null } },
@@ -93,12 +97,6 @@ export async function loadInterventoDetail(id: string) {
         }
       : null,
     techId: intervento.assignedTechId,
-    // Documenti A1: la cartella c'è sempre, qui c'è solo chi deve riempirla
-    a1AssigneeId: intervento.a1AssigneeId,
-    a1AssigneeName: intervento.a1Assignee?.name ?? null,
-    a1AssignedAt: intervento.a1AssignedAt?.toISOString() ?? null,
-    a1AssignedByName: intervento.a1AssignedByName,
-    a1Note: intervento.a1Note,
     // P.O.S.: stato della validazione (il file sta nei documenti, category "pos")
     posValidated: intervento.posValidated,
     posValidatedAt: intervento.posValidatedAt?.toISOString() ?? null,
@@ -201,5 +199,5 @@ export async function loadInterventoDetail(id: string) {
     })),
   };
 
-  return { dto, techs, machines, commesse };
+  return { dto, techs, machines, commesse, a1Managers };
 }

@@ -2,86 +2,92 @@ import { NextResponse, after } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
-import { loadInterventoBrief, buildA1AssignedNotices } from "@/lib/interventoNotify";
+import { saveFile } from "@/lib/uploads";
+import { A1_CATEGORY } from "@/lib/domain";
+import { loadInterventoBrief, buildA1UploadedNotices } from "@/lib/interventoNotify";
 import { createNotifications } from "@/lib/notifications";
 import { deliverNotifications } from "@/lib/notifyDeliver";
 import { absoluteUrl } from "@/lib/absoluteUrl";
-import type { Role } from "@prisma/client";
-
-const SOLA_LETTURA: Role[] = ["VISUALIZZATORE", "COLLAUDATORE_ESTERNO", "CLIENTE"];
 
 /**
- * Incarico di caricare i **documenti A1** di un intervento.
+ * Documenti **A1** di un intervento: i certificati richiesti per la presenza
+ * dei nostri tecnici in cantiere, uno per tecnico.
  *
- * POST   → affida il compito a una persona (e glielo notifica).
- * DELETE → toglie l'incarico; i file già caricati restano dove sono.
+ * Ha una rotta sua, separata dagli altri allegati, per una ragione precisa:
+ * chi li carica è un profilo **in sola lettura** (data entry), e `src/proxy.ts`
+ * apre le scritture **per path**, senza poter guardare dentro al corpo della
+ * richiesta. Con la rotta generica dei documenti si sarebbe dovuto aprire tutto
+ * l'allegato per fidarsi poi del controllo della singola route — esattamente
+ * ciò che il proxy esiste per non dover fare.
  *
- * La cartella A1 esiste comunque su ogni intervento: qui si decide solo **chi**
- * la deve riempire. Non c'è nessun blocco sulla pianificazione — a differenza
- * del P.O.S., che invece è vincolante.
+ * Chi può: chi ha il flag `User.a1Manager` in anagrafica (per **tutti** gli
+ * interventi, come il validatore del P.O.S.) e chi gestisce gli interventi.
  */
+async function canHandleA1(user: { id: string; role: string; a1Manager: boolean }) {
+  if (user.a1Manager) return true;
+  return userCan(user.role as Parameters<typeof userCan>[0], "intervento.edit");
+}
+
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  if (!(await userCan(user.role, "intervento.edit")))
-    return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
+  if (!(await canHandleA1(user)))
+    return NextResponse.json(
+      { error: "Solo chi gestisce i documenti A1 può caricarli." },
+      { status: 403 }
+    );
 
   const { id } = await ctx.params;
   const intervento = await prisma.intervento.findUnique({
     where: { id },
-    select: { id: true, a1AssigneeId: true },
+    select: { id: true, code: true, createdById: true },
   });
   if (!intervento) return NextResponse.json({ error: "Intervento non trovato" }, { status: 404 });
 
-  const b = await req.json().catch(() => null);
-  if (!b) return NextResponse.json({ error: "Body non valido" }, { status: 400 });
+  const form = await req.formData();
+  const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  if (!files.length) return NextResponse.json({ error: "Nessun file" }, { status: 400 });
+  // Tecnico a cui il documento si riferisce (facoltativo): un A1 è di una
+  // persona, non del cantiere.
+  const userId = String(form.get("userId") || "").trim() || null;
 
-  const assigneeId = typeof b.assigneeId === "string" ? b.assigneeId.trim() : "";
-  if (!assigneeId) return NextResponse.json({ error: "Scegli l'incaricato" }, { status: 400 });
-
-  const assignee = await prisma.user.findUnique({
-    where: { id: assigneeId },
-    select: { id: true, name: true, active: true, role: true },
+  const before = await prisma.interventoDocument.count({
+    where: { interventoId: id, category: A1_CATEGORY },
   });
-  if (!assignee?.active)
-    return NextResponse.json({ error: "Utente non valido o disattivato" }, { status: 400 });
 
-  // Ruoli che `src/proxy.ts` tiene in sola lettura: l'incarico si potrebbe
-  // dare, ma il caricamento verrebbe poi rifiutato a monte — meglio dirlo
-  // subito che lasciare qualcuno davanti a un pulsante che non funziona.
-  if (SOLA_LETTURA.includes(assignee.role))
-    return NextResponse.json(
-      {
-        error: `${assignee.name} ha un accesso in sola lettura e non potrebbe caricare i documenti. Scegli un'altra persona o cambiale il ruolo.`,
+  const scope = `service/${intervento.code}/documenti`;
+  const created: { id: string; name: string }[] = [];
+  for (const f of files) {
+    const saved = await saveFile(f, scope);
+    const rec = await prisma.interventoDocument.create({
+      data: {
+        interventoId: id,
+        name: f.name || "documento",
+        path: saved.path,
+        mimeType: f.type || null,
+        sizeBytes: saved.size,
+        category: A1_CATEGORY,
+        source: "UPLOAD",
+        userId,
+        uploadedById: user.id,
+        uploadedByName: user.name,
       },
-      { status: 400 }
-    );
+    });
+    created.push({ id: rec.id, name: rec.name });
+  }
 
-  const note = typeof b.note === "string" ? b.note.trim() || null : null;
-  // Cambio di incaricato (o prima assegnazione): è l'unico caso in cui ha senso
-  // avvisare. Risalvare la stessa persona non deve rimandare la notifica.
-  const isNew = intervento.a1AssigneeId !== assigneeId;
-
-  await prisma.intervento.update({
-    where: { id },
-    data: {
-      a1AssigneeId: assigneeId,
-      a1AssignedAt: new Date(),
-      a1AssignedById: user.id,
-      a1AssignedByName: user.name,
-      a1Note: note,
-    },
-  });
-
-  if (isNew) {
+  // ── Primi A1 arrivati: torna a chi ha aperto l'intervento ──────────
+  // Solo la prima volta: un avviso per ogni certificato di una cartella che si
+  // riempie un tecnico alla volta sarebbe rumore sulla campanella.
+  if (created.length && before === 0) {
     try {
       const brief = await loadInterventoBrief(id);
       if (brief) {
-        const notices = await buildA1AssignedNotices(
+        const notices = await buildA1UploadedNotices(
           brief,
-          assigneeId,
+          intervento.createdById,
           { id: user.id, name: user.name },
-          note
+          created.length
         );
         if (notices.length) {
           const ids = await createNotifications(notices.map((n) => n.notification));
@@ -92,32 +98,34 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         }
       }
     } catch (e) {
-      // L'incarico è già scritto: un avviso mancato non lo annulla.
-      console.error("[notifiche] incarico A1", id, e);
+      // I file sono già salvati: un avviso mancato non li annulla.
+      console.error("[notifiche] caricamento A1", id, e);
     }
   }
 
-  return NextResponse.json({ ok: true, notified: isNew });
+  return NextResponse.json({ ok: true, count: created.length });
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+/** Toglie un documento A1 (file sbagliato, tecnico cambiato). */
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  if (!(await userCan(user.role, "intervento.edit")))
-    return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
+  if (!(await canHandleA1(user)))
+    return NextResponse.json(
+      { error: "Solo chi gestisce i documenti A1 può eliminarli." },
+      { status: 403 }
+    );
 
   const { id } = await ctx.params;
-  const exists = await prisma.intervento.findUnique({ where: { id }, select: { id: true } });
-  if (!exists) return NextResponse.json({ error: "Intervento non trovato" }, { status: 404 });
+  const docId = new URL(req.url).searchParams.get("docId");
+  if (!docId) return NextResponse.json({ error: "docId mancante" }, { status: 400 });
 
-  await prisma.intervento.update({
-    where: { id },
-    data: {
-      a1AssigneeId: null,
-      a1AssignedAt: null,
-      a1AssignedById: null,
-      a1AssignedByName: null,
-    },
+  const doc = await prisma.interventoDocument.findFirst({
+    where: { id: docId, interventoId: id, category: A1_CATEGORY },
+    select: { id: true },
   });
+  if (!doc) return NextResponse.json({ error: "Documento non trovato" }, { status: 404 });
+
+  await prisma.interventoDocument.delete({ where: { id: docId } });
   return NextResponse.json({ ok: true });
 }

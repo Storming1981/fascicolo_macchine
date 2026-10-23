@@ -3,17 +3,15 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { saveFile } from "@/lib/uploads";
-import { POS_CATEGORY, A1_CATEGORY } from "@/lib/domain";
-import {
-  loadInterventoBrief,
-  buildPosToValidateNotices,
-  buildA1UploadedNotices,
-} from "@/lib/interventoNotify";
+import { POS_CATEGORY } from "@/lib/domain";
+import { loadInterventoBrief, buildPosToValidateNotices } from "@/lib/interventoNotify";
 import { createNotifications } from "@/lib/notifications";
 import { deliverNotifications } from "@/lib/notifyDeliver";
 import { absoluteUrl } from "@/lib/absoluteUrl";
 
-const CATEGORIES = [POS_CATEGORY, A1_CATEGORY, "allegato", "sicurezza", "formazione", "dpi", "altro"];
+// L'A1 non è qui: ha una rotta sua (`/a1`), perché lo carica un profilo in
+// sola lettura e il proxy apre le scritture per path.
+const CATEGORIES = [POS_CATEGORY, "allegato", "sicurezza", "formazione", "dpi", "altro"];
 
 /**
  * Documenti allegati a un intervento (upload manuale). I documenti dei tecnici
@@ -24,10 +22,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
 
+  if (!(await userCan(user.role, "intervento.edit")))
+    return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
+
   const { id } = await ctx.params;
   const intervento = await prisma.intervento.findUnique({
     where: { id },
-    select: { id: true, code: true, a1AssigneeId: true, a1AssignedById: true },
+    select: { id: true, code: true },
   });
   if (!intervento) return NextResponse.json({ error: "Intervento non trovato" }, { status: 404 });
 
@@ -35,23 +36,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const rawCat = String(form.get("category") || "allegato");
   const category = CATEGORIES.includes(rawCat) ? rawCat : "allegato";
   const userId = String(form.get("userId") || "").trim() || null;
-
-  // Chi ha ricevuto l'incarico degli A1 deve poterli caricare anche senza
-  // `intervento.edit`: di solito è una persona dell'ufficio, non chi gestisce
-  // i cantieri. Vale solo per la sua cartella.
-  const isA1Assignee = category === A1_CATEGORY && intervento.a1AssigneeId === user.id;
-  if (!isA1Assignee && !(await userCan(user.role, "intervento.edit")))
-    return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
-
   const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (!files.length) return NextResponse.json({ error: "Nessun file" }, { status: 400 });
-
-  const a1Before =
-    category === A1_CATEGORY
-      ? await prisma.interventoDocument.count({
-          where: { interventoId: id, category: A1_CATEGORY },
-        })
-      : 0;
 
   // Il P.O.S. è uno solo per intervento (ed è il documento che sblocca la
   // pianificazione): per sostituirlo va prima eliminato quello esistente.
@@ -115,32 +101,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
-  // ── Primi A1 caricati: torna a chi ha dato l'incarico ──────────────
-  // Solo la prima volta: un avviso per ogni file di una cartella che se ne
-  // riempie uno per tecnico sarebbe rumore.
-  if (category === A1_CATEGORY && created.length && a1Before === 0) {
-    try {
-      const brief = await loadInterventoBrief(id);
-      if (brief) {
-        const notices = await buildA1UploadedNotices(
-          brief,
-          intervento.a1AssignedById,
-          { id: user.id, name: user.name },
-          created.length
-        );
-        if (notices.length) {
-          const ids = await createNotifications(notices.map((n) => n.notification));
-          const base = absoluteUrl(req, "");
-          after(async () => {
-            await deliverNotifications(ids, notices, user.id, base);
-          });
-        }
-      }
-    } catch (e) {
-      console.error("[notifiche] caricamento A1", id, e);
-    }
-  }
-
   return NextResponse.json({ ok: true, count: created.length, documents: created });
 }
 
@@ -153,18 +113,12 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   const docId = new URL(req.url).searchParams.get("docId");
   if (!docId) return NextResponse.json({ error: "docId mancante" }, { status: 400 });
 
+  if (!(await userCan(user.role, "intervento.edit")))
+    return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
+
   const doc = await prisma.interventoDocument.findUnique({ where: { id: docId } });
   if (!doc || doc.interventoId !== id)
     return NextResponse.json({ error: "Documento non trovato" }, { status: 404 });
-
-  // Chi carica gli A1 deve anche poter correggere un file sbagliato.
-  const iv = await prisma.intervento.findUnique({
-    where: { id },
-    select: { a1AssigneeId: true },
-  });
-  const isA1Assignee = doc.category === A1_CATEGORY && iv?.a1AssigneeId === user.id;
-  if (!isA1Assignee && !(await userCan(user.role, "intervento.edit")))
-    return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
   if (doc.source === "TEAMSYSTEM")
     return NextResponse.json(
       { error: "I documenti sincronizzati da TeamSystem non si eliminano da qui" },

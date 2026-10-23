@@ -384,53 +384,74 @@ export async function buildPosToValidateNotices(
 /* ─────────────────────────── Documenti A1 ──────────────────────────────── */
 
 /**
- * Incarico di caricare i documenti A1 del cantiere. Va alla persona scelta: la
- * cartella esiste su ogni intervento, ma finché non c'è un nome nessuno la
- * riempie — è lo stesso motivo per cui il P.O.S. ha un responsabile.
+ * Chi tiene i documenti A1: il flag `User.a1Manager` in anagrafica, non un
+ * incarico per singolo intervento — se ne occupa una persona per tutti, come
+ * il validatore del P.O.S. Senza nessuno col flag si ripiega sugli ADMIN: un
+ * avviso senza destinatari lascerebbe la cartella vuota e basta.
  */
-export async function buildA1AssignedNotices(
-  brief: InterventoBrief,
-  assigneeId: string,
-  actor: { id: string; name: string },
-  note: string | null
-): Promise<Notice[]> {
-  if (assigneeId === actor.id) return []; // chi se lo assegna da sé lo sa già
-  const u = await prisma.user.findUnique({
-    where: { id: assigneeId },
-    select: { id: true, email: true, active: true },
+async function a1Recipients(excludeUserId: string) {
+  const flagged = await prisma.user.findMany({
+    where: { active: true, a1Manager: true },
+    select: { id: true, email: true },
   });
-  if (!u?.active) return [];
-  return [
+  const list = flagged.length
+    ? flagged
+    : await prisma.user.findMany({
+        where: { active: true, role: "ADMIN" },
+        select: { id: true, email: true },
+      });
+  return list.filter((u) => u.id !== excludeUserId);
+}
+
+/** Elenco di chi gestisce gli A1, per mostrarlo nella scheda intervento. */
+export async function a1Managers(): Promise<{ id: string; name: string }[]> {
+  return prisma.user.findMany({
+    where: { active: true, a1Manager: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+}
+
+/**
+ * Intervento appena creato: servono i documenti A1 dei tecnici che ci andranno.
+ * Va a chi li gestisce, altrimenti la cartella resta vuota in attesa di
+ * qualcuno che non sa di doverla riempire.
+ */
+export async function buildA1ToUploadNotices(
+  brief: InterventoBrief,
+  actor: { id: string; name: string }
+): Promise<Notice[]> {
+  const to = await a1Recipients(actor.id);
+  return to.map((u) =>
     notice("A1_DA_CARICARE", {
       userId: u.id,
       title: `Documenti A1 da caricare: ${brief.code}`,
       intro:
-        `${actor.name} ti ha incaricato di caricare i documenti A1 dell'intervento ` +
-        `${brief.code} — ${brief.title}, richiesti per la presenza dei nostri tecnici ` +
-        `in cantiere.` + (note ? ` Nota: ${note}` : ""),
+        `${actor.name} ha creato l'intervento ${brief.code} — ${brief.title}. ` +
+        `Servono i documenti A1 per la presenza dei nostri tecnici in cantiere: ` +
+        `si caricano nella cartella A1 della scheda intervento.`,
       brief,
       tone: "warn",
       icon: "doc",
       actor,
       emailTo: u.email,
-    }),
-  ];
+    })
+  );
 }
 
 /**
- * I primi A1 sono stati caricati: torna a **chi ha dato l'incarico**, che
- * altrimenti dovrebbe riaprire l'intervento ogni tanto per vedere se è stato
- * fatto.
+ * I primi A1 sono stati caricati: torna a **chi ha aperto l'intervento**, che
+ * altrimenti dovrebbe riaprirlo ogni tanto per vedere se è stato fatto.
  */
 export async function buildA1UploadedNotices(
   brief: InterventoBrief,
-  assignerId: string | null,
+  creatorId: string | null,
   actor: { id: string; name: string },
   quanti: number
 ): Promise<Notice[]> {
-  if (!assignerId || assignerId === actor.id) return [];
+  if (!creatorId || creatorId === actor.id) return [];
   const u = await prisma.user.findUnique({
-    where: { id: assignerId },
+    where: { id: creatorId },
     select: { id: true, email: true, active: true },
   });
   if (!u?.active) return [];

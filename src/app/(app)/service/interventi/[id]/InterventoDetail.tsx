@@ -106,11 +106,6 @@ type Data = {
   posValidated: boolean;
   posValidatedAt: string | null;
   posValidatedByName: string | null;
-  a1AssigneeId: string | null;
-  a1AssigneeName: string | null;
-  a1AssignedAt: string | null;
-  a1AssignedByName: string | null;
-  a1Note: string | null;
   posSignature: string | null;
   posNote: string | null;
   summarySignedAt: string | null;
@@ -177,6 +172,8 @@ export default function InterventoDetail({
   canSign,
   canChecklist = false,
   canValidatePos = false,
+  canUploadA1 = false,
+  a1Managers = [],
   googleConfigured = false,
   googleSender = null,
   campo = false,
@@ -194,6 +191,9 @@ export default function InterventoDetail({
   canSign: boolean;
   canChecklist?: boolean;
   canValidatePos?: boolean;
+  /** Vero per chi ha il flag "gestisce gli A1" in anagrafica (o gestisce gli interventi). */
+  canUploadA1?: boolean;
+  a1Managers?: { id: string; name: string }[];
   googleConfigured?: boolean;
   googleSender?: string | null;
   campo?: boolean;
@@ -990,22 +990,14 @@ export default function InterventoDetail({
           uploadedByName: d.uploadedByName,
           createdAt: d.createdAt,
         }))}
-        state={{
-          assigneeId: data.a1AssigneeId,
-          assigneeName: data.a1AssigneeName,
-          assignedAt: data.a1AssignedAt,
-          assignedByName: data.a1AssignedByName,
-          note: data.a1Note,
-        }}
+        managers={a1Managers}
         team={[
           ...(data.techId
             ? [{ id: data.techId, name: techs.find((t) => t.id === data.techId)?.name ?? "Capo cantiere" }]
             : []),
           ...data.participants,
         ]}
-        people={techs.map((t) => ({ id: t.id, name: t.name }))}
-        canAssign={canEdit && !campo}
-        canUpload={canEdit || data.a1AssigneeId === currentUserId}
+        canUpload={canUploadA1}
         onDone={() => router.refresh()}
       />
 

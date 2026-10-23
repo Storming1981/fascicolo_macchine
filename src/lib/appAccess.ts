@@ -33,6 +33,7 @@ export const DEFAULT_APP_ACCESS: AppAccessMatrix = {
   COLLAUDATORE: "field",
   TECNICO_CAMPO: "field",
   LOGISTICA: "field",
+  DATA_ENTRY: "desktop",
   VISUALIZZATORE: "desktop",
   COLLAUDATORE_ESTERNO: "desktop",
 };

@@ -38,6 +38,7 @@ export default async function PeoplePage() {
       reparto: u.reparto,
       siteManager: u.siteManager,
       posValidator: u.posValidator,
+      a1Manager: u.a1Manager,
       viewerChat: u.viewerChat,
       company: u.company,
       username: u.username,
