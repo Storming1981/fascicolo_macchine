@@ -31,7 +31,7 @@ export const MILESTONES: {
   /** Da dove arriva la data (sottotitolo nella card); vuoto = nessun sottotitolo. */
   hint: string;
 }[] = [
-  { key: "production_start", label: "Inizio produzione", phase: "PRODUCTION", hint: "" },
+  { key: "production_start", label: "Inizio produzione", phase: "PRODUCTION", hint: "Prima timbratura" },
   { key: "production_end", label: "Fine produzione", phase: "PRODUCTION", hint: "Ultima timbratura" },
   { key: "testing", label: "Collaudo", phase: "TESTING", hint: "Firma check list di collaudo" },
   { key: "shipped", label: "Spedita", phase: "SHIPPED", hint: "DDT di fornitura (SUPPLY)" },
