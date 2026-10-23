@@ -1022,6 +1022,29 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   essere a pagamento o in garanzia — quindi il lavoro tecnico va d'ufficio su
   *a pagamento* e lo script **stampa la lista da rivedere a mano**, invece di
   inventare un dato commerciale.
+- **Cartella A1 per intervento** (`A1_CATEGORY = "a1"` in `domain.ts`,
+  `src/components/A1Card.tsx`): ogni intervento ne ha una **di suo**, viola e
+  ben visibile, dove finiscono i documenti A1 richiesti per la presenza dei
+  nostri tecnici in cantiere — uno per tecnico (il file si può targare col
+  tecnico a cui si riferisce, riusando `InterventoDocument.userId`). La card
+  c'è **sempre**, anche vuota: è un elenco da riempire, non un allegato
+  facoltativo. A differenza del P.O.S. **non blocca niente**.
+  - **Ha un incaricato, non è di tutti**: `Intervento.a1Assignee*` (+ `a1Note`
+    per dirgli cosa serve). Una cartella senza un nome sopra non la riempie
+    nessuno — stessa ragione per cui il P.O.S. ha un responsabile.
+    `POST|DELETE /api/interventi/[id]/a1` (permesso `intervento.edit`).
+  - **L'incaricato può caricare senza `intervento.edit`**: di solito è
+    l'ufficio, non chi gestisce i cantieri. L'eccezione vale **solo** per la
+    categoria `a1` del proprio intervento (upload e cancellazione), verificata
+    in `…/documents`; su ogni altra cartella resta un 403.
+  - **Non si assegna a un ruolo in sola lettura** (VISUALIZZATORE,
+    COLLAUDATORE_ESTERNO, CLIENTE): `src/proxy.ts` rifiuterebbe comunque il
+    caricamento, quindi l'incarico si rifiuta subito con un messaggio chiaro
+    invece di lasciare qualcuno davanti a un pulsante che non funziona.
+  - Notifiche: `A1_DA_CARICARE` all'incaricato quando riceve il compito,
+    `A1_CARICATI` **solo al primo file** a chi gliel'ha dato — un avviso per
+    ogni certificato di una cartella che se ne riempie uno per tecnico sarebbe
+    rumore.
 - **P.O.S. — Piano Operativo di Sicurezza (vincolo di pianificazione)**:
   ogni intervento nasce nello stato **DOCUMENTAZIONE** ("Documentazione da
   validare"). Finché il P.O.S. non è **caricato** (file Word/PDF compilato a

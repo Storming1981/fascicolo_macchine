@@ -20,6 +20,7 @@ export async function loadInterventoDetail(id: string) {
       site: { select: { id: true, name: true, city: true } },
       machine: { select: { id: true, code: true, job: true, model: true } },
       tech: { select: { id: true, name: true } },
+      a1Assignee: { select: { id: true, name: true } },
       participants: { select: { id: true, name: true } },
       rapportini: {
         orderBy: { date: "asc" },
@@ -92,6 +93,12 @@ export async function loadInterventoDetail(id: string) {
         }
       : null,
     techId: intervento.assignedTechId,
+    // Documenti A1: la cartella c'è sempre, qui c'è solo chi deve riempirla
+    a1AssigneeId: intervento.a1AssigneeId,
+    a1AssigneeName: intervento.a1Assignee?.name ?? null,
+    a1AssignedAt: intervento.a1AssignedAt?.toISOString() ?? null,
+    a1AssignedByName: intervento.a1AssignedByName,
+    a1Note: intervento.a1Note,
     // P.O.S.: stato della validazione (il file sta nei documenti, category "pos")
     posValidated: intervento.posValidated,
     posValidatedAt: intervento.posValidatedAt?.toISOString() ?? null,

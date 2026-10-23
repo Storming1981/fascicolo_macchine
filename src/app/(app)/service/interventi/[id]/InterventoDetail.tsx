@@ -16,6 +16,7 @@ import {
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import PosCard from "@/components/PosCard";
+import A1Card from "@/components/A1Card";
 import TecniciDocs from "@/components/TecniciDocs";
 import {
   CHECKLIST_DEFS,
@@ -32,6 +33,7 @@ import {
   interventoTypeMeta,
   PRIORITY_META,
   POS_CATEGORY,
+  A1_CATEGORY,
 } from "@/lib/domain";
 import type { InterventoStatus } from "@prisma/client";
 
@@ -104,6 +106,11 @@ type Data = {
   posValidated: boolean;
   posValidatedAt: string | null;
   posValidatedByName: string | null;
+  a1AssigneeId: string | null;
+  a1AssigneeName: string | null;
+  a1AssignedAt: string | null;
+  a1AssignedByName: string | null;
+  a1Note: string | null;
   posSignature: string | null;
   posNote: string | null;
   summarySignedAt: string | null;
@@ -200,6 +207,7 @@ export default function InterventoDetail({
 
   // P.O.S.: finché non è validato l'intervento non si assegna e non si pianifica
   const posDoc = data.documents.find((d) => d.category === POS_CATEGORY) ?? null;
+  const a1Docs = data.documents.filter((d) => d.category === A1_CATEGORY);
   const posOk = data.posValidated;
   const canPlan = canEdit && posOk;
   // Senza P.O.S. validato non si compilano rapportini: quel lavoro non doveva
@@ -970,10 +978,43 @@ export default function InterventoDetail({
         onDone={() => router.refresh()}
       />
 
+      {/* Cartella A1: ogni intervento ha la sua, con un incaricato */}
+      <A1Card
+        interventoId={data.id}
+        docs={a1Docs.map((d) => ({
+          id: d.id,
+          name: d.name,
+          path: d.path,
+          sizeBytes: d.sizeBytes,
+          userName: d.userName,
+          uploadedByName: d.uploadedByName,
+          createdAt: d.createdAt,
+        }))}
+        state={{
+          assigneeId: data.a1AssigneeId,
+          assigneeName: data.a1AssigneeName,
+          assignedAt: data.a1AssignedAt,
+          assignedByName: data.a1AssignedByName,
+          note: data.a1Note,
+        }}
+        team={[
+          ...(data.techId
+            ? [{ id: data.techId, name: techs.find((t) => t.id === data.techId)?.name ?? "Capo cantiere" }]
+            : []),
+          ...data.participants,
+        ]}
+        people={techs.map((t) => ({ id: t.id, name: t.name }))}
+        canAssign={canEdit && !campo}
+        canUpload={canEdit || data.a1AssigneeId === currentUserId}
+        onDone={() => router.refresh()}
+      />
+
       {/* Altri documenti dell'intervento (nessun vincolo) */}
       <DocumentiCard
         interventoId={data.id}
-        documents={data.documents.filter((d) => d.category !== POS_CATEGORY)}
+        documents={data.documents.filter(
+          (d) => d.category !== POS_CATEGORY && d.category !== A1_CATEGORY
+        )}
         canEdit={canEdit && !campo}
         onDone={() => router.refresh()}
       />

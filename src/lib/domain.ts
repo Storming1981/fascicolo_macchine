@@ -57,6 +57,17 @@ export const INTERVENTO_STATUS_ORDER: InterventoStatus[] = [
 export const POS_CATEGORY = "pos";
 export const POS_LABEL = "P.O.S. — Piano Operativo di Sicurezza";
 
+/**
+ * Cartella **A1**: ogni intervento ne ha una di suo. Ci finiscono i certificati
+ * A1 richiesti per la presenza dei nostri tecnici in cantiere — uno per
+ * tecnico. A differenza del P.O.S. non blocca niente: è una cartella da
+ * riempire, con un incaricato preciso a cui chiederne conto.
+ */
+export const A1_CATEGORY = "a1";
+export const A1_LABEL = "Documenti A1";
+/** Colore della cartella A1: deve saltare all'occhio fra le altre. */
+export const A1_COLOR = "#7c3aed";
+
 /** Stati che presuppongono un P.O.S. validato (tutti tranne il primo step). */
 export function statusRequiresPos(s: InterventoStatus): boolean {
   return s !== "DOCUMENTAZIONE";

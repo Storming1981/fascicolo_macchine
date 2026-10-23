@@ -18,6 +18,8 @@ export type NotifKind =
   | "POS_DA_CARICARE" // intervento appena creato: il P.O.S. non c'e' ancora
   | "POS_DA_VALIDARE" // file caricato: il responsabile lo deve firmare
   | "POS_VALIDATO" // torna a chi ha creato l'intervento: ora e' pianificabile
+  | "A1_DA_CARICARE" // incarico di caricare i documenti A1 del cantiere
+  | "A1_CARICATI" // torna a chi ha dato l'incarico: i primi A1 sono arrivati
   | "INTERVENTO_ACCETTATO" // un assegnato ha preso in carico
   | "INTERVENTO_RIFIUTATO" // un assegnato non puo' andarci
   | "CHAT_MESSAGGIO"; // un assegnato non puo' andarci

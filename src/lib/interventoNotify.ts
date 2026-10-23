@@ -381,6 +381,75 @@ export async function buildPosToValidateNotices(
   );
 }
 
+/* ─────────────────────────── Documenti A1 ──────────────────────────────── */
+
+/**
+ * Incarico di caricare i documenti A1 del cantiere. Va alla persona scelta: la
+ * cartella esiste su ogni intervento, ma finché non c'è un nome nessuno la
+ * riempie — è lo stesso motivo per cui il P.O.S. ha un responsabile.
+ */
+export async function buildA1AssignedNotices(
+  brief: InterventoBrief,
+  assigneeId: string,
+  actor: { id: string; name: string },
+  note: string | null
+): Promise<Notice[]> {
+  if (assigneeId === actor.id) return []; // chi se lo assegna da sé lo sa già
+  const u = await prisma.user.findUnique({
+    where: { id: assigneeId },
+    select: { id: true, email: true, active: true },
+  });
+  if (!u?.active) return [];
+  return [
+    notice("A1_DA_CARICARE", {
+      userId: u.id,
+      title: `Documenti A1 da caricare: ${brief.code}`,
+      intro:
+        `${actor.name} ti ha incaricato di caricare i documenti A1 dell'intervento ` +
+        `${brief.code} — ${brief.title}, richiesti per la presenza dei nostri tecnici ` +
+        `in cantiere.` + (note ? ` Nota: ${note}` : ""),
+      brief,
+      tone: "warn",
+      icon: "doc",
+      actor,
+      emailTo: u.email,
+    }),
+  ];
+}
+
+/**
+ * I primi A1 sono stati caricati: torna a **chi ha dato l'incarico**, che
+ * altrimenti dovrebbe riaprire l'intervento ogni tanto per vedere se è stato
+ * fatto.
+ */
+export async function buildA1UploadedNotices(
+  brief: InterventoBrief,
+  assignerId: string | null,
+  actor: { id: string; name: string },
+  quanti: number
+): Promise<Notice[]> {
+  if (!assignerId || assignerId === actor.id) return [];
+  const u = await prisma.user.findUnique({
+    where: { id: assignerId },
+    select: { id: true, email: true, active: true },
+  });
+  if (!u?.active) return [];
+  return [
+    notice("A1_CARICATI", {
+      userId: u.id,
+      title: `Documenti A1 caricati: ${brief.code}`,
+      intro:
+        `${actor.name} ha caricato ${quanti === 1 ? "il primo documento" : `${quanti} documenti`} ` +
+        `A1 nell'intervento ${brief.code} — ${brief.title}.`,
+      brief,
+      tone: "ok",
+      icon: "check",
+      actor,
+      emailTo: u.email,
+    }),
+  ];
+}
+
 /* ────────────── Giro di ritorno: P.O.S. validato e prese in carico ─────────── */
 
 /**

@@ -118,6 +118,7 @@ model User {
   interventiPartecipati Intervento[] @relation("InterventoParticipants")
   interventoDocs InterventoDocument[] @relation("InterventoDocUser")
   posValidati    Intervento[] @relation("InterventoPosValidator")
+  a1Incarichi    Intervento[] @relation("InterventoA1Assignee")
   presences      TechPresence[]
   googleToken    GoogleToken?
   notifications  Notification[] @relation("UserNotifications")
@@ -590,6 +591,15 @@ model Intervento {
   posValidatedByName String?
   posSignature       String?   // path firma del responsabile (/uploads/...)
   posNote            String?
+  // Documenti A1: la cartella che ogni intervento ha di suo, dove finiscono i
+  // certificati richiesti per la presenza dei nostri tecnici in cantiere. I
+  // file stanno in InterventoDocument con category = "a1"; qui c'e' solo
+  // l'INCARICO di caricarli, dato a una persona precisa.
+  a1AssigneeId     String?
+  a1AssignedAt     DateTime?
+  a1AssignedById   String?
+  a1AssignedByName String?
+  a1Note           String?   // cosa serve per questo cantiere (paese, scadenze…)
   // Riepilogo di tutte le giornate in un PDF unico (installazioni lunghe): il
   // cliente firma una volta sola a fine lavori, invece di un foglio al giorno.
   // I rapportini giornalieri restano con la loro firma.
@@ -615,6 +625,7 @@ model Intervento {
   machine    Machine?    @relation(fields: [machineId], references: [id], onDelete: SetNull)
   tech         User?     @relation("InterventoTech", fields: [assignedTechId], references: [id], onDelete: SetNull)
   posValidator User?     @relation("InterventoPosValidator", fields: [posValidatedById], references: [id], onDelete: SetNull)
+  a1Assignee   User?     @relation("InterventoA1Assignee", fields: [a1AssigneeId], references: [id], onDelete: SetNull)
   participants  User[]    @relation("InterventoParticipants") // tecnici partecipanti (squadra)
   rapportini    Rapportino[]
   checklists    InterventoChecklist[]
@@ -711,7 +722,7 @@ model InterventoDocument {
   path           String // /uploads/...
   mimeType       String?
   sizeBytes      Int?
-  category       String   @default("allegato") // allegato | sicurezza | formazione | dpi | altro
+  category       String   @default("allegato") // a1 | pos | allegato | sicurezza | formazione | dpi | altro
   source         String   @default("UPLOAD") // UPLOAD | TEAMSYSTEM
   externalId     String? // id del documento nel fascicolo TeamSystem
   userId         String? // tecnico a cui il documento si riferisce
