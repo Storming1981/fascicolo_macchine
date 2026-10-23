@@ -80,6 +80,18 @@ export function mainOrderRole(plant?: string | null): string {
   return hasDualJob(plant) ? "Corpo" : "Produzione";
 }
 
+/**
+ * Tipologie **senza** check list di collaudo. La linea di separazione non si
+ * collauda come una macchina singola: si verifica in campo a linea montata,
+ * quindi un verbale di collaudo in fascicolo non lo compilerebbe nessuno e
+ * terrebbe il fascicolo incompleto per sempre.
+ */
+const NO_COLLAUDO: string[] = ["BLUE SORTER"];
+
+export function hasCollaudo(plant?: string | null): boolean {
+  return !NO_COLLAUDO.includes((plant ?? "").trim().toUpperCase());
+}
+
 /** Il kit opzionale "tirante giunto" esiste solo sui BLUE DEVIL. */
 export function hasTiranteGiunto(plant?: string | null): boolean {
   return plant === "BLUE DEVIL";

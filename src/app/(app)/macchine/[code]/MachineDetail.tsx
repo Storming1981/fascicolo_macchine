@@ -14,7 +14,7 @@ import {
   PRIORITY_META,
   COUNTRIES,
 } from "@/lib/domain";
-import { CUSTOM_MODEL, jobFields } from "@/lib/plant";
+import { CUSTOM_MODEL, hasCollaudo, jobFields } from "@/lib/plant";
 import {
   anagraficaFields,
   groupScore,
@@ -143,9 +143,13 @@ export default function MachineDetail({
   };
 }) {
   const router = useRouter();
-  const tabs = caps.collaudoOnly
+  // Dove il collaudo non è previsto la linguetta non si propone — nemmeno al
+  // collaudatore esterno, che su una macchina così non ha niente da compilare.
+  const collaudo = hasCollaudo(machine.plantType);
+  const tabs = (caps.collaudoOnly
     ? TABS.filter((t) => t.id === "collaudo")
-    : TABS.filter((t) => t.id !== "service" || caps.service);
+    : TABS.filter((t) => t.id !== "service" || caps.service)
+  ).filter((t) => t.id !== "collaudo" || collaudo);
   const [tab, setTab] = useState(caps.collaudoOnly ? "collaudo" : "anagrafica");
   const [intervention, setIntervention] = useState<null | { groupId?: string; itemId?: string; itemLabel?: string; oldSerial?: string }>(null);
   const [signRole, setSignRole] = useState<string | null>(null);
@@ -217,6 +221,14 @@ export default function MachineDetail({
           </button>
         ))}
       </div>
+
+      {/* Collaudatore esterno su una macchina senza collaudo: non ha linguette,
+          e una pagina vuota sembrerebbe un guasto. */}
+      {tabs.length === 0 && (
+        <div className="card empty-state">
+          Per questa tipologia impianto non è prevista la check list di collaudo.
+        </div>
+      )}
 
       {tab === "anagrafica" && (
         <TabAnagrafica
@@ -847,15 +859,17 @@ function TabAnagrafica({
                 </dd>
               </div>
             ))}
-            <div>
-              <dt>
-                Versione software
-                <span className="muted small" style={{ display: "block", fontWeight: 400 }}>
-                  Dalla check list di collaudo
-                </span>
-              </dt>
-              <dd className="mono">{machine.collaudo?.softwareVersion || "—"}</dd>
-            </div>
+            {hasCollaudo(machine.plantType) && (
+              <div>
+                <dt>
+                  Versione software
+                  <span className="muted small" style={{ display: "block", fontWeight: 400 }}>
+                    Dalla check list di collaudo
+                  </span>
+                </dt>
+                <dd className="mono">{machine.collaudo?.softwareVersion || "—"}</dd>
+              </div>
+            )}
             <div>
               <dt>Anno</dt>
               <dd>

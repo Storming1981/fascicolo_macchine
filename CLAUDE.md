@@ -715,6 +715,15 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   aggiungibili delle specifiche (chiave `KIND.row#marca`). Mulino e cesoia non
   hanno righe condizionali: entrambe le alimentazioni (elettrica e diesel) stanno
   sul modulo e si compila quella che serve.
+- **Tipologie senza collaudo** (`hasCollaudo()` in `plant.ts`, oggi
+  **BLUE SORTER**): la linea di separazione non si collauda come una macchina
+  singola, si verifica in campo a linea montata. Quindi niente linguetta
+  *Collaudo & Firme*, niente campo *Versione software* in anagrafica (lo scrive
+  chi compila la check list), `POST /api/machines/[id]/collaudo` risponde 400,
+  e **la voce Collaudo esce dal calcolo dell'avanzamento**: tenerla a zero
+  avrebbe fermato ogni linea a due terzi per sempre. Un collaudatore esterno su
+  una macchina così resta senza linguette e legge il perché, invece di una
+  pagina vuota.
 - **Check list di collaudo per tipologia** (`checklistFor()` in
   `src/lib/checklist.ts`): **CESOIE / SPACCABINARI → M5.7 CHECK LIST CESOIA**
   (28 voci, raggruppate in sezioni: lame, link, cesoia, funzionali, generali,

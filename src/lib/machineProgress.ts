@@ -13,7 +13,7 @@
 //
 // Modulo puro (client + server): niente import server-only.
 
-import { jobFields } from "./plant";
+import { hasCollaudo, jobFields } from "./plant";
 
 export type CollaudoState = "NONE" | "DRAFT" | "COMPILED" | "APPROVED";
 
@@ -164,13 +164,19 @@ export function progressSteps(f: ProgressFacts): ProgressStep[] {
       done: s.total ? s.filled / s.total : 0,
       detail: s.total ? `${s.filled} di ${s.total} matricole` : "nessuno slot censito",
     },
-    {
-      key: "collaudo",
-      label: "Collaudo",
-      weight: 1,
-      done: COLLAUDO_SCORE[f.collaudo],
-      detail: COLLAUDO_LABEL[f.collaudo],
-    },
+    // Dove il collaudo non è previsto (linea di separazione) la voce non c'è
+    // proprio: tenerla a zero terrebbe il fascicolo a due terzi per sempre.
+    ...(hasCollaudo(f.anagrafica.plantType)
+      ? [
+          {
+            key: "collaudo",
+            label: "Collaudo",
+            weight: 1,
+            done: COLLAUDO_SCORE[f.collaudo],
+            detail: COLLAUDO_LABEL[f.collaudo],
+          },
+        ]
+      : []),
   ];
 }
 
