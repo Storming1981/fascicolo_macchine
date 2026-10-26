@@ -84,7 +84,7 @@ export default function MachinesList({
         <div className="search" style={{ flex: 1, minWidth: 220 }}>
           <Icon name="search" size={15} color="var(--muted)" />
           <input
-            placeholder="Cerca matricola, job, cliente, paese…"
+            placeholder="Cerca commessa, matricola, cliente, paese…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -114,8 +114,9 @@ export default function MachinesList({
           <table className="data-table">
             <thead>
               <tr>
-                <th>ID Fascicolo</th>
-                <th>Job</th>
+                {/* La commessa è il riferimento con cui si parla di una macchina in
+                    azienda: sta in testa, e l'ID fascicolo resta nella scheda. */}
+                <th>Commessa</th>
                 <th>Tipologia</th>
                 <th>Modello</th>
                 <th title="Tipo container dalla scheda di allestimento M5.17">Tipo container</th>
@@ -145,8 +146,7 @@ export default function MachinesList({
                   style={ct ? { borderLeft: `4px solid ${ct.color}`, background: `${ct.color}0d` } : undefined}
                   onClick={() => router.push(`/macchine/${m.code}`)}
                 >
-                  <td className="mono">{m.code}</td>
-                  <td className="mono muted">{m.job}</td>
+                  <td className="mono">{m.job}</td>
                   <td>{m.plantType || <span className="muted">—</span>}</td>
                   <td>{m.model}</td>
                   <td>
@@ -211,7 +211,7 @@ export default function MachinesList({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="empty">
+                  <td colSpan={11} className="empty">
                     Nessuna macchina trovata.
                   </td>
                 </tr>

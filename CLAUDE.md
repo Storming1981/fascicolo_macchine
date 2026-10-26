@@ -50,6 +50,14 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
   - CESOIE → CAYMAN 06/10/20/30/40/50/70/90
   - SPACCABINARI → CAYMAN RB20, CAYMAN RB40
   - BLUE MARLIN / BLUE STORM → solo "Altro / Personalizzato" (modelli da definire)
+- **In pagina si chiama «commessa», ed è il riferimento principale.** In azienda
+  una macchina la si chiama con la sua commessa, non col codice del fascicolo:
+  quindi l'elenco macchine ha la colonna **Commessa** al posto di *ID
+  Fascicolo* + *Job* (il codice resta nel link della riga e nella ricerca), la
+  scheda ha il **numero di commessa come titolo** (occhiello *COMMESSA*) con
+  *Fascicolo M-AAAA-NNNN* nella riga sotto, e l'etichetta QR mostra la commessa
+  in grande con la riga **Fascicolo** al posto della vecchia riga *Job*. Nel
+  codice il campo resta `Machine.job`: cambia come lo si chiama, non dov'è.
 - **Job Number = commessa di vendita.** Un **BLUE DEVIL** si compone di un
   CORPO TRITURATORE (`jobBody`) e di un CONTAINER (`jobContainer`): per le
   macchine importate questi sono numeri di commessa, per le future saranno

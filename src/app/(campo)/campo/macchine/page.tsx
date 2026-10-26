@@ -52,7 +52,7 @@ export default async function CampoMacchinePage({
       <div className="campo-head campo-head-row">
         <div>
           <h1>Fascicolo macchina</h1>
-          <p>{q ? `Risultati per «${q}»` : "Macchine recenti · cerca per job/matricola"}</p>
+          <p>{q ? `Risultati per «${q}»` : "Macchine recenti · cerca per commessa/matricola"}</p>
         </div>
         {canCreate && (
           <Link href="/campo/macchine/nuova" className="btn-primary-sm">
@@ -83,7 +83,7 @@ export default async function CampoMacchinePage({
                   </span>
                 </div>
                 <div className="campo-card-title">
-                  Job <span className="mono">{m.job}</span> · {m.model}
+                  Commessa <span className="mono">{m.job}</span> · {m.model}
                 </div>
                 <div className="campo-card-meta">
                   <span>

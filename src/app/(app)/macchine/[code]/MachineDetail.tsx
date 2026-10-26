@@ -168,8 +168,8 @@ export default function MachineDetail({
     <div className="view">
       <header className="detail-header">
         <div className="detail-id-block">
-          <div className="detail-tag mono">FASCICOLO TECNICO</div>
-          <h1 className="detail-id mono">{machine.code}</h1>
+          <div className="detail-tag mono">COMMESSA</div>
+          <h1 className="detail-id mono">{machine.job}</h1>
           <div className="detail-meta">
             {machine.plantType && (
               <>
@@ -184,7 +184,7 @@ export default function MachineDetail({
             )}
             <span>{machine.model}</span>
             <span className="dot-sep">·</span>
-            <span>Job <span className="mono">{machine.job}</span></span>
+            <span>Fascicolo <span className="mono">{machine.code}</span></span>
             <span className="dot-sep">·</span>
             <Flag code={machine.countryCode} />
             <span>{machine.customer} — {machine.country}</span>
@@ -2973,8 +2973,8 @@ function TabQR({ machine, qrDataUrl }: { machine: Machine; qrDataUrl: string }) 
                 <div>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img className="label-logo" src="/zato-logo.png" alt="ZATO" />
-                  <div className="label-brand mono">FASCICOLO TECNICO</div>
-                  <div className="label-id">{machine.code}</div>
+                  <div className="label-brand mono">COMMESSA</div>
+                  <div className="label-id">{machine.job}</div>
                 </div>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img className="qr-img" src={qrDataUrl} alt="QR" />
@@ -2982,7 +2982,7 @@ function TabQR({ machine, qrDataUrl }: { machine: Machine; qrDataUrl: string }) 
               <dl className="label-kv">
                 <dt>Tipologia</dt><dd>{machine.plantType || "—"}</dd>
                 <dt>Modello</dt><dd>{machine.model}</dd>
-                <dt>Job</dt><dd className="mono">{machine.job}</dd>
+                <dt>Fascicolo</dt><dd className="mono">{machine.code}</dd>
                 <dt>Anno</dt><dd>{machine.year}</dd>
                 <dt>Cliente</dt><dd>{machine.customer}</dd>
                 <dt>Sito</dt><dd>{machine.site || "—"}</dd>
