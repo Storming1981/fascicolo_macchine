@@ -94,7 +94,11 @@ model User {
   reparto        String?  // reparto (timbratore): PRO, APV, UTE…
   siteManager    Boolean  @default(false) // responsabile di cantiere
   posValidator   Boolean  @default(false) // puo' validare il P.O.S. degli interventi (responsabile sicurezza)
-  a1Manager      Boolean  @default(false) // tiene i documenti A1 degli interventi (li carica per tutti)
+  // Tiene i documenti di trasferta degli interventi (A1 + Dichiarazione Stato
+  // UE), per tutti. Il nome resta `a1Manager`: e' il flag letto dalla rotta
+  // /a1, che e' anche la riga di proxy.ts che apre l'unica scrittura di un
+  // profilo in sola lettura.
+  a1Manager      Boolean  @default(false)
   photoBackup    Boolean  @default(false) // copia le proprie foto sul suo Google Foto
   viewerChat     Boolean  @default(true)  // VISUALIZZATORE: puo' scrivere nelle chat (unica scrittura concessa)
   company        String?  // ditta di appartenenza (collaudatori esterni)
@@ -592,10 +596,10 @@ model Intervento {
   posValidatedByName String?
   posSignature       String?   // path firma del responsabile (/uploads/...)
   posNote            String?
-  // Documenti A1: la cartella che ogni intervento ha di suo (file in
-  // InterventoDocument con category = "a1"). Chi li carica non si decide qui
-  // ma in anagrafica, con User.a1Manager: e' una persona sola per tutti gli
-  // interventi, come il validatore del P.O.S.
+  // Documenti di trasferta: la cartella che ogni intervento ha di suo (file in
+  // InterventoDocument con category = "a1" oppure "ue"). Chi li carica non si
+  // decide qui ma in anagrafica, con User.a1Manager: e' una persona sola per
+  // tutti gli interventi, come il validatore del P.O.S.
   // Riepilogo di tutte le giornate in un PDF unico (installazioni lunghe): il
   // cliente firma una volta sola a fine lavori, invece di un foglio al giorno.
   // I rapportini giornalieri restano con la loro firma.
@@ -717,7 +721,7 @@ model InterventoDocument {
   path           String // /uploads/...
   mimeType       String?
   sizeBytes      Int?
-  category       String   @default("allegato") // a1 | pos | allegato | sicurezza | formazione | dpi | altro
+  category       String   @default("allegato") // a1 | ue | pos | allegato | sicurezza | formazione | dpi | altro
   source         String   @default("UPLOAD") // UPLOAD | TEAMSYSTEM
   externalId     String? // id del documento nel fascicolo TeamSystem
   userId         String? // tecnico a cui il documento si riferisce

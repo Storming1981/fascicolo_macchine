@@ -12,10 +12,12 @@ import { jwtVerify } from "jose";
  * - VISUALIZZATORE: ogni scrittura /api viene rifiutata, salvo le poche
  *   scritture personali e i messaggi di chat (che le route verificano ancora
  *   col si/no della persona).
- * - DATA_ENTRY: come il visualizzatore, piu' i **documenti A1** degli
- *   interventi. Hanno una rotta loro (`/api/interventi/<id>/a1`) proprio per
- *   questo: qui si apre un path, non si guarda dentro al corpo della
- *   richiesta, quindi una categoria di allegato non si potrebbe distinguere.
+ * - DATA_ENTRY: come il visualizzatore, piu' i **documenti di trasferta**
+ *   degli interventi (A1 e Dichiarazione Stato UE). Hanno una rotta loro
+ *   (`/api/interventi/<id>/a1`) proprio per questo: qui si apre un path, non
+ *   si guarda dentro al corpo della richiesta, quindi una categoria di
+ *   allegato non si potrebbe distinguere. Per la stessa ragione un tipo di
+ *   documento in piu' NON apre un path in piu': viaggia nel campo `kind`.
  * - COLLAUDATORE_ESTERNO: persona di un'altra ditta. Pagine: solo elenco e
  *   fascicolo macchine, profilo e notifiche (il resto rimanda alle macchine).
  *   Scritture: solo la check list di collaudo, piu' quelle personali.
@@ -41,7 +43,7 @@ const VIEWER_WRITES: RegExp[] = [
 
 const DATA_ENTRY_WRITES: RegExp[] = [
   ...VIEWER_WRITES,
-  /^\/api\/interventi\/[^/]+\/a1$/, // documenti A1: caricamento ed eliminazione
+  /^\/api\/interventi\/[^/]+\/a1$/, // documenti di trasferta: caricamento ed eliminazione
 ];
 
 const EXTERNAL_WRITES: RegExp[] = [...PERSONAL, /^\/api\/machines\/[^/]+\/collaudo$/];
@@ -79,7 +81,7 @@ export async function proxy(req: NextRequest) {
 
   if (role === "DATA_ENTRY") {
     if (!isApi || DATA_ENTRY_WRITES.some((re) => re.test(path))) return NextResponse.next();
-    return denied("Profilo data entry: si possono caricare solo i documenti A1.");
+    return denied("Profilo data entry: si possono caricare solo i documenti di trasferta.");
   }
 
   if (role === "COLLAUDATORE_ESTERNO") {

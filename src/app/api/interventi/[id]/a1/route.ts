@@ -3,15 +3,17 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { saveFile } from "@/lib/uploads";
-import { A1_CATEGORY } from "@/lib/domain";
+import { A1_CATEGORY, TRASFERTA_DOC_KINDS, isTrasfertaDoc, trasfertaDocLabel } from "@/lib/domain";
 import { loadInterventoBrief, buildA1UploadedNotices } from "@/lib/interventoNotify";
 import { createNotifications } from "@/lib/notifications";
 import { deliverNotifications } from "@/lib/notifyDeliver";
 import { absoluteUrl } from "@/lib/absoluteUrl";
 
 /**
- * Documenti **A1** di un intervento: i certificati richiesti per la presenza
- * dei nostri tecnici in cantiere, uno per tecnico.
+ * **Documenti di trasferta** di un intervento: quelli che l'ufficio prepara
+ * perché i tecnici possano stare in cantiere — oggi il certificato **A1** e la
+ * **Dichiarazione Stato UE** (`TRASFERTA_DOC_KINDS`), uno per tecnico. Il tipo
+ * arriva nel campo `kind`.
  *
  * Ha una rotta sua, separata dagli altri allegati, per una ragione precisa:
  * chi li carica è un profilo **in sola lettura** (data entry), e `src/proxy.ts`
@@ -19,6 +21,10 @@ import { absoluteUrl } from "@/lib/absoluteUrl";
  * richiesta. Con la rotta generica dei documenti si sarebbe dovuto aprire tutto
  * l'allegato per fidarsi poi del controllo della singola route — esattamente
  * ciò che il proxy esiste per non dover fare.
+ *
+ * Per lo stesso motivo il **path resta `/a1`** anche ora che i tipi sono due:
+ * è la riga del proxy che apre l'unica scrittura di un profilo in sola
+ * lettura, e un tipo di documento in più non è una porta in più.
  *
  * Chi può: chi ha il flag `User.a1Manager` in anagrafica (per **tutti** gli
  * interventi, come il validatore del P.O.S.) e chi gestisce gli interventi.
@@ -33,7 +39,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   if (!(await canHandleA1(user)))
     return NextResponse.json(
-      { error: "Solo chi gestisce i documenti A1 può caricarli." },
+      { error: "Solo chi gestisce i documenti di trasferta può caricarli." },
       { status: 403 }
     );
 
@@ -47,12 +53,25 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const form = await req.formData();
   const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (!files.length) return NextResponse.json({ error: "Nessun file" }, { status: 400 });
-  // Tecnico a cui il documento si riferisce (facoltativo): un A1 è di una
-  // persona, non del cantiere.
+  // Tipo di documento: A1 (il caso storico, quindi il default) o Dichiarazione
+  // Stato UE. Un valore non previsto si rifiuta invece di finire nell'A1.
+  const kind = String(form.get("kind") || A1_CATEGORY).trim();
+  if (!isTrasfertaDoc(kind))
+    return NextResponse.json(
+      {
+        error: `Tipo di documento non valido. Ammessi: ${TRASFERTA_DOC_KINDS.map((k) => k.key).join(", ")}.`,
+      },
+      { status: 400 }
+    );
+  // Tecnico a cui il documento si riferisce (facoltativo): questi documenti
+  // sono di una persona, non del cantiere.
   const userId = String(form.get("userId") || "").trim() || null;
 
+  // "Primo file" si conta per TIPO: la Dichiarazione UE che arriva dopo gli A1
+  // è comunque una novità per chi aspetta, e un avviso solo sul primo in
+  // assoluto l'avrebbe nascosta.
   const before = await prisma.interventoDocument.count({
-    where: { interventoId: id, category: A1_CATEGORY },
+    where: { interventoId: id, category: kind },
   });
 
   const scope = `service/${intervento.code}/documenti`;
@@ -66,7 +85,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         path: saved.path,
         mimeType: f.type || null,
         sizeBytes: saved.size,
-        category: A1_CATEGORY,
+        category: kind,
         source: "UPLOAD",
         userId,
         uploadedById: user.id,
@@ -87,7 +106,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           brief,
           intervento.createdById,
           { id: user.id, name: user.name },
-          created.length
+          created.length,
+          trasfertaDocLabel(kind)
         );
         if (notices.length) {
           const ids = await createNotifications(notices.map((n) => n.notification));
@@ -112,7 +132,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   if (!(await canHandleA1(user)))
     return NextResponse.json(
-      { error: "Solo chi gestisce i documenti A1 può eliminarli." },
+      { error: "Solo chi gestisce i documenti di trasferta può eliminarli." },
       { status: 403 }
     );
 
@@ -121,7 +141,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   if (!docId) return NextResponse.json({ error: "docId mancante" }, { status: 400 });
 
   const doc = await prisma.interventoDocument.findFirst({
-    where: { id: docId, interventoId: id, category: A1_CATEGORY },
+    where: { id: docId, interventoId: id, category: { in: TRASFERTA_DOC_KINDS.map((k) => k.key) } },
     select: { id: true },
   });
   if (!doc) return NextResponse.json({ error: "Documento non trovato" }, { status: 404 });

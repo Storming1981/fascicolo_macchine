@@ -16,7 +16,7 @@ import {
 import ModalPortal from "@/components/ModalPortal";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import PosCard from "@/components/PosCard";
-import A1Card from "@/components/A1Card";
+import DocTrasferta from "@/components/DocTrasferta";
 import TecniciDocs from "@/components/TecniciDocs";
 import {
   CHECKLIST_DEFS,
@@ -33,7 +33,7 @@ import {
   interventoTypeMeta,
   PRIORITY_META,
   POS_CATEGORY,
-  A1_CATEGORY,
+  isTrasfertaDoc,
 } from "@/lib/domain";
 import type { InterventoStatus } from "@prisma/client";
 
@@ -207,7 +207,7 @@ export default function InterventoDetail({
 
   // P.O.S.: finché non è validato l'intervento non si assegna e non si pianifica
   const posDoc = data.documents.find((d) => d.category === POS_CATEGORY) ?? null;
-  const a1Docs = data.documents.filter((d) => d.category === A1_CATEGORY);
+  const trasfertaDocs = data.documents.filter((d) => isTrasfertaDoc(d.category));
   const posOk = data.posValidated;
   const canPlan = canEdit && posOk;
   // Senza P.O.S. validato non si compilano rapportini: quel lavoro non doveva
@@ -979,12 +979,13 @@ export default function InterventoDetail({
       />
 
       {/* Cartella A1: ogni intervento ha la sua, con un incaricato */}
-      <A1Card
+      <DocTrasferta
         interventoId={data.id}
-        docs={a1Docs.map((d) => ({
+        docs={trasfertaDocs.map((d) => ({
           id: d.id,
           name: d.name,
           path: d.path,
+          category: d.category,
           sizeBytes: d.sizeBytes,
           userName: d.userName,
           uploadedByName: d.uploadedByName,
@@ -1005,7 +1006,7 @@ export default function InterventoDetail({
       <DocumentiCard
         interventoId={data.id}
         documents={data.documents.filter(
-          (d) => d.category !== POS_CATEGORY && d.category !== A1_CATEGORY
+          (d) => d.category !== POS_CATEGORY && !isTrasfertaDoc(d.category)
         )}
         canEdit={canEdit && !campo}
         onDone={() => router.refresh()}

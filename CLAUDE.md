@@ -219,7 +219,8 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
     a sessione aperta resta comunque limitato dai permessi del ruolo nuovo
     (letti dal DB), ma il blocco totale scatta al login successivo.
 - **`DATA_ENTRY`** — chi tiene aggiornati i documenti e basta. Oggi: carica i
-  **documenti A1** degli interventi; per tutto il resto è un visualizzatore
+  **documenti di trasferta** degli interventi (A1 e Dichiarazione Stato UE);
+  per tutto il resto è un visualizzatore
   (vede fascicoli, service, knowledge; scrive in chat se glielo si lascia).
   I limiti stanno in `src/proxy.ts` come per il Visualizzatore, con **un solo
   path aperto in più**: `/api/interventi/<id>/a1`. È la ragione per cui gli A1
@@ -1043,27 +1044,37 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   essere a pagamento o in garanzia — quindi il lavoro tecnico va d'ufficio su
   *a pagamento* e lo script **stampa la lista da rivedere a mano**, invece di
   inventare un dato commerciale.
-- **Cartella A1 per intervento** (`A1_CATEGORY = "a1"` in `domain.ts`,
-  `src/components/A1Card.tsx`): ogni intervento ne ha una **di suo**, viola e
-  ben visibile, dove finiscono i documenti A1 richiesti per la presenza dei
-  nostri tecnici in cantiere — uno per tecnico (il file si può targare col
-  tecnico a cui si riferisce, riusando `InterventoDocument.userId`). La card
-  c'è **sempre**, anche vuota: è un elenco da riempire, non un allegato
-  facoltativo. A differenza del P.O.S. **non blocca niente**.
+- **Cartella documenti di trasferta per intervento** (`TRASFERTA_DOC_KINDS` in
+  `domain.ts`, `src/components/DocTrasferta.tsx`): ogni intervento ne ha una
+  **di suo**, viola e ben visibile, con i documenti che l'ufficio prepara
+  perché i tecnici possano stare in cantiere — oggi **Documenti A1**
+  (`category = "a1"`) e **Dichiarazione Stato UE** (`"ue"`), un file per tecnico
+  (si può targare col tecnico a cui si riferisce, riusando
+  `InterventoDocument.userId`). La card c'è **sempre**, anche vuota: è un elenco
+  da riempire, non un allegato facoltativo. A differenza del P.O.S. **non
+  blocca niente**.
+  - **Una card sola, due riquadri**: li carica la stessa persona, nello stesso
+    momento, per le stesse trasferte — due card avrebbero raddoppiato lo spazio
+    per lo stesso gesto. Aggiungere un terzo tipo si fa **solo** in
+    `TRASFERTA_DOC_KINDS`.
   - **Chi li carica si decide in anagrafica, non per intervento**: flag
-    **`User.a1Manager`** (Persone → *Gestisce i documenti A1*), una persona per
-    **tutti** gli interventi — oggi **Jasmin Ladonna Antwi Adjei**, con ruolo
-    `DATA_ENTRY`. È lo stesso schema del validatore P.O.S. (Fausto Zanotti):
-    un incarico per singolo intervento sarebbe stato un secondo modo di dire la
-    stessa cosa, da ricordarsi di compilare ogni volta.
-  - **Rotta dedicata** `POST|DELETE /api/interventi/[id]/a1`, separata dagli
-    allegati generici: chi carica è un profilo in sola lettura e `src/proxy.ts`
-    apre le scritture per path. Vi accede chi ha `a1Manager` o `intervento.edit`.
-  - Notifiche: `A1_DA_CARICARE` a chi gestisce gli A1 **alla creazione
-    dell'intervento** (insieme a quella del P.O.S.: sono le due cose che
-    servono subito), `A1_CARICATI` **solo al primo file** a chi ha aperto
-    l'intervento — un avviso per ogni certificato di una cartella che si riempie
-    un tecnico alla volta sarebbe rumore.
+    **`User.a1Manager`** (Persone → *Gestisce i documenti di trasferta*), una
+    persona per **tutti** gli interventi — oggi **Jasmin Ladonna Antwi Adjei**,
+    con ruolo `DATA_ENTRY`. È lo stesso schema del validatore P.O.S. (Fausto
+    Zanotti): un incarico per singolo intervento sarebbe stato un secondo modo
+    di dire la stessa cosa, da ricordarsi di compilare ogni volta.
+  - **Rotta dedicata** `POST|DELETE /api/interventi/[id]/a1` (il tipo nel campo
+    `kind`), separata dagli allegati generici: chi carica è un profilo in sola
+    lettura e `src/proxy.ts` apre le scritture **per path**. Per la stessa
+    ragione il path **resta `/a1`** anche con due tipi: è la riga di proxy che
+    apre l'unica scrittura di quel profilo, e un tipo di documento in più non
+    deve diventare una porta in più. Vi accede chi ha `a1Manager` o
+    `intervento.edit`.
+  - Notifiche: `A1_DA_CARICARE` a chi li gestisce **alla creazione
+    dell'intervento** (insieme a quella del P.O.S.: sono le cose che servono
+    subito), `A1_CARICATI` al **primo file di ogni tipo** a chi ha aperto
+    l'intervento — per tipo e non in assoluto, altrimenti la Dichiarazione UE
+    caricata dopo gli A1 non avrebbe avvisato nessuno.
 - **P.O.S. — Piano Operativo di Sicurezza (vincolo di pianificazione)**:
   ogni intervento nasce nello stato **DOCUMENTAZIONE** ("Documentazione da
   validare"). Finché il P.O.S. non è **caricato** (file Word/PDF compilato a

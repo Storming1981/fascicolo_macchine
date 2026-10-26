@@ -58,15 +58,44 @@ export const POS_CATEGORY = "pos";
 export const POS_LABEL = "P.O.S. — Piano Operativo di Sicurezza";
 
 /**
- * Cartella **A1**: ogni intervento ne ha una di suo. Ci finiscono i certificati
- * A1 richiesti per la presenza dei nostri tecnici in cantiere — uno per
- * tecnico. A differenza del P.O.S. non blocca niente: è una cartella da
- * riempire, con un incaricato preciso a cui chiederne conto.
+ * **Documenti di trasferta**: la cartella che ogni intervento ha di suo, con i
+ * documenti che l'ufficio prepara perché i nostri tecnici possano stare in
+ * cantiere — un file per tecnico. Oggi sono due tipi, il **certificato A1** e
+ * la **Dichiarazione Stato UE**; stanno nella stessa cartella perché li carica
+ * la stessa persona nello stesso momento, per le stesse trasferte.
+ *
+ * A differenza del P.O.S. non bloccano niente: è un elenco da riempire.
  */
 export const A1_CATEGORY = "a1";
-export const A1_LABEL = "Documenti A1";
-/** Colore della cartella A1: deve saltare all'occhio fra le altre. */
+export const UE_CATEGORY = "ue";
+
+export type TrasfertaDocKind = { key: string; label: string; descr: string };
+
+/** I tipi di documento della cartella. Aggiungerne uno si fa solo qui. */
+export const TRASFERTA_DOC_KINDS: TrasfertaDocKind[] = [
+  {
+    key: A1_CATEGORY,
+    label: "Documenti A1",
+    descr: "Certificato A1 di ogni tecnico che va in cantiere.",
+  },
+  {
+    key: UE_CATEGORY,
+    label: "Dichiarazione Stato UE",
+    descr: "Dichiarazione per lo Stato UE di destinazione, un file per tecnico.",
+  },
+];
+
+export const TRASFERTA_LABEL = "Documenti A1 e Dichiarazione Stato UE";
+/** Colore della cartella: deve saltare all'occhio fra le altre. */
 export const A1_COLOR = "#7c3aed";
+
+export function isTrasfertaDoc(category: string | null | undefined): boolean {
+  return TRASFERTA_DOC_KINDS.some((k) => k.key === category);
+}
+
+export function trasfertaDocLabel(category: string): string {
+  return TRASFERTA_DOC_KINDS.find((k) => k.key === category)?.label ?? category;
+}
 
 /** Stati che presuppongono un P.O.S. validato (tutti tranne il primo step). */
 export function statusRequiresPos(s: InterventoStatus): boolean {

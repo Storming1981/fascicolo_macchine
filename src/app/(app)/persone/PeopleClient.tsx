@@ -306,8 +306,8 @@ export default function PeopleClient({
                         </span>
                       )}
                       {u.a1Manager && (
-                        <span className="prio-chip" style={{ background: "#7c3aed22", color: "#6d28d9" }} title="Gestisce i documenti A1 degli interventi">
-                          <Icon name="doc" size={11} /> Documenti A1
+                        <span className="prio-chip" style={{ background: "#7c3aed22", color: "#6d28d9" }} title="Carica i documenti di trasferta degli interventi: A1 e Dichiarazione Stato UE">
+                          <Icon name="doc" size={11} /> Doc. trasferta
                         </span>
                       )}
                     </div>
@@ -670,8 +670,8 @@ function EditEmployeeModal({ user, onClose }: { user: U; onClose: () => void }) 
                   checked={a1Manager}
                   onChange={(ev) => setA1Manager(ev.target.checked)}
                 />
-                <span title="Carica i documenti A1 nella cartella di ogni intervento">
-                  Gestisce i documenti A1
+                <span title="Carica A1 e Dichiarazione Stato UE nella cartella di ogni intervento">
+                  Gestisce i documenti di trasferta (A1, Dich. Stato UE)
                 </span>
               </label>
             </div>

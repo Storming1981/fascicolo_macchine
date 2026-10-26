@@ -425,11 +425,12 @@ export async function buildA1ToUploadNotices(
   return to.map((u) =>
     notice("A1_DA_CARICARE", {
       userId: u.id,
-      title: `Documenti A1 da caricare: ${brief.code}`,
+      title: `Documenti di trasferta da caricare: ${brief.code}`,
       intro:
         `${actor.name} ha creato l'intervento ${brief.code} — ${brief.title}. ` +
-        `Servono i documenti A1 per la presenza dei nostri tecnici in cantiere: ` +
-        `si caricano nella cartella A1 della scheda intervento.`,
+        `Servono i documenti per la presenza dei nostri tecnici in cantiere ` +
+        `(A1 e Dichiarazione Stato UE): si caricano nella cartella documenti ` +
+        `della scheda intervento.`,
       brief,
       tone: "warn",
       icon: "doc",
@@ -447,7 +448,8 @@ export async function buildA1UploadedNotices(
   brief: InterventoBrief,
   creatorId: string | null,
   actor: { id: string; name: string },
-  quanti: number
+  quanti: number,
+  tipo = "A1"
 ): Promise<Notice[]> {
   if (!creatorId || creatorId === actor.id) return [];
   const u = await prisma.user.findUnique({
@@ -458,10 +460,10 @@ export async function buildA1UploadedNotices(
   return [
     notice("A1_CARICATI", {
       userId: u.id,
-      title: `Documenti A1 caricati: ${brief.code}`,
+      title: `${tipo}: documenti caricati su ${brief.code}`,
       intro:
         `${actor.name} ha caricato ${quanti === 1 ? "il primo documento" : `${quanti} documenti`} ` +
-        `A1 nell'intervento ${brief.code} — ${brief.title}.`,
+        `(${tipo}) nell'intervento ${brief.code} — ${brief.title}.`,
       brief,
       tone: "ok",
       icon: "check",
