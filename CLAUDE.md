@@ -919,15 +919,34 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     non lo scoprirebbe nessuno.
   - Lo spazio consumato è quello del Google dell'utente, e le foto copiate
     **restano sue**: scollegare l'account dall'app non le cancella.
-  - **Non basta il consenso: l'API va accesa nel progetto Google Cloud.**
-    Misurato il 23-10-2026 con permesso concesso e token valido: `POST
-    /v1/uploads` risponde **200** (i byte salgono), ma `POST /v1/albums` e
-    `mediaItems:batchCreate` rispondono **403 con una pagina HTML**, quella del
-    front-end di Google, non un errore JSON dell'API — e Calendar, dalla stessa
-    macchina e con lo stesso token, risponde 200. Quando il 403 è HTML il
-    problema non è lo scope: l'API non è abilitata per quel progetto. Le 22
-    foto in attesa restano con `gphotoError` e ripartono da sé con
-    `npm run gphoto:retry` appena l'API viene accesa.
+  - **La VPS usciva in IPv6 e Google Foto la rifiutava** (`src/lib/ipv4.ts`).
+    Tre giorni di diagnosi sbagliata, vale la pena ricordarla. Sintomo: con
+    permesso concesso e token valido, `POST /v1/uploads` rispondeva **200** (i
+    byte salivano) mentre `/v1/albums` e `mediaItems:batchCreate` rispondevano
+    **403 con una pagina HTML** — quella del front-end di Google, non un errore
+    JSON dell'API — e Gmail e Calendar, dalla stessa macchina e con lo stesso
+    token, rispondevano regolarmente. Sembrava l'API non abilitata nel progetto
+    Cloud, e non lo era.
+    La prova che chiude la questione si fa **senza token**: un'API raggiungibile
+    risponde `401 UNAUTHENTICATED` in JSON, non un 403 in HTML. Dalla VPS
+    arrivava comunque HTML; dalla rete dell'ufficio, JSON. Poi, sulla stessa
+    VPS:
+
+    ```
+    curl -4 https://photoslibrary.googleapis.com/v1/albums  → 401 JSON
+    curl -6 https://photoslibrary.googleapis.com/v1/albums  → 403 HTML
+    ```
+
+    Node dalla 18 preferisce l'IPv6, quindi usciva sempre dalla parte
+    sbagliata. L'indirizzo IPv6 della VPS sta in un intervallo da datacenter
+    che Google non accetta su Photos (Gmail e Calendar invece passano, ed è
+    questo che faceva sembrare il guasto circoscritto alle foto).
+    **Regola generale: un 403 in HTML non viene dal servizio, viene da prima** —
+    non è mai uno scope e quasi mai un'API spenta. I moduli che parlano con
+    Google Foto impostano `dns.setDefaultResultOrder("ipv4first")` di processo,
+    così vale anche per `gphoto:retry`, che non passa da `instrumentation.ts`.
+    Verifica dopo la correzione: 22 foto arretrate copiate su 22, 5 album
+    creati.
 - **Una foto si può pescare dal proprio Google Foto** (`src/lib/googlePicker.ts`,
   `src/components/GooglePhotosPick.tsx`): in officina si scatta col telefono e
   lo scatto è già nel Google Foto di chi l'ha fatto — rifarlo dal computer non
@@ -963,10 +982,11 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   - Il consenso torna sul **fascicolo** da cui si è partiti
     (`?return=m:M-2026-0013`, `src/lib/googleReturn.ts`): l'elenco delle
     destinazioni resta chiuso perché quel valore finisce in una redirect.
-  - **Serve la *Photos Picker API* abilitata** nel progetto Google Cloud, come
-    la Library API per il backup: senza, Google risponde con la pagina HTML di
-    errore 403 del front-end (non un errore JSON dell'API) e nessuna chiamata
-    arriva al servizio. Diagnosi in *Backup delle foto su Google Foto*.
+  - Nel progetto Google Cloud servono abilitate **due API distinte**: *Photos
+    Library API* per il backup e *Photos Picker API* per la scelta. E vale la
+    trappola dell'IPv6 descritta in *Backup delle foto su Google Foto*: un 403
+    in HTML non è un permesso mancante. Un permesso mancante risponde in JSON,
+    `ACCESS_TOKEN_SCOPE_INSUFFICIENT`.
 - **Profilo utente** (`/profilo`, clic su avatar o nome in topbar/sidebar):
   foto (ridotta a 256 px), telefono, **casella Gmail personale** (Accedi con
   Google → `/api/google/auth?target=me&return=profilo`, la callback torna al
