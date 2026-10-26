@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { getUserAccessToken, hasPhotoScope } from "./google";
 import { readUploadBytes } from "./uploads";
+import { preferIpv4 } from "./ipv4";
 
 /**
  * Backup delle foto su **Google Foto dell'account personale di chi le scatta**.
@@ -19,6 +20,9 @@ import { readUploadBytes } from "./uploads";
  * ma **non può leggere** la libreria dell'utente. È opt-in: `User.photoBackup`
  * più il consenso a quel permesso (gli altri scope restano quelli della posta).
  */
+
+// La VPS esce in IPv6 e Google Foto la rifiuta: vedi ipv4.ts
+preferIpv4();
 
 const UPLOAD_URL = "https://photoslibrary.googleapis.com/v1/uploads";
 const BATCH_URL = "https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate";

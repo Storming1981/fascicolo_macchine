@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "./db";
 import { getUserAccessToken, hasPickerScope } from "./google";
 import { saveBytes } from "./uploads";
+import { preferIpv4 } from "./ipv4";
 import crypto from "crypto";
 
 /**
@@ -26,6 +27,9 @@ import crypto from "crypto";
  * I `baseUrl` scadono in **60 minuti** e vanno chiamati col token: per questo
  * lo scarico avviene subito, nella stessa richiesta che importa.
  */
+
+// La VPS esce in IPv6 e Google Foto la rifiuta: vedi ipv4.ts
+preferIpv4();
 
 const PICKER = "https://photospicker.googleapis.com/v1";
 /** Tetto per scatto: una foto di cantiere sta sotto, un video no. */
