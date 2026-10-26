@@ -43,6 +43,17 @@ export const GOOGLE_SCOPES = [
  */
 export const GPHOTO_SCOPE = "https://www.googleapis.com/auth/photoslibrary.appendonly";
 
+/**
+ * **Pescare** una foto dal Google Foto dell'utente e portarla nel fascicolo.
+ *
+ * È un permesso diverso da `appendonly`, che sa solo scrivere, e Google non
+ * consente più a un'app di leggere la libreria per conto suo: dal 2025 si passa
+ * per la **Picker API**, dove è l'utente a scegliere gli scatti dentro Google
+ * Foto e l'app riceve **solo quelli**. Per questo è il permesso giusto anche
+ * dal lato della riservatezza: la piattaforma non vede mai il resto.
+ */
+export const GPICKER_SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
+
 /** Bersaglio del collegamento: casella personale dell'utente o aziendale. */
 export type GoogleTarget = "me" | "company";
 
@@ -290,6 +301,12 @@ export async function getUserGoogleInfo(
 export async function hasPhotoScope(userId: string): Promise<boolean> {
   const t = await prisma.googleToken.findUnique({ where: { userId }, select: { scope: true } });
   return (t?.scope ?? "").includes(GPHOTO_SCOPE);
+}
+
+/** L'utente ha concesso il permesso di scegliere foto dal suo Google Foto? */
+export async function hasPickerScope(userId: string): Promise<boolean> {
+  const t = await prisma.googleToken.findUnique({ where: { userId }, select: { scope: true } });
+  return (t?.scope ?? "").includes(GPICKER_SCOPE);
 }
 
 /**

@@ -919,6 +919,54 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     non lo scoprirebbe nessuno.
   - Lo spazio consumato è quello del Google dell'utente, e le foto copiate
     **restano sue**: scollegare l'account dall'app non le cancella.
+  - **Non basta il consenso: l'API va accesa nel progetto Google Cloud.**
+    Misurato il 23-10-2026 con permesso concesso e token valido: `POST
+    /v1/uploads` risponde **200** (i byte salgono), ma `POST /v1/albums` e
+    `mediaItems:batchCreate` rispondono **403 con una pagina HTML**, quella del
+    front-end di Google, non un errore JSON dell'API — e Calendar, dalla stessa
+    macchina e con lo stesso token, risponde 200. Quando il 403 è HTML il
+    problema non è lo scope: l'API non è abilitata per quel progetto. Le 22
+    foto in attesa restano con `gphotoError` e ripartono da sé con
+    `npm run gphoto:retry` appena l'API viene accesa.
+- **Una foto si può pescare dal proprio Google Foto** (`src/lib/googlePicker.ts`,
+  `src/components/GooglePhotosPick.tsx`): in officina si scatta col telefono e
+  lo scatto è già nel Google Foto di chi l'ha fatto — rifarlo dal computer non
+  si può e passarselo in chat per ricaricarlo è il giro lungo. Il pulsante
+  **Da Google Foto** sta nella barra della scheda *Foto* (accanto a *Scatta
+  foto* e *Dalla libreria*) e dentro il riquadro *Scegli una foto* degli slot
+  matricola, dove la foto arriva **già agganciata allo slot**.
+  - **È un'altra API e un altro permesso** rispetto al backup: `appendonly` sa
+    solo scrivere, e dal 2025 Google non lascia più a un'app leggere la
+    libreria di una persona. Si passa dalla **Picker API**
+    (`photospicker.googleapis.com`, scope
+    `photospicker.mediaitems.readonly`): l'app apre una *sessione*, l'utente
+    sceglie dentro Google Foto e l'app riceve **solo gli scatti scelti**. È
+    anche la ragione per cui va bene dal lato riservatezza: il resto della
+    libreria non lo vede mai.
+  - **Finestra nuova e attesa, non per scelta nostra**: il `pickerUri` non si
+    può aprire in un iframe, quindi si apre una finestra e si controlla la
+    sessione ogni `pollInterval` finché `mediaItemsSet` non diventa vero.
+    `window.open` sta **dentro il clic** (aprirla dopo la risposta del server
+    la farebbe bloccare come popup) e resta il pulsante *Ho finito* per chi
+    chiude la finestra a modo suo.
+  - **La foto si copia, non si collega**: i `baseUrl` di Google scadono in 60
+    minuti e l'utente può cancellare o revocare quando vuole. I byte si
+    scaricano subito (`=d`, con l'Authorization: quei link non sono pubblici) e
+    finiscono su disco come un caricamento qualunque. La riga nasce con
+    `gphotoId = "picked:<id>"`, che **impedisce al backup di rispedirla** su
+    Google creando un doppione; il prefisso dice che è l'id dello scatto
+    *scelto*, non di un media creato da noi.
+  - API: `POST|GET /api/google/picker` (apre la sessione / chiede se ha finito)
+    · `POST /api/machines/[id]/photos/google` `{sessionId, category,
+    componentItemId?}`. Il token dell'utente **non arriva mai al browser**: il
+    client vede solo il `pickerUri`.
+  - Il consenso torna sul **fascicolo** da cui si è partiti
+    (`?return=m:M-2026-0013`, `src/lib/googleReturn.ts`): l'elenco delle
+    destinazioni resta chiuso perché quel valore finisce in una redirect.
+  - **Serve la *Photos Picker API* abilitata** nel progetto Google Cloud, come
+    la Library API per il backup: senza, Google risponde con la pagina HTML di
+    errore 403 del front-end (non un errore JSON dell'API) e nessuna chiamata
+    arriva al servizio. Diagnosi in *Backup delle foto su Google Foto*.
 - **Profilo utente** (`/profilo`, clic su avatar o nome in topbar/sidebar):
   foto (ridotta a 256 px), telefono, **casella Gmail personale** (Accedi con
   Google → `/api/google/auth?target=me&return=profilo`, la callback torna al

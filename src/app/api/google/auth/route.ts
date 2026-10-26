@@ -3,8 +3,16 @@ import { SignJWT } from "jose";
 import crypto from "crypto";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
-import { isGoogleConfigured, buildConsentUrl, GOOGLE_SCOPES, GPHOTO_SCOPE, type GoogleTarget } from "@/lib/google";
+import {
+  isGoogleConfigured,
+  buildConsentUrl,
+  GOOGLE_SCOPES,
+  GPHOTO_SCOPE,
+  GPICKER_SCOPE,
+  type GoogleTarget,
+} from "@/lib/google";
 import { absoluteUrl } from "@/lib/absoluteUrl";
+import { returnTarget } from "@/lib/googleReturn";
 
 const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret-change-me");
 
@@ -20,8 +28,10 @@ export async function GET(req: Request) {
 
   const sp = new URL(req.url).searchParams;
   const target: GoogleTarget = sp.get("target") === "company" ? "company" : "me";
-  // pagina a cui tornare dopo il consenso: il profilo o le impostazioni
-  const ret = sp.get("return") === "profilo" ? "profilo" : "impostazioni";
+  // Pagina a cui tornare dopo il consenso. Elenco chiuso (piu' il fascicolo,
+  // col solo codice macchina): il valore finisce in una redirect, e accettare
+  // un path qualunque vorrebbe dire farsi spedire gli utenti dove capita.
+  const ret = returnTarget(sp.get("return"));
   if (target === "company" && !(await userCan(user.role, "settings.manage")))
     return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
 
@@ -43,9 +53,11 @@ export async function GET(req: Request) {
     .setExpirationTime("600s")
     .sign(SECRET);
 
-  // `?photos=1`: chiede anche il permesso di caricare su Google Foto. Non e'
-  // nel giro normale perche' chi collega la casella per spedire non deve
-  // vedersi chiedere l'accesso alle proprie foto.
-  const scopes = sp.get("photos") === "1" ? `${GOOGLE_SCOPES} ${GPHOTO_SCOPE}` : GOOGLE_SCOPES;
-  return NextResponse.redirect(buildConsentUrl(state, scopes));
+  // `?photos=1` (copia su Google Foto) e `?picker=1` (pesca dal proprio Google
+  // Foto) chiedono permessi in piu', uno per volta e solo a chi li attiva: chi
+  // collega la casella per spedire non deve vedersi chiedere le proprie foto.
+  const extra = [sp.get("photos") === "1" ? GPHOTO_SCOPE : "", sp.get("picker") === "1" ? GPICKER_SCOPE : ""]
+    .filter(Boolean)
+    .join(" ");
+  return NextResponse.redirect(buildConsentUrl(state, extra ? `${GOOGLE_SCOPES} ${extra}` : GOOGLE_SCOPES));
 }

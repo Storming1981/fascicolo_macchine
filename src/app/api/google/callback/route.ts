@@ -4,13 +4,13 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { isGoogleConfigured, exchangeCodeAndSave, type GoogleTarget } from "@/lib/google";
 import { absoluteUrl } from "@/lib/absoluteUrl";
+import { returnPage, returnTarget } from "@/lib/googleReturn";
 
 const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret-change-me");
 
 const back = (req: Request, params: Record<string, string>, ret = "impostazioni") => {
   const qs = new URLSearchParams(params).toString();
-  const page = ret === "profilo" ? "profilo" : "impostazioni";
-  return NextResponse.redirect(absoluteUrl(req, `/${page}?${qs}`));
+  return NextResponse.redirect(absoluteUrl(req, `/${returnPage(ret)}?${qs}`));
 };
 
 /**
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     const { payload } = await jwtVerify(state, SECRET);
     if (payload.uid !== user.id) throw new Error("state non corrispondente");
     target = payload.target === "company" ? "company" : "me";
-    ret = payload.ret === "profilo" ? "profilo" : "impostazioni";
+    ret = returnTarget(typeof payload.ret === "string" ? payload.ret : null);
   } catch {
     return back(req, { google: "err", msg: "Sessione di collegamento scaduta, riprova" });
   }

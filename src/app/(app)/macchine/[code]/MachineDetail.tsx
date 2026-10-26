@@ -23,6 +23,7 @@ import {
 } from "@/lib/machineProgress";
 import { blockKindOf, hasAllestimentoSheets } from "@/lib/allestimento";
 import AllestimentoSheets from "@/components/AllestimentoSheets";
+import GooglePhotosPick from "@/components/GooglePhotosPick";
 import HoursAnalysisCard from "@/components/HoursAnalysisCard";
 import { MILESTONES, milestoneDef, SOURCE_LABEL, isAutoSource } from "@/lib/milestones";
 import { checklistFor, type ChecklistItem } from "@/lib/checklist";
@@ -1390,8 +1391,15 @@ function TabComponenti({
         <PhotoPickerModal
           photos={machine.photos}
           slot={pickFor}
+          machineId={machine.id}
+          machineCode={machine.code}
           onClose={() => setPickFor(null)}
           onPick={(photoId) => linkPhoto(photoId, pickFor.id)}
+          onDone={() => {
+            setPickFor(null);
+            onDone();
+          }}
+          notify={notify}
         />
       )}
 
@@ -2201,6 +2209,13 @@ function TabFoto({
             <button className="btn-ghost-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
               <Icon name="image" size={14} /> Dalla libreria
             </button>
+            <GooglePhotosPick
+              machineId={machine.id}
+              machineCode={machine.code}
+              category={current.id}
+              onDone={onDone}
+              notify={notify}
+            />
             <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => upload(e.target.files)} />
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
           </div>
@@ -4125,16 +4140,30 @@ function ExternalSignerPicker({
  * foto giusta quasi sempre c'è già e riscattarla significherebbe averla due
  * volte. Collegandola **si sposta** nella cartella dello slot.
  */
+/**
+ * Da dove arriva la foto di uno slot: dalle **cartelle del fascicolo** (quasi
+ * sempre: in officina si scatta prima e si compila dopo) oppure dal **Google
+ * Foto di chi sta compilando**, perché lo scatto fatto col telefono è già lì e
+ * ricaricarlo a mano vorrebbe dire passarselo via chat.
+ */
 function PhotoPickerModal({
   photos,
   slot,
+  machineId,
+  machineCode,
   onClose,
   onPick,
+  onDone,
+  notify,
 }: {
   photos: PhotoItem[];
   slot: { id: string; title: string };
+  machineId: string;
+  machineCode: string;
   onClose: () => void;
   onPick: (photoId: string) => void;
+  onDone: () => void;
+  notify: (m: string, k?: "ok" | "err") => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   // le foto gia' su questo slot non si ri-collegano
@@ -4145,7 +4174,7 @@ function PhotoPickerModal({
       <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
         <header className="modal-header">
           <div>
-            <h2>Scegli una foto già caricata</h2>
+            <h2>Scegli una foto</h2>
             <div className="muted small">{slot.title}</div>
           </div>
           <button className="icon-btn" onClick={onClose}>
@@ -4153,6 +4182,22 @@ function PhotoPickerModal({
           </button>
         </header>
         <div className="modal-body">
+          <div className="pick-sources">
+            <span className="muted small">
+              Dal fascicolo, oppure direttamente dal tuo Google Foto: la foto entra nel fascicolo e resta
+              anche se la togli da Google.
+            </span>
+            <GooglePhotosPick
+              machineId={machineId}
+              machineCode={machineCode}
+              componentItemId={slot.id}
+              category="produzione"
+              label="Scegli da Google Foto"
+              className="btn-primary-sm"
+              onDone={onDone}
+              notify={notify}
+            />
+          </div>
           {list.length === 0 ? (
             <p className="muted">Nel fascicolo non ci sono altre foto da collegare.</p>
           ) : (

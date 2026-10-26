@@ -304,6 +304,10 @@ img.user-avatar.small { object-fit: cover; }
 .ctype-badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 650; letter-spacing: .02em; white-space: nowrap; }
 /* Scelta di una foto gia' caricata da collegare a uno slot componente */
 .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+/* Sorgenti di una foto: cartelle del fascicolo o Google Foto dell'utente */
+.pick-sources { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-3); }
+.gphoto-wait { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pick-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 7px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; text-align: left; font: inherit; }
 .pick-card:hover:not(:disabled) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .pick-card:disabled { opacity: .55; cursor: default; }
