@@ -198,6 +198,28 @@ export const COMPONENT_GROUPS: ComponentGroup[] = [
     excel: { brandCol: "AS", serialCols: ["AT", "AU"] },
   },
   {
+    // Container elettrico: le ventole di raffreddamento e i loro motori sono
+    // due forniture diverse (spesso due marche), quindi due gruppi e non uno
+    // con quattro slot: altrimenti non si saprebbe quale matricola e' di che
+    // cosa. Due slot ciascuno; se un container ne monta di piu',
+    // `ensureSheetSlots` sa aggiungerli in coda senza toccare i dati gia'
+    // scritti.
+    id: "fans",
+    label: "Ventole",
+    en: "FANS",
+    icon: "fan",
+    slots: ["Ventola #1", "Ventola #2"],
+    excel: { serialCols: [] },
+  },
+  {
+    id: "fan_motors",
+    label: "Motori ventole",
+    en: "FAN MOTORS",
+    icon: "fan",
+    slots: ["Motore ventola #1", "Motore ventola #2"],
+    excel: { serialCols: [] },
+  },
+  {
     id: "heater",
     label: "Scaldiglia",
     en: "HEATER",

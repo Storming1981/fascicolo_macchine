@@ -309,6 +309,8 @@ export const SHEET_CONTAINER: SheetDef = {
         { key: "nr_radiatori", label: "Nr. Radiatori", free: true },
         { key: "radiatori", label: "Radiatori", bind: { group: "dissipators", field: "brand" }, serials: "dissipators", suggest: ["SESINO"] },
         { key: "blocco_radiatori", label: "Blocco radiatori", bind: { group: "radiator_block", field: "brand" }, serials: "radiator_block" },
+        { key: "ventole", label: "Ventole", bind: { group: "fans", field: "brand" }, serials: "fans", when: isElectric },
+        { key: "motori_ventole", label: "Motori ventole", bind: { group: "fan_motors", field: "brand" }, serials: "fan_motors", when: isElectric },
         { key: "scaldiglia", label: "Scaldiglia", bind: { group: "heater", field: "brand" }, serials: "heater" },
         { key: "installazione_radiatori", label: "Tipo installazione Radiatori", suggest: ["A TETTO", "LATERALE"] },
         { key: "radiatore_marino", label: "Radiatore modello marino", input: "yesno" },

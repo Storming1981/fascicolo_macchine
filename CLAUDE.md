@@ -792,6 +792,13 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     elenco con voci aggiungibili come le altre.
   - **Scaldiglia** (gruppo `heater`): fornitore + matricola con foto, come gli
     altri componenti del container.
+  - **Ventole e motori ventole** (gruppi `fans` / `fan_motors`), **solo sul
+    container elettrico** (`when: isElectric`): fornitore + matricole con foto.
+    Sono due gruppi e non uno da quattro slot perché ventola e motore sono due
+    forniture diverse, spesso di marca diversa: in un gruppo solo non si
+    saprebbe quale matricola è di che cosa. Due slot ciascuno; se un container
+    ne monta di più, `ensureSheetSlots` li aggiunge in coda senza toccare
+    quello che è già scritto.
   - Nuovi gruppi componente con matricola sul container: **Blocchi pompe**
     (`pump_blocks`, due slot LINDE/MAGNUM), **Valvola regolazione velocità**
     (`speed_valve`), **Blocco radiatori** (`radiator_block`) e **Pompa di
