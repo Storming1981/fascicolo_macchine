@@ -26,6 +26,7 @@ export default function GooglePhotosPick({
   className = "btn-ghost-sm",
   title,
   onDone,
+  onImported,
   notify,
 }: {
   machineId: string;
@@ -40,6 +41,8 @@ export default function GooglePhotosPick({
   className?: string;
   title?: string;
   onDone: () => void;
+  /** Path delle foto appena importate: chi le aggancia a uno slot ci legge la matricola. */
+  onImported?: (paths: string[]) => void | Promise<void>;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
   const [phase, setPhase] = useState<"idle" | "open" | "waiting" | "importing">("idle");
@@ -115,6 +118,7 @@ export default function GooglePhotosPick({
     session.current = null;
     if (!res.ok) return notify(d.error || "Importazione non riuscita", "err");
     onDone();
+    if (onImported && Array.isArray(d.paths) && d.paths.length) await onImported(d.paths);
     notify(
       `${d.count} ${d.count === 1 ? "foto importata" : "foto importate"} da Google Foto` +
         (d.skipped?.length ? ` · ${d.skipped.length} saltate` : "")
@@ -128,7 +132,8 @@ export default function GooglePhotosPick({
         href={`/api/google/auth?target=me&picker=1&return=m:${encodeURIComponent(machineCode)}`}
         title="Serve il tuo permesso: scegli tu quali foto vede la piattaforma"
       >
-        <Icon name="upload" size={14} /> Autorizza Google Foto
+        <Icon name="upload" size={14} />
+        {label ? " Autorizza Google Foto" : ""}
       </a>
     );
 
@@ -154,8 +159,8 @@ export default function GooglePhotosPick({
       onClick={start}
       title={title ?? "Scegli una foto dal tuo account Google Foto"}
     >
-      <Icon name={icon} size={14} />{" "}
-      {phase === "open" ? "Apro Google Foto…" : phase === "importing" ? "Importo…" : label}
+      <Icon name={icon} size={14} />
+      {label && <> {phase === "open" ? "Apro Google Foto…" : phase === "importing" ? "Importo…" : label}</>}
     </button>
   );
 }

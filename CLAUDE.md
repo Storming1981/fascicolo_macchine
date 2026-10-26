@@ -951,9 +951,15 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   `src/components/GooglePhotosPick.tsx`): in officina si scatta col telefono e
   lo scatto è già nel Google Foto di chi l'ha fatto — rifarlo dal computer non
   si può e passarselo in chat per ricaricarlo è il giro lungo. Il pulsante
-  **Da Google Foto** sta nella barra della scheda *Foto* (accanto a *Scatta
-  foto* e *Dalla libreria*) e dentro il riquadro *Scegli una foto* degli slot
-  matricola, dove la foto arriva **già agganciata allo slot**.
+  **Da Google Foto** sta in tre punti: la barra della scheda *Foto* (accanto a
+  *Scatta foto* e *Dalla libreria*, **dentro una cartella**: sull'elenco delle
+  cartelle non c'è nessun caricamento), il riquadro *Scegli una foto* degli
+  slot, e l'**icona nuvola nella cella della matricola**. In tutti e tre la
+  foto arriva già agganciata allo slot; dalla cella della matricola, in più,
+  **l'OCR parte da solo** sulla foto appena importata (`onImported` →
+  `readFromPath`, la stessa rilettura del pulsante ↻). Senza, la foto arrivava
+  sullo slot e il numero restava da battere a mano — cioè il lavoro che l'OCR
+  toglie.
   - **È un'altra API e un altro permesso** rispetto al backup: `appendonly` sa
     solo scrivere, e dal 2025 Google non lascia più a un'app leggere la
     libreria di una persona. Si passa dalla **Picker API**

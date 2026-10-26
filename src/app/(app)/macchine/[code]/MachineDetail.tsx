@@ -1414,6 +1414,7 @@ function TabComponenti({
           renderSerial={(it, groupId) => (
             <SlotSerialCell
               machineId={machine.id}
+              machineCode={machine.code}
               item={it}
               lotLabel={lotLabel(groupId)}
               photoPath={photoByItem.get(it.id)?.path}
@@ -1488,6 +1489,7 @@ function TabComponenti({
                             <td>
                               <SlotSerialCell
                                 machineId={machine.id}
+                                machineCode={machine.code}
                                 item={it}
                                 lotLabel={g.lot?.label}
                                 photoPath={photoByItem.get(it.id)?.path}
@@ -1579,7 +1581,14 @@ function TabComponenti({
                           <tr key={it.id}>
                             <td>{it.label}</td>
                             <td>
-                              <SlotSerialCell machineId={machine.id} item={it} canEdit={!!canEdit} onDone={onDone} notify={notify} />
+                              <SlotSerialCell
+                                machineId={machine.id}
+                                machineCode={machine.code}
+                                item={it}
+                                canEdit={!!canEdit}
+                                onDone={onDone}
+                                notify={notify}
+                              />
                             </td>
                             <td>
                               {photoCell(it.id, `${c.label || "Componente"} — ${it.label}`)}
@@ -1732,6 +1741,7 @@ const pendingLots = new Map<string, string>();
 
 function SlotSerialCell({
   machineId,
+  machineCode,
   item,
   lotLabel: lotName,
   photoPath,
@@ -1740,6 +1750,8 @@ function SlotSerialCell({
   notify,
 }: {
   machineId: string;
+  /** Per tornare su questo fascicolo dopo il consenso Google. */
+  machineCode: string;
   item: Item;
   /** Se il componente porta anche un lotto (es. blocchi motore), la sua etichetta. */
   lotLabel?: string;
@@ -1838,6 +1850,27 @@ function SlotSerialCell({
     }
   }
 
+  /**
+   * Legge la matricola da una foto appena importata da Google Foto. È la
+   * rilettura applicata al path che l'importazione restituisce: senza, la foto
+   * arriverebbe sullo slot e il numero resterebbe da battere a mano, che è
+   * esattamente il lavoro che l'OCR toglie.
+   */
+  async function readFromPath(path: string) {
+    setBusy("ocr");
+    try {
+      const r = await fetch(path);
+      if (!r.ok) return notify("Foto importata ma non rileggibile", "err");
+      const blob = await r.blob();
+      const fd = new FormData();
+      fd.append("photo", await downscaleImage(new File([blob], "slot.jpg", { type: blob.type || "image/jpeg" })));
+      const res = await fetch("/api/vision/serial", { method: "POST", body: fd });
+      await applyRead(res.ok, await res.json().catch(() => null));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   /** Cosa fare del risultato dell'OCR, uguale per lo scatto e per la rilettura. */
   async function applyRead(
     ok: boolean,
@@ -1912,6 +1945,22 @@ function SlotSerialCell({
       >
         <Icon name="camera" size={15} />
       </button>
+      {/* La foto della targhetta spesso è già nel Google Foto di chi l'ha
+          scattata col telefono: si prende di là e la matricola si legge subito,
+          senza passare dal computer. */}
+      <GooglePhotosPick
+        machineId={machineId}
+        machineCode={machineCode}
+        componentItemId={item.id}
+        category="componente"
+        label=""
+        icon="cloud"
+        className="icon-btn sm"
+        title="Prendi la foto dal tuo Google Foto e leggi la matricola"
+        onDone={onDone}
+        onImported={(paths) => readFromPath(paths[0])}
+        notify={notify}
+      />
       {photoPath && (
         <button
           type="button"

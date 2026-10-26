@@ -52,5 +52,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   });
   if ("error" in r) return NextResponse.json(r, { status: 409 });
 
-  return NextResponse.json({ ok: true, count: r.photoIds.length, photoIds: r.photoIds, skipped: r.skipped });
+  // i path servono a chi importa su uno slot: la matricola si legge subito
+  // dalla foto appena arrivata, senza aspettare il ricaricamento della pagina
+  const paths = await prisma.photo.findMany({
+    where: { id: { in: r.photoIds } },
+    select: { path: true },
+  });
+  return NextResponse.json({
+    ok: true,
+    count: r.photoIds.length,
+    photoIds: r.photoIds,
+    paths: paths.map((p) => p.path),
+    skipped: r.skipped,
+  });
 }
