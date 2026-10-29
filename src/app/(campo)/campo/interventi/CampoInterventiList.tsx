@@ -31,6 +31,8 @@ export type CampoItem = {
   customer: string | null;
   site: string | null;
   machineJob: string | null;
+  /** Commessa di cantiere: il numero su cui si timbra. */
+  commessa: string | null;
 };
 
 const GROUPS: { key: string; label: string; test: (s: InterventoStatus) => boolean }[] = [
@@ -68,7 +70,8 @@ export default function CampoInterventiList({
           i.title.toLowerCase().includes(term) ||
           i.code.toLowerCase().includes(term) ||
           (i.customer ?? "").toLowerCase().includes(term) ||
-          (i.machineJob ?? "").toLowerCase().includes(term))
+          (i.machineJob ?? "").toLowerCase().includes(term) ||
+          (i.commessa ?? "").toLowerCase().includes(term))
     );
   }, [items, g, q]);
 
@@ -128,6 +131,17 @@ export default function CampoInterventiList({
                     </span>
                   )}
                 </div>
+                {i.commessa ? (
+                  <div className="ticket-commessa" title="Commessa di cantiere (timbratore)">
+                    <span className="lbl">Commessa</span>
+                    <span className="val mono">{i.commessa}</span>
+                  </div>
+                ) : (
+                  <div className="ticket-commessa missing">
+                    <span className="lbl">Commessa</span>
+                    <span className="val">da impostare</span>
+                  </div>
+                )}
                 <div className="campo-card-title">{i.title}</div>
                 <div className="campo-card-meta">
                   {i.machineJob && (

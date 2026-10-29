@@ -391,6 +391,21 @@ function Ticket({
           {prio.label}
         </span>
       </div>
+      {/* La commessa di cantiere e' il primo dato che si cerca su una card: in
+          azienda un intervento lo si chiama col suo numero di commessa, non col
+          codice INT. Dove manca si dice, invece di lasciare il vuoto: senza
+          commessa le ore del timbratore non si agganciano all'intervento. */}
+      {i.commessa ? (
+        <div className="ticket-commessa" title="Commessa di cantiere (timbratore)">
+          <span className="lbl">Commessa</span>
+          <span className="val mono">{i.commessa}</span>
+        </div>
+      ) : (
+        <div className="ticket-commessa missing" title="Senza commessa le ore timbrate non si agganciano a questo intervento">
+          <span className="lbl">Commessa</span>
+          <span className="val">da impostare</span>
+        </div>
+      )}
       <span className="type-chip" style={{ background: tmeta.color + "1f", color: tmeta.color }}>
         {tmeta.label}
       </span>
@@ -456,6 +471,7 @@ function Lista({ interventi }: { interventi: InterventoRow[] }) {
         <thead>
           <tr>
             <th>Codice</th>
+            <th>Commessa</th>
             <th>Titolo</th>
             <th>Tipo</th>
             <th>Cliente · Cantiere</th>
@@ -476,6 +492,9 @@ function Lista({ interventi }: { interventi: InterventoRow[] }) {
                   <Link href={`/service/interventi/${i.id}`} className="link-strong">
                     {i.code}
                   </Link>
+                </td>
+                <td className="cell-commessa mono">
+                  {i.commessa ?? <span className="muted small">da impostare</span>}
                 </td>
                 <td style={{ fontWeight: 600 }}>
                   <Link href={`/service/interventi/${i.id}`} style={{ color: "inherit" }}>

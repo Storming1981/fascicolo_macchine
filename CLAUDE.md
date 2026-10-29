@@ -1118,6 +1118,16 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
 - **Filtro nel board Interventi**: campo nella barra che restringe kanban,
   lista e conteggi delle linguette (codice, titolo, cliente, cantiere,
   commessa, macchina, tecnico, tipo).
+- **La commessa di cantiere in testa alla card** (`.ticket-commessa`): in
+  azienda un intervento lo si chiama col numero di commessa, non col codice
+  `INT-…`, quindi sta sopra il titolo nelle card del kanban, in colonna propria
+  (subito dopo il codice) nella vista lista e in testa anche alle card dell'app
+  **Campo** — lì è il numero su cui il tecnico timbra, e prima non c'era
+  affatto (nemmeno nella ricerca, ora sì). Da non confondere con la riga
+  dell'icona macchina, che è il **job del fascicolo**: sono due numeri diversi.
+  **Dove manca si dice** ("da impostare", in ambra) invece di lasciare il
+  vuoto: senza commessa le ore del timbratore non si agganciano
+  all'intervento.
 - **Tipi di intervento: quattro, commerciali** (`INTERVENTO_TYPE_ORDER` in
   `domain.ts`) — **Installazione · Intervento a pagamento · Intervento in
   garanzia · Servizi**. Hanno sostituito la vecchia targhettizzazione tecnica

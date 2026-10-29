@@ -37,6 +37,7 @@ export default async function CampoInterventiPage() {
     customer: i.customer?.name ?? null,
     site: i.site?.name ?? null,
     machineJob: i.machine?.job ?? i.machine?.code ?? null,
+    commessa: i.commessa,
   }));
 
   // Anagrafica minima per la creazione da campo (solo se l'utente può creare)
