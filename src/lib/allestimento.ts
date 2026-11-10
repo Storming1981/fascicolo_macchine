@@ -285,7 +285,9 @@ export const SHEET_CONTAINER: SheetDef = {
       icon: "box",
       rows: [
         { key: "nr_motori", label: "Nr. Motori Elettrici", free: true, when: isElectric },
-        { key: "potenza_motori", label: "Potenza motori (kW)", free: true },
+        // I kW sono la potenza dei motori ELETTRICI: su un container diesel la
+        // voce non si compila mai e teneva la scheda a un campo dal fondo.
+        { key: "potenza_motori", label: "Potenza motori (kW)", free: true, when: isElectric },
         { key: "tensione_motori", label: "Tensione motore (V)", suggest: ["400", "690"], list: "tensione", when: isElectric },
         { key: "frequenza_motori", label: "Frequenza (Hz)", suggest: ["50", "60"], list: "frequenza", when: isElectric },
         { key: "marca_motori", label: "Marca motori", bind: { group: "electric_motor", field: "brand" }, serials: "electric_motor", suggest: ["SIMOTOP"], limitBy: "nr_motori", when: isElectric },

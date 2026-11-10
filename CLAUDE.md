@@ -815,6 +815,10 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     non sparisce perché qualcuno corregge un numero. Stessa regola nel PDF.
   - Nuova voce **Tipologia motore** (descrittiva, es. `355M B35 4P IE4`), a
     elenco con voci aggiungibili come le altre.
+  - **Potenza motori (kW) solo sull'elettrico**: i kW sono la potenza dei
+    motori elettrici, su un container diesel quella voce non si compila mai e
+    teneva la scheda a un campo dal fondo per sempre. Stesso `when: isElectric`
+    delle altre voci dei motori, dove mancava per svista.
   - **Scaldiglia** (gruppo `heater`): fornitore + matricola con foto, come gli
     altri componenti del container.
   - **Ventole e motori ventole** (gruppi `fans` / `fan_motors`), **solo sul
