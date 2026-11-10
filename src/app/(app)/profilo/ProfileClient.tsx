@@ -25,6 +25,8 @@ type Props = {
   google: { email: string; connectedAt: string } | null;
   /** L'account collegato ha già concesso il permesso di caricare su Google Foto. */
   photoScope: boolean;
+  /** L'account collegato ha già concesso il permesso di scegliere foto da Google Foto. */
+  pickerScope: boolean;
   companyEmail: string | null;
 };
 
@@ -59,7 +61,7 @@ function photoToDataUrl(file: File): Promise<string> {
   });
 }
 
-export default function ProfileClient({ user, googleConfigured, google, photoScope, companyEmail }: Props) {
+export default function ProfileClient({ user, googleConfigured, google, photoScope, pickerScope, companyEmail }: Props) {
   const router = useRouter();
   const refresh = () => router.refresh();
 
@@ -93,6 +95,7 @@ export default function ProfileClient({ user, googleConfigured, google, photoSco
             configured={googleConfigured}
             google={google}
             photoScope={photoScope}
+            pickerScope={pickerScope}
             photoBackup={user.photoBackup}
             companyEmail={companyEmail}
             userEmail={user.email}
@@ -258,6 +261,7 @@ function GmailCard({
   configured,
   google,
   photoScope,
+  pickerScope,
   photoBackup,
   companyEmail,
   userEmail,
@@ -267,6 +271,7 @@ function GmailCard({
   configured: boolean;
   google: Props["google"];
   photoScope: boolean;
+  pickerScope: boolean;
   photoBackup: boolean;
   companyEmail: string | null;
   userEmail: string;
@@ -281,6 +286,10 @@ function GmailCard({
   }, [initialMsg]);
 
   const connectHref = "/api/google/auth?target=me&return=profilo";
+  // Chi ricollega la casella dopo averla scollegata perde i permessi delle foto
+  // (Scollega revoca tutto presso Google): li richiede insieme a Gmail chi ha il
+  // backup acceso, cosi' non smette di copiare senza accorgersene.
+  const loginHref = photoBackup ? `${connectHref}&photos=1` : connectHref;
 
   async function test() {
     setBusy("test");
@@ -384,6 +393,24 @@ function GmailCard({
               </a>
             )}
           </div>
+          <div className="pf-backup">
+            <label>
+              <input type="checkbox" checked={pickerScope} readOnly disabled />
+              <span>
+                <strong>Scegli foto dal mio Google Foto nei fascicoli</strong>
+                <span className="muted small">
+                  {pickerScope
+                    ? "Autorizzato. Dal fascicolo apri Google Foto e scegli tu quali scatti portare: la piattaforma vede solo quelli."
+                    : "Serve per il pulsante «Da Google Foto» nei fascicoli. Nella schermata di Google spunta la casella delle foto."}
+                </span>
+              </span>
+            </label>
+            {!pickerScope && (
+              <a className="btn-ghost-sm" href={`${connectHref}&picker=1`}>
+                Autorizza scelta foto
+              </a>
+            )}
+          </div>
           <div className="pf-actions">
             <button className="btn-ghost-sm" onClick={test} disabled={busy !== null}>
               {busy === "test" ? "Invio…" : "Invia mail di prova"}
@@ -402,7 +429,7 @@ function GmailCard({
             Accedi con il tuo account Google: autorizzi solo l&apos;<strong>invio</strong> di e-mail, la piattaforma
             non legge la tua posta.
           </p>
-          <a className="pf-google-btn" href={connectHref}>
+          <a className="pf-google-btn" href={loginHref}>
             <span className="pf-google-g">G</span> Accedi con Google
           </a>
           {companyEmail && (

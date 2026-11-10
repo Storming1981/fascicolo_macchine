@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/domain";
-import { getCompanyGoogleInfo, getUserGoogleInfo, isGoogleConfigured, GPHOTO_SCOPE } from "@/lib/google";
+import { getCompanyGoogleInfo, getUserGoogleInfo, isGoogleConfigured, GPHOTO_SCOPE, GPICKER_SCOPE } from "@/lib/google";
 import ProfileClient from "./ProfileClient";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,7 @@ export default async function ProfilePage() {
       googleConfigured={isGoogleConfigured()}
       google={google}
       photoScope={(google?.scopes ?? "").includes(GPHOTO_SCOPE)}
+      pickerScope={(google?.scopes ?? "").includes(GPICKER_SCOPE)}
       companyEmail={company?.email ?? null}
     />
   );

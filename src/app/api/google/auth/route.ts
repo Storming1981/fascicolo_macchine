@@ -41,11 +41,22 @@ export async function GET(req: Request) {
       { status: 503 }
     );
 
+  // `?photos=1` (copia su Google Foto) e `?picker=1` (pesca dal proprio Google
+  // Foto) chiedono permessi in piu', uno per volta e solo a chi li attiva: chi
+  // collega la casella per spedire non deve vedersi chiedere le proprie foto.
+  const want = [sp.get("photos") === "1" ? GPHOTO_SCOPE : "", sp.get("picker") === "1" ? GPICKER_SCOPE : ""].filter(
+    Boolean
+  );
+  const extra = want.join(" ");
+
   const state = await new SignJWT({
     uid: user.id,
     name: user.name,
     target,
     ret,
+    // I permessi in piu' viaggiano nello state: la callback deve poter
+    // verificare che Google li abbia davvero concessi (vedi callback).
+    want,
     nonce: crypto.randomBytes(8).toString("hex"),
   })
     .setProtectedHeader({ alg: "HS256" })
@@ -53,11 +64,5 @@ export async function GET(req: Request) {
     .setExpirationTime("600s")
     .sign(SECRET);
 
-  // `?photos=1` (copia su Google Foto) e `?picker=1` (pesca dal proprio Google
-  // Foto) chiedono permessi in piu', uno per volta e solo a chi li attiva: chi
-  // collega la casella per spedire non deve vedersi chiedere le proprie foto.
-  const extra = [sp.get("photos") === "1" ? GPHOTO_SCOPE : "", sp.get("picker") === "1" ? GPICKER_SCOPE : ""]
-    .filter(Boolean)
-    .join(" ");
   return NextResponse.redirect(buildConsentUrl(state, extra ? `${GOOGLE_SCOPES} ${extra}` : GOOGLE_SCOPES));
 }

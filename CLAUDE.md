@@ -1028,6 +1028,20 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   - Il consenso torna sul **fascicolo** da cui si è partiti
     (`?return=m:M-2026-0013`, `src/lib/googleReturn.ts`): l'elenco delle
     destinazioni resta chiuso perché quel valore finisce in una redirect.
+  - **Il permesso concesso si verifica, non si presume.** Google mostra una
+    casella per permesso e lascia togliere la spunta: il collegamento riusciva
+    lo stesso, l'app tornava con "collegata" e il pulsante restava *Autorizza
+    Google Foto* all'infinito (caso f.zanotti). Ora i permessi chiesti
+    viaggiano nello `state` (`want`) e la callback li confronta con quelli
+    ricevuti: se manca quello delle foto lo dice. Gli errori di Google
+    (`access_denied`, `admin_policy_enforced` = blocco dalla console Workspace)
+    diventano frasi, e tornano **dove si era partiti** — prima finivano sempre
+    in Impostazioni e il fascicolo non leggeva `?google=`, quindi dal fascicolo
+    un rifiuto spariva senza una parola.
+  - **Scollega revoca tutto presso Google**, compresi i permessi delle foto:
+    il Profilo ora ha anche la riga *Scegli foto dal mio Google Foto* (stato +
+    *Autorizza scelta foto*), e il ricollegamento richiede il backup insieme a
+    Gmail per chi lo ha acceso.
   - Nel progetto Google Cloud servono abilitate **due API distinte**: *Photos
     Library API* per il backup e *Photos Picker API* per la scelta. E vale la
     trappola dell'IPv6 descritta in *Backup delle foto su Google Foto*: un 403

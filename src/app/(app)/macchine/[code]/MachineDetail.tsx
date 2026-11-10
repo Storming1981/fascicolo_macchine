@@ -158,11 +158,24 @@ export default function MachineDetail({
   const [toast, setToast] = useState<{ msg: string; kind: "ok" | "err" } | null>(null);
 
   const meta = STATUS_META[machine.status];
-  const notify = (msg: string, kind: "ok" | "err" = "ok") => {
+  const notify = (msg: string, kind: "ok" | "err" = "ok", ms = 3500) => {
     setToast({ msg, kind });
-    setTimeout(() => setToast(null), 3500);
+    setTimeout(() => setToast(null), ms);
   };
   const refresh = () => router.refresh();
+
+  // Ritorno dal consenso Google partito da qui ("Autorizza Google Foto"): senza
+  // leggere l'esito, un permesso negato o bloccato dall'amministratore tornava
+  // sul fascicolo senza una parola, e il pulsante restava "Autorizza".
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const g = sp.get("google");
+    if (!g) return;
+    if (g === "ok") notify("Google Foto autorizzato: ora puoi scegliere le foto", "ok", 5000);
+    else notify(sp.get("msg") || "Collegamento Google non riuscito", "err", 12000);
+    window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="view">

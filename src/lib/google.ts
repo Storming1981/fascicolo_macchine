@@ -150,14 +150,17 @@ async function postForm(url: string, params: Record<string, string>): Promise<To
 
 /**
  * Scambia il `code` del callback con i token e li salva sul bersaglio scelto
- * (personale dell'utente o aziendale). Ritorna l'indirizzo email collegato.
+ * (personale dell'utente o aziendale). Ritorna l'indirizzo collegato e i
+ * permessi **effettivamente** concessi, che possono essere meno di quelli
+ * chiesti: Google mostra una casella per permesso e l'utente puo' lasciarne
+ * qualcuna senza spunta.
  */
 export async function exchangeCodeAndSave(
   code: string,
   target: GoogleTarget,
   userId: string,
   connectedByName: string | null
-): Promise<string> {
+): Promise<{ email: string; scope: string }> {
   const tok = await postForm(TOKEN_URL, {
     code,
     client_id: process.env.GOOGLE_CLIENT_ID!,
@@ -176,6 +179,7 @@ export async function exchangeCodeAndSave(
   if (!email) throw new Error("Impossibile leggere l'indirizzo dell'account Google.");
 
   const expiresAtMs = Date.now() + (tok.expires_in ?? 3600) * 1000;
+  const scope = tok.scope ?? GOOGLE_SCOPES;
 
   if (target === "company") {
     await saveGoogleAccount({
@@ -183,7 +187,7 @@ export async function exchangeCodeAndSave(
       refreshToken: encryptSecret(tok.refresh_token),
       accessToken: encryptSecret(tok.access_token),
       expiresAt: expiresAtMs,
-      scope: tok.scope ?? GOOGLE_SCOPES,
+      scope,
       connectedByName,
       connectedAt: new Date().toISOString(),
     } satisfies GoogleAccount);
@@ -195,7 +199,7 @@ export async function exchangeCodeAndSave(
         refreshToken: encryptSecret(tok.refresh_token),
         accessToken: encryptSecret(tok.access_token),
         expiresAt: new Date(expiresAtMs),
-        scope: tok.scope ?? GOOGLE_SCOPES,
+        scope,
         connectedAt: new Date(),
       },
       create: {
@@ -204,11 +208,11 @@ export async function exchangeCodeAndSave(
         refreshToken: encryptSecret(tok.refresh_token),
         accessToken: encryptSecret(tok.access_token),
         expiresAt: new Date(expiresAtMs),
-        scope: tok.scope ?? GOOGLE_SCOPES,
+        scope,
       },
     });
   }
-  return email;
+  return { email, scope };
 }
 
 /** Access token valido per uno StoredToken (refresh automatico + persistenza). */
