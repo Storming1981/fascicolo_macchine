@@ -598,6 +598,24 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   g.marini `4444`, f.greco `5555`, d.ferrari `6666`.
 - **Dashboard**: KPI flotta, pipeline per stato, attività recenti.
 - **Macchine**: ricerca + filtri di stato; tabella responsive.
+- **Due semafori nell'elenco macchine** (`src/lib/machineAlerts.ts`): colonna
+  **Schede** (le schede di allestimento previste dalla tipologia sono tutte
+  firmate?) e colonna **Collaudo** (check list **approvata** *e* le tre firme
+  `SIGN_ROLES` raccolte). **Rosso lampeggiante** finché manca qualcosa, **verde
+  fisso** quando è a posto, "—" dove quella cosa non è prevista (la linea di
+  separazione non ha collaudo): un semaforo che non si può mai spegnere è solo
+  rumore. Il `title` della targhetta dice **cosa** manca ("Da firmare: M5.17",
+  "Manca: check list, firma capo officina"), così non si apre il fascicolo per
+  scoprirlo.
+  - Il collaudo si ferma alle firme **più** l'approvazione: contare solo le tre
+    firme avrebbe fatto passare per completo un collaudo con la check list
+    ancora da compilare.
+  - Una scheda **mai aperta** conta come da firmare: il dato non c'è, non è che
+    non serve.
+  - Costo: **tre query per pagina** (schede, collaudi, firme con
+    `diaryEventId: null` — quelle legate a un evento di diario sono degli
+    interventi), non una per riga. L'animazione si spegne con
+    `prefers-reduced-motion`.
 - **Dettaglio macchina** (6 tab): Anagrafica + documenti, Componenti & Matricole
   (accordion con sostituzione pezzo e foto per slot), Foto produzione (upload con
   categorie), Collaudo & Firme (firme per ruolo PIN/penna), Diario macchina

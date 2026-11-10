@@ -6,6 +6,7 @@ import Icon, { Flag } from "@/components/Icon";
 import { STATUS_META, STATUS_ORDER } from "@/lib/domain";
 import { hasKit, KITS } from "@/lib/kits";
 import { containerType } from "@/lib/allestimento";
+import type { MachineAlert } from "@/lib/machineAlerts";
 import type { MachineStatus } from "@prisma/client";
 
 type M = {
@@ -22,6 +23,9 @@ type M = {
   progress: number;
   tiranteGiunto: boolean;
   filtroMaggiorato: boolean;
+  /** Semafori: schede di allestimento firmate · collaudo chiuso. */
+  schede: MachineAlert;
+  collaudo: MachineAlert;
   /** Tipo container dalla scheda M5.17 (null = scheda non ancora compilata). */
   containerType: string | null;
 };
@@ -130,6 +134,8 @@ export default function MachinesList({
                 <th>Anno</th>
                 <th>Stato</th>
                 <th>Avanzamento</th>
+                <th title="Schede di allestimento: rosso finché non sono tutte firmate">Schede</th>
+                <th title="Collaudo: rosso finché check list e firme non sono complete">Collaudo</th>
                 <th />
               </tr>
             </thead>
@@ -204,6 +210,12 @@ export default function MachinesList({
                     </div>
                   </td>
                   <td>
+                    <AlertCell alert={m.schede} />
+                  </td>
+                  <td>
+                    <AlertCell alert={m.collaudo} />
+                  </td>
+                  <td>
                     <Icon name="chev-right" size={16} color="var(--muted)" />
                   </td>
                 </tr>
@@ -211,7 +223,7 @@ export default function MachinesList({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="empty">
+                  <td colSpan={13} className="empty">
                     Nessuna macchina trovata.
                   </td>
                 </tr>
@@ -221,5 +233,22 @@ export default function MachinesList({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Semaforo di una colonna di controllo: **rosso lampeggiante** finché manca
+ * qualcosa (deve farsi notare in un elenco di duecento righe), **verde fisso**
+ * quando è a posto, "—" dove quella cosa non è prevista per la tipologia.
+ * Il titolo dice che cosa manca, così non serve aprire il fascicolo.
+ */
+function AlertCell({ alert }: { alert: MachineAlert }) {
+  if (alert.state === "na") return <span className="muted">—</span>;
+  const ok = alert.state === "ok";
+  return (
+    <span className={"alert-pill" + (ok ? " ok" : " warn")} title={alert.detail}>
+      <Icon name={ok ? "check" : "flag"} size={12} />
+      {ok ? "OK" : "Da fare"}
+    </span>
   );
 }

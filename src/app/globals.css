@@ -360,6 +360,14 @@ img.user-avatar.small { object-fit: cover; }
 .cmp-label { font-weight: 500; font-size: 13.5px; }
 .cmp-en { font-size: 11px; color: var(--muted); }
 .cmp-brand { font-size: 13px; color: var(--text-2); font-family: "JetBrains Mono", monospace; }
+/* Semafori dell'elenco macchine (schede firmate, collaudo chiuso). */
+.alert-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 99px; border: 1px solid transparent; white-space: nowrap; }
+.alert-pill.ok { background: #e7f8f1; border-color: #b6e8d4; color: #0f9d68; }
+.alert-pill.warn { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; animation: alert-blink 1.2s ease-in-out infinite; }
+@keyframes alert-blink { 50% { opacity: 0.3; } }
+/* Chi ha chiesto meno animazioni vede il rosso fisso: resta leggibile lo stesso. */
+@media (prefers-reduced-motion: reduce) { .alert-pill.warn { animation: none; } }
+
 .cmp-count-pill { font-family: "JetBrains Mono", monospace; font-size: 11px; padding: 3px 9px; border-radius: 99px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
 .cmp-count-pill.full { background: #e7f8f1; border-color: #b6e8d4; color: #0f9d68; }
 .cmp-count-pill.partial { background: #fdf3e3; border-color: #f5dca7; color: #b45309; }
