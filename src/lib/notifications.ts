@@ -22,7 +22,8 @@ export type NotifKind =
   | "A1_CARICATI" // torna a chi ha dato l'incarico: i primi A1 sono arrivati
   | "INTERVENTO_ACCETTATO" // un assegnato ha preso in carico
   | "INTERVENTO_RIFIUTATO" // un assegnato non puo' andarci
-  | "CHAT_MESSAGGIO"; // un assegnato non puo' andarci
+  | "CHAT_MESSAGGIO" // nuovo messaggio in una chat seguita
+  | "PASSWORD_RESET"; // dalla pagina di login: qualcuno chiede una password nuova
 
 export type NotifTone = "info" | "ok" | "warn" | "alert";
 

@@ -596,6 +596,13 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
 - **Login**: `admin@zato.it` / `zato2026` (tutti gli utenti seed: password `zato2026`).
   PIN firma: admin `0000`, m.rossi `1111`, a.verdi `2222`, p.costa `3333`,
   g.marini `4444`, f.greco `5555`, d.ferrari `6666`.
+- **Pagina di login**: occhio per **mostrare la password** e link **Password
+  dimenticata?** → `POST /api/auth/reset-request` `{id, note}`: avviso
+  `PASSWORD_RESET` (campanella + push + mail dalla casella aziendale) a tutti
+  gli **ADMIN**, che reimpostano la password da Persone → Modifica. Niente reset
+  self-service via e-mail: metà degli utenti non ha una casella vera
+  (timbratore, esterni). La risposta è **sempre la stessa** (non rivela quali
+  account esistono) e c'è **una richiesta all'ora per persona**.
 - **Dashboard**: KPI flotta, pipeline per stato, attività recenti.
 - **Macchine**: ricerca + filtri di stato; tabella responsive.
 - **Due semafori nell'elenco macchine** (`src/lib/machineAlerts.ts`): colonna
