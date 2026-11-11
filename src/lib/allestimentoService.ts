@@ -224,6 +224,10 @@ function fixedHeader(
   // chi compila (i moduli mulino e cesoia la chiedono in testata).
   if (fields.includes("collaudatoDa")) out.collaudatoDa = machine.collaudo?.compilerName ?? "";
   if (fields.includes("matricola")) out.matricola = header.matricola ?? "";
+  // Alimentazione del mulino: una delle due, mai niente. Senza una scelta
+  // scritta la scheda non saprebbe quale card chiedere, e l'elettrico e' il
+  // caso di gran lunga piu' frequente.
+  if (fields.includes("alimentazione")) out.alim = header.alim === "Diesel" ? "Diesel" : "Elettrico";
   return out;
 }
 

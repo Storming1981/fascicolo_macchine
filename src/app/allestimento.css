@@ -136,6 +136,8 @@
 .al-na.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .al-na:disabled { cursor: default; }
 .al-side-stack { display: flex; flex-direction: column; gap: 8px; }
+/* Una matricola in piu' dove la riga lo prevede (piu' lotti di lame insieme) */
+.al-add-slot { align-self: flex-start; }
 /* Riga senza specifica: la matricola si legge dalla foto (es. lotto albero) */
 .al-nospec { display: inline-block; padding-top: 9px; font-style: italic; }
 /* Spunta di dotazione sotto la specifica (tirante giunto, filtro maggiorato) */

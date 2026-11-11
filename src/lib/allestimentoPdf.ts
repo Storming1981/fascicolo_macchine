@@ -8,6 +8,7 @@ import {
   sheetCtx,
   sheetDef,
   inlineRows,
+  visibleSections,
   NA_VALUE,
   serialLimit,
   visibleRows,
@@ -214,7 +215,7 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
 
   newPage(true);
 
-  for (const section of def.sections) {
+  for (const section of visibleSections(def, ctx)) {
     const rows = visibleRows(section, ctx, input.values);
     const blocks = section.repeat
       ? (input.blocks ?? []).filter((b) => section.repeat!.includes(b.kind))
@@ -263,7 +264,7 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
       const serials = lim === null ? all : all.filter((s, i) => i < lim || !!s.trim());
       // riga senza specifica (lotto albero): la colonna resta vuota; dove N.A.
       // e' il default (specifiche speciali) il vuoto si stampa come N.a.
-      const subSpec = inlineRows(def, row.key)
+      const subSpec = inlineRows(def, row.key, ctx)
         .map((r) => (input.values[r.key]?.spec ?? "").trim())
         .filter(Boolean)
         .join(" · ");

@@ -746,9 +746,9 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   schede BLUE DEVIL, `matricola` per mulino e cesoia). Le righe con
   `serialList` hanno un **elenco anche nella colonna Matricola** (le marche del
   modulo cartaceo: IMI/RIVAL/AVEROLDI, PSP/GELLI, ...), con le stesse voci
-  aggiungibili delle specifiche (chiave `KIND.row#marca`). Mulino e cesoia non
-  hanno righe condizionali: entrambe le alimentazioni (elettrica e diesel) stanno
-  sul modulo e si compila quella che serve.
+  aggiungibili delle specifiche (chiave `KIND.row#marca`). La cesoia non ha
+  righe condizionali: entrambe le alimentazioni stanno sul modulo e si compila
+  quella che serve; il **mulino** invece le ha (vedi sotto).
 - **Tipologie senza collaudo** (`hasCollaudo()` in `plant.ts`, oggi
   **BLUE SORTER**): la linea di separazione non si collauda come una macchina
   singola, si verifica in campo a linea montata. Quindi niente linguetta
@@ -796,6 +796,12 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     quindi ha fotocamera, foto e lettura automatica. Il valore già scritto si
     sposta sullo slot alla prima apertura (`moveBladesLot`) e l'`extra.lot` si
     svuota: due verità sullo stesso dato sono peggio di nessuna.
+  - **I lotti di lame possono essere più d'uno** (`SheetRow.addSlots`): una
+    macchina può montare due o tre lotti insieme, e quanti non lo sa la
+    definizione del gruppo. Il pulsante *Aggiungi set lame* crea una matricola
+    in più (`POST …/component-item`), con foto e OCR come le altre — invece di
+    far scrivere due numeri nello stesso campo, dove poi non si sa quale pezzo
+    è di quale lotto. Vale per qualunque riga che dichiari `addSlots`.
   - **Gli alberi sono due** (gruppo `shaft`, lavorati da DGS): la definizione di
     un gruppo puo' crescere, quindi `ensureSheetSlots` aggiunge **in coda** gli
     slot che mancano sui fascicoli gia' aperti (gli slot aggiunti a mano dagli
@@ -880,6 +886,34 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   compila, toglie chi ha `machine.edit`. API `GET|POST|DELETE /api/allestimento/options`.
   API: `GET|PUT|POST /api/machines/[id]/allestimento` ·
   `GET /api/machines/[id]/allestimento/[kind]/pdf`.
+- **Scheda mulino** (M5.6, `BLUE SHARK`): il modulo cartaceo è uno solo per
+  tutti i mulini, ma un 12-10 e un 16-13 non si allestiscono allo stesso modo.
+  - **L'alimentazione si dichiara in testata** (`headerFields:
+    ["alimentazione"]`, `SheetHeader.alim`): Elettrico o Diesel, e **si vede
+    solo la card scelta** (`SheetSection.when`). Prima c'erano entrambe, una
+    delle due restava per forza a 0/4 e la scheda non arrivava mai in fondo.
+    Sul container l'alimentazione *è* il tipo; qui no — lo stesso 12-10 esiste
+    elettrico e diesel — quindi `SheetCtx` porta ora **due** cose: `diesel` e
+    `tipo`. Default *Elettrico*: è il caso di gran lunga più frequente e una
+    scheda senza scelta non saprebbe cosa chiedere.
+  - **Il 12-10 è un'altra macchina** (`is1210` / `not1210`): niente container,
+    quindi niente coibentazione né condizionatore, e niente cassa giunto —
+    quattro voci che su quel mulino restavano vuote per sempre. Il **19-22
+    segue il 16-13**, come chiesto.
+  - **Rotore e griglie: chi salda e chi lavora.** Sul 12-10 sono due fornitori
+    diversi, quindi la riga ha due specifiche in linea (`inlineWith`);
+    sul 16-13 e sul 19-22 ne resta una sola, perché le griglie sono **in
+    fusione** e la saldatura non esiste. Il rotore ha ora il suo costruttore,
+    che prima non c'era. `inlineRows()` accetta il contesto: una specifica in
+    linea che non vale per quel tipo non si disegna.
+  - **Linea di aspirazione e insonorizzazione: fornitore + N.A.** al posto di
+    *Previsto / Non previsto* con il fornitore nella colonna matricola — due
+    modi per dire la stessa cosa erano uno di troppo. **Via il tamburo
+    magnetico**, che nel mulino non si allestisce.
+  - **L'impianto di separazione è una sezione a blocchi**, gli stessi della
+    M5.19 (nastri, piano vibrante, tamburo magnetico, overbelt, ECS, cabina di
+    cernita): era una riga sola ("Impianto separazione: Previsto"), che di una
+    linea non diceva niente — né quanti nastri né che separatori.
 - **Scheda linea di separazione** (M5.19, `BLUE SORTER`) — non ha niente a che
   vedere con i BLUE DEVIL: carpenteria, **nastri**, separatori e cabina di
   cernita.

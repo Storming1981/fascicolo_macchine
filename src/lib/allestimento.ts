@@ -17,7 +17,13 @@ export type SheetKind = "TRITURATORE" | "CONTAINER" | "MULINO" | "CESOIA" | "SEP
 export const SHEET_KINDS: SheetKind[] = ["TRITURATORE", "CONTAINER", "MULINO", "CESOIA", "SEPARAZIONE"];
 
 export type SheetInput = "text" | "yesno" | "yesnona";
-export type SheetCtx = { diesel: boolean };
+/**
+ * Cosa decide quali righe si vedono: l'**alimentazione** (elettrica o diesel)
+ * e il **tipo** scelto in intestazione. Sul container il tipo dice gia' se e'
+ * diesel; sul mulino sono due cose distinte — un 12-10 puo' essere elettrico o
+ * diesel — quindi il tipo viaggia a parte.
+ */
+export type SheetCtx = { diesel: boolean; tipo: string };
 
 export type SheetRow = {
   key: string;
@@ -73,6 +79,12 @@ export type SheetRow = {
   kitFlag?: KitFlag;
   /** Quante matricole mostrare: il numero scritto in un'altra riga (es. nr. motori). */
   limitBy?: string;
+  /**
+   * La riga accetta **altre matricole oltre a quelle previste**: un trituratore
+   * puo' montare piu' lotti di lame insieme, e quanti non lo sa la definizione
+   * del gruppo. Il valore e' il nome degli slot aggiunti ("Set lame #2").
+   */
+  addSlots?: string;
   when?: (ctx: SheetCtx) => boolean;
 };
 
@@ -92,6 +104,12 @@ export type SheetSection = {
    * una macchina non possono esistere due gruppi con lo stesso id.
    */
   repeat?: string[];
+  /**
+   * Sezione mostrata solo in certe condizioni: le due alimentazioni del mulino
+   * sono l'una o l'altra, e tenerle entrambe a video lasciava meta' scheda
+   * vuota per sempre.
+   */
+  when?: (ctx: SheetCtx) => boolean;
 };
 
 export type SheetDef = {
@@ -104,13 +122,16 @@ export type SheetDef = {
   typeLabel: string;
   typeOptions?: string[];
   /** Campi d'intestazione oltre a commessa, paese e tipo. */
-  headerFields?: ("collaudatoDa" | "matricola")[];
+  headerFields?: ("collaudatoDa" | "matricola" | "alimentazione")[];
   sections: SheetSection[];
 };
 
 export type SheetValue = { spec?: string; serial?: string; note?: string };
 export type SheetValues = Record<string, SheetValue>;
-export type SheetHeader = { tipo?: string; collaudatoDa?: string; matricola?: string };
+export type SheetHeader = { tipo?: string; collaudatoDa?: string; matricola?: string; alim?: string };
+
+/** Alimentazione dichiarata in testata (mulino): decide quale card si compila. */
+export const ALIMENTAZIONI = ["Elettrico", "Diesel"] as const;
 /** Voci aggiunte dagli operatori, per elenco. */
 export type SheetOptions = Record<string, string[]>;
 
@@ -128,6 +149,13 @@ const GHIERE = ["CILINDRICA DIAMETRO EST. PICCOLO"];
 
 const isElectric = (c: SheetCtx) => !c.diesel;
 const isDiesel = (c: SheetCtx) => c.diesel;
+/**
+ * Il mulino 12-10 e' un'altra macchina rispetto al 16-13: non ha container,
+ * condizionatore ne' cassa giunto, e rotore e griglie li fanno due fornitori
+ * (chi salda e chi lavora) invece di uno solo. Il 19-22 segue il 16-13.
+ */
+const is1210 = (c: SheetCtx) => c.tipo === "12-10";
+const not1210 = (c: SheetCtx) => c.tipo !== "12-10";
 
 /**
  * Tipologie di container. Elettrico e diesel si distinguono per **mercato**
@@ -237,7 +265,9 @@ export const SHEET_TRITURATORE: SheetDef = {
         { key: "giunti_sicurezza", label: "Giunti sicurezza", input: "yesno", kitFlag: "tiranteGiunto" },
         { key: "lame", label: "Lame", bind: { group: "blades", field: "extra", extraKey: "type" }, suggest: ["PLATINUM"] },
         { key: "costruttore_lame", label: "Costruttori lame", bind: { group: "blades", field: "brand" }, suggest: ["CO.DI.TRA"] },
-        { key: "lotto_lame", label: "Lotto lame", serials: "blades", noSpec: true },
+        // Un trituratore puo' montare piu' lotti di lame insieme: il "+" aggiunge
+        // una matricola in piu' invece di costringere a scriverne due in un campo.
+        { key: "lotto_lame", label: "Lotto lame", serials: "blades", noSpec: true, addSlots: "Set lame" },
         { key: "lav_portalame", label: "Lav portalame - distanziali - alberi", suggest: ["DGS"], list: "lavorazioni" },
         { key: "montaggio_albero", label: "Montaggio albero", suggest: ["DGS"], list: "lavorazioni" },
         { key: "lotto_albero", label: "Lotto albero", serials: "shaft", noSpec: true },
@@ -356,12 +386,13 @@ export const SHEET_MULINO: SheetDef = {
   plantTypes: ["BLUE SHARK"],
   typeLabel: "TIPO MULINO",
   typeOptions: ["12-10", "16-13", "19-22"],
-  headerFields: ["matricola"],
+  headerFields: ["matricola", "alimentazione"],
   sections: [
     {
       key: "elettrico",
       title: "ALIMENTAZIONE MULINO ELETTRICO",
       icon: "bolt",
+      when: isElectric,
       rows: [
         { key: "potenza_motore", label: "Potenza motore (kW)", free: true },
         { key: "tensione_motore", label: "Tensione motore (V)", suggest: ["400", "690"], list: "tensione" },
@@ -373,6 +404,7 @@ export const SHEET_MULINO: SheetDef = {
       key: "diesel",
       title: "ALIMENTAZIONE MULINO DIESEL",
       icon: "engine",
+      when: isDiesel,
       rows: [
         { key: "potenza_diesel", label: "Potenza motori (HP)", free: true },
         { key: "classe_emissioni", label: "Classe emissioni motore", suggest: ["STAGE 0", "STAGE IIIA", "STAGE V", "TIER IVF"] },
@@ -385,28 +417,51 @@ export const SHEET_MULINO: SheetDef = {
       title: "ALLESTIMENTO IMPIANTO",
       icon: "box",
       rows: [
-        { key: "costruttore_container", label: "Costruttori Container", bind: { group: "container", field: "brand" }, serials: "container", suggest: ["SOGECO", "ECOFER"] },
-        { key: "coibentazione", label: "Coibentazione Container", input: "yesno" },
-        { key: "condizionatore", label: "Costruttore Condizionatore", bind: { group: "cooling", field: "brand" }, serials: "cooling", suggest: ["MITSUBISHI", "NON PRESENTE"] },
+        // Il 12-10 non ha container (quindi nemmeno coibentazione e
+        // condizionatore) ne' cassa giunto: chiederli lasciava quattro voci
+        // vuote per sempre.
+        { key: "costruttore_container", label: "Costruttori Container", bind: { group: "container", field: "brand" }, serials: "container", suggest: ["SOGECO", "ECOFER"], when: not1210 },
+        { key: "coibentazione", label: "Coibentazione Container", input: "yesno", when: not1210 },
+        { key: "condizionatore", label: "Costruttore Condizionatore", bind: { group: "cooling", field: "brand" }, serials: "cooling", suggest: ["MITSUBISHI", "NON PRESENTE"], when: not1210 },
         { key: "quadro_elettrico", label: "Quadro elettrico", bind: { group: "cabinet", field: "brand" }, serials: "cabinet" },
-        { key: "cassa_giunto", label: "Cassa giunto", suggest: PREVISTO, list: "previsto", serialList: ["IMI", "RIVAL", "AVEROLDI"] },
+        { key: "cassa_giunto", label: "Cassa giunto", suggest: PREVISTO, list: "previsto", serialList: ["IMI", "RIVAL", "AVEROLDI"], when: not1210 },
         { key: "giunto_idraulico", label: "Giunto idraulico completo", suggest: PREVISTO, list: "previsto", serialList: ["SEW", "ALTRO"] },
         { key: "impalcato", label: "Impalcato", suggest: ["ECOFER", "TRUSSARDI", "STAM"] },
         { key: "corpo_mulino", label: "Corpo mulino", suggest: ["IMI", "RIVAL", "AVEROLDI"] },
+        // Rotore e griglie: sul 12-10 sono due lavorazioni di due fornitori
+        // diversi (chi salda e chi lavora), sugli altri un fornitore solo.
+        // Sul 16-13 le griglie sono in fusione, quindi la saldatura non esiste.
+        { key: "rotore", label: "Rotore", specLabel: "Saldatura", suggest: ["IMI", "RIVAL", "AVEROLDI"] },
+        { key: "rotore_lavorazione", label: "Lavorazione", inlineWith: "rotore", suggest: ["IMI", "RIVAL", "AVEROLDI"], when: is1210 },
         { key: "rotore_scudato", label: "Rotore scudato", input: "yesno" },
         { key: "martelli", label: "Martelli", suggest: ["OSSITAGLIO", "FUSIONE"], serialList: ["PSP", "CODITRA", "GELLI"] },
-        { key: "griglie", label: "Griglie", suggest: ["90x90", "100x120", "100x140", "160x160", "200x200"], serialList: ["PSP", "GELLI"] },
+        { key: "griglie", label: "Griglie", specLabel: "Dimensione", suggest: ["90x90", "100x120", "100x140", "160x160", "200x200"], serialList: ["PSP", "GELLI"] },
+        { key: "griglie_saldatura", label: "Saldatura", inlineWith: "griglie", suggest: ["PSP", "GELLI"], when: is1210 },
+        { key: "griglie_lavorazione", label: "Lavorazione", inlineWith: "griglie", suggest: ["PSP", "GELLI"] },
         { key: "piano_vibrante", label: "Piano vibrante" },
         { key: "centrale_idraulica", label: "Centrale Idraulica", bind: { group: "hyd_unit", field: "brand" }, serials: "hyd_unit", suggest: ["MAGNUM"] },
-        { key: "tamburo_magnetico", label: "Tamburo magnetico", suggest: PREVISTO, list: "previsto", serialList: ["TORRI", "SGM", "GAUSS", "DARTEK"] },
-        { key: "linea_aspirazione", label: "Impianto linea aspirazione", suggest: PREVISTO, list: "previsto", serialList: ["TVT", "ALTRO"] },
-        { key: "insonorizzazione", label: "Insonorizzazione", suggest: PREVISTO, list: "previsto", serialList: ["MIRO", "ALTRO"] },
-        { key: "impianto_separazione", label: "Impianto separazione", suggest: PREVISTO, list: "previsto", serialList: ["ITALSORT", "DECCA", "TELANDRO"] },
+        // Il fornitore al posto di "Previsto / Non previsto": chi c'e' lo si
+        // scrive, chi non c'e' lo dice il N.A. — due modi per la stessa cosa
+        // erano uno di troppo.
+        { key: "linea_aspirazione", label: "Impianto linea aspirazione", suggest: ["TVT"], naButton: true },
+        { key: "insonorizzazione", label: "Insonorizzazione", suggest: ["MIRO"], naButton: true },
         { key: "verniciatura_corpo", label: "Verniciatura corpo", suggest: PAINT_MULINO, list: "verniciatura" },
         { key: "verniciatura_impalcato", label: "Verniciatura impalcato", suggest: PAINT_MULINO, list: "verniciatura" },
         { key: "imballaggio", label: "Imballaggio", suggest: ["PARZIALE", "TOTALE", "NON PREVISTO"], serialList: ["EUROIMBALLI", "ALTRO"] },
         { key: "colore", label: "Colore", suggest: COLORS, list: "colori" },
       ],
+    },
+    {
+      // La linea di separazione di un mulino si allestisce come quella di un
+      // BLUE SORTER: stessi pezzi, stessi campi, stesse foto. Era una riga
+      // sola ("Impianto separazione: Previsto"), che di una linea non diceva
+      // niente — ne' quanti nastri, ne' che separatori.
+      key: "separazione",
+      title: "IMPIANTO DI SEPARAZIONE",
+      subtitle: "Si aggiunge quello che la linea monta davvero: puo' anche non essercene nessuno",
+      icon: "rotor",
+      repeat: ["belt", "vibro", "magnet", "overbelt", "ecs", "cabin"],
+      rows: [],
     },
   ],
 };
@@ -683,8 +738,17 @@ export function defaultTipo(kind: SheetKind, model: string): string {
 }
 
 export function sheetCtx(kind: SheetKind, header: SheetHeader, model: string): SheetCtx {
-  if (kind !== "CONTAINER") return { diesel: false };
-  return { diesel: isDieselTipo(header.tipo || defaultTipo(kind, model)) };
+  const tipo = header.tipo || defaultTipo(kind, model);
+  // Sul container l'alimentazione E' il tipo; sul mulino e' una scelta a parte
+  // in testata, perche' lo stesso 12-10 esiste elettrico e diesel.
+  if (kind === "CONTAINER") return { diesel: isDieselTipo(tipo), tipo };
+  if (kind === "MULINO") return { diesel: header.alim === "Diesel", tipo };
+  return { diesel: false, tipo };
+}
+
+/** Sezioni da mostrare: quelle previste per l'alimentazione scelta. */
+export function visibleSections(def: SheetDef, ctx: SheetCtx): SheetSection[] {
+  return def.sections.filter((s) => !s.when || s.when(ctx));
 }
 
 /**
@@ -708,8 +772,8 @@ export function visibleRows(section: SheetSection, ctx: SheetCtx, values?: Sheet
  * modello). Sono righe vere — si salvano e si leggono come le altre — ma le
  * disegna la riga genitore, nella sua colonna.
  */
-export function inlineRows(def: SheetDef, key: string): SheetRow[] {
-  return allRows(def).filter((r) => r.inlineWith === key);
+export function inlineRows(def: SheetDef, key: string, ctx?: SheetCtx): SheetRow[] {
+  return allRows(def).filter((r) => r.inlineWith === key && (!ctx || !r.when || r.when(ctx)));
 }
 
 /**

@@ -24,6 +24,8 @@ import {
   sheetCtx,
   sheetDef,
   visibleRows,
+  visibleSections,
+  ALIMENTAZIONI,
   type SheetHeader,
   type SheetKind,
   type SheetOptions,
@@ -234,7 +236,7 @@ export default function AllestimentoSheets({
       );
   const disabled = !canEdit || busy;
 
-  const sections = def.sections
+  const sections = visibleSections(def, ctx)
     .map((s) => {
       const rows = visibleRows(s, ctx, draft.values);
       // Contano TUTTE le voci mostrate: una riga che si compila solo con la
@@ -251,7 +253,7 @@ export default function AllestimentoSheets({
     const d = drafts[k];
     if (!d) return 0;
     const c = sheetCtx(k, d.header, machine.model);
-    const rows = sheetDef(k).sections.flatMap((s) => visibleRows(s, c, d.values));
+    const rows = visibleSections(sheetDef(k), c).flatMap((s) => visibleRows(s, c, d.values));
     return rows.length ? Math.round((rows.filter((r) => rowFilled(r, d.values)).length / rows.length) * 100) : 0;
   }
 
@@ -399,9 +401,34 @@ export default function AllestimentoSheets({
         ) : (
           <span className="muted small">Gruppo in creazione…</span>
         )}
+        {c && row.addSlots && !disabled && (
+          <button className="btn-ghost-sm al-add-slot" disabled={busy} onClick={() => addSlot(c.id, row.addSlots!, items.length)}>
+            <Icon name="plus" size={13} /> Aggiungi {row.addSlots.toLowerCase()}
+          </button>
+        )}
         {note}
       </div>
     );
+  }
+
+  /**
+   * Una matricola in piu' su una riga che lo prevede: un trituratore puo'
+   * montare piu' lotti di lame insieme, e quanti non lo sa la definizione del
+   * gruppo. Lo slot nasce vuoto e si compila come gli altri, foto e OCR
+   * compresi.
+   */
+  async function addSlot(componentId: string, prefix: string, n: number) {
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/component-item`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ componentId, label: `${prefix} #${n + 1}` }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      onDone();
+      notify(`${prefix} #${n + 1} aggiunto`);
+    } else notify("Matricola non aggiunta", "err");
   }
 
   const signed = sheet?.status === "SIGNED";
@@ -558,6 +585,25 @@ export default function AllestimentoSheets({
               )}
             </div>
           )}
+          {(def.headerFields ?? []).includes("alimentazione") && (
+            <div className="al-kv">
+              <span className="al-kv-label">Alimentazione</span>
+              <div className="al-choice">
+                {ALIMENTAZIONI.map((a) => (
+                  <button
+                    key={a}
+                    type="button"
+                    disabled={disabled}
+                    title="Decide quale card di alimentazione si compila"
+                    className={"al-choice-btn type" + ((draft.header.alim ?? "Elettrico") === a ? " active" : "")}
+                    onClick={() => setHeader("alim", a)}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {(def.headerFields ?? []).includes("matricola") && (
             <label className="al-kv">
               <span className="al-kv-label">{MATRICOLA_LABEL[kind] ?? "Matricola"}</span>
@@ -699,7 +745,7 @@ export default function AllestimentoSheets({
                     <div className="al-row-spec">
                       <div className="al-spec-line">
                         {(() => {
-                          const subs = inlineRows(def, row.key);
+                          const subs = inlineRows(def, row.key, ctx);
                           if (!subs.length) return specControl(row);
                           // Un componente solo con piu' dati (fornitore,
                           // larghezza, lunghezza, modello): stanno nella stessa
