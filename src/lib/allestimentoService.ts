@@ -11,7 +11,7 @@ import {
   resolveValues,
   sheetDef,
   sheetGroupIds,
-  sheetKindsFor,
+  machineSheetKinds,
   serialListKey,
   type SheetHeader,
   type SheetKind,
@@ -91,11 +91,15 @@ export async function removeSheetOption(list: string, value: string): Promise<Sh
  * "Blocchi motore" sui fascicoli importati prima che esistesse). Idempotente.
  */
 export async function ensureSheetComponents(machineId: string): Promise<number> {
-  const machine = await prisma.machine.findUnique({ where: { id: machineId }, select: { plantType: true } });
+  const machine = await prisma.machine.findUnique({
+    where: { id: machineId },
+    select: { plantType: true, sheetKinds: true },
+  });
   if (!machine) return 0;
-  // Solo i gruppi delle schede di QUESTA tipologia: su una cesoia non hanno
-  // senso i riduttori del trituratore.
-  const groups = sheetGroupIds(sheetKindsFor(machine.plantType));
+  // Solo i gruppi delle schede di QUESTO fascicolo: su una cesoia non hanno
+  // senso i riduttori del trituratore, e su un container senza corpo non ha
+  // senso creare i gruppi della M5.16.
+  const groups = sheetGroupIds(machineSheetKinds(machine.plantType, machine.sheetKinds));
   const existing = await prisma.component.findMany({ where: { machineId }, select: { groupId: true } });
   const have = new Set(existing.map((c) => c.groupId));
   let created = 0;

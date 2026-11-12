@@ -740,8 +740,8 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   l'**unica** vista di Componenti & Matricole (l'elenco per gruppo resta per le
   tipologie senza scheda). Mappatura in `sheetKindsFor()`:
   **BLUE DEVIL** → M5.16 Trituratore + M5.17 Container · **BLUE SHARK** → M5.6
-  Mulino · **CESOIE** e **SPACCABINARI** → M5.18 Scheda costruzione cesoie ·
-  **BLUE SORTER** → M5.19 Linea di separazione.
+  Mulino + M5.21 Downstream · **CESOIE** e **SPACCABINARI** → M5.18 Scheda
+  costruzione cesoie · **BLUE SORTER** → M5.19 Linea di separazione.
   Ogni `SheetDef` dichiara `plantTypes` e `headerFields` (`collaudatoDa` per le
   schede BLUE DEVIL, `matricola` per mulino e cesoia). Le righe con
   `serialList` hanno un **elenco anche nella colonna Matricola** (le marche del
@@ -749,6 +749,25 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   aggiungibili delle specifiche (chiave `KIND.row#marca`). La cesoia non ha
   righe condizionali: entrambe le alimentazioni stanno sul modulo e si compila
   quella che serve; il **mulino** invece le ha (vedi sotto).
+  - **Quali schede ha un fascicolo lo sceglie chi lo apre**
+    (`machineSheetKinds()`, campo `Machine.sheetKinds`): un BLUE DEVIL non è
+    sempre corpo + container — capita di doverne compilare una sola, e l'altra
+    resterebbe vuota per sempre: scheda a 0%, avanzamento fermo e **semaforo
+    rosso che nessuno può spegnere**. Le caselle stanno nel wizard *Nuova
+    macchina* (step Identificazione) e, per correggersi, nella card *Anagrafica
+    macchina*; compaiono solo dove la tipologia ha più di una scheda.
+  - **Tutte = elenco vuoto.** Non si scrive l'elenco completo nel fascicolo: la
+    restrizione si salva solo quando è davvero una restrizione, così una scheda
+    aggiunta domani alla tipologia compare anche sui fascicoli di oggi (ed è
+    anche il motivo per cui i 195 fascicoli esistenti non hanno avuto bisogno di
+    nessun backfill). Se la scelta non interseca più la tipologia — qualcuno
+    l'ha cambiata — valgono tutte, invece di lasciare un fascicolo **senza
+    nessuna scheda**; per lo stesso motivo cambiare tipologia azzera la scelta.
+  - **Togliere la spunta nasconde la scheda, non cancella niente**: la riga
+    `AllestimentoSheet` resta, quindi rimettendola si ritrova quello che c'era
+    scritto. Il filtro vale per le linguette (`kinds` dalla API), per i gruppi
+    componente creati da `ensureSheetComponents` e per il semaforo *Schede*
+    dell'elenco macchine.
 - **Tipologie senza collaudo** (`hasCollaudo()` in `plant.ts`, oggi
   **BLUE SORTER**): la linea di separazione non si collauda come una macchina
   singola, si verifica in campo a linea montata. Quindi niente linguetta
@@ -906,14 +925,19 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     fusione** e la saldatura non esiste. Il rotore ha ora il suo costruttore,
     che prima non c'era. `inlineRows()` accetta il contesto: una specifica in
     linea che non vale per quel tipo non si disegna.
-  - **Linea di aspirazione e insonorizzazione: fornitore + N.A.** al posto di
-    *Previsto / Non previsto* con il fornitore nella colonna matricola — due
-    modi per dire la stessa cosa erano uno di troppo. **Via il tamburo
-    magnetico**, che nel mulino non si allestisce.
-  - **L'impianto di separazione è una sezione a blocchi**, gli stessi della
-    M5.19 (nastri, piano vibrante, tamburo magnetico, overbelt, ECS, cabina di
-    cernita): era una riga sola ("Impianto separazione: Previsto"), che di una
-    linea non diceva niente — né quanti nastri né che separatori.
+  - **Il downstream è una scheda sua** (M5.21, `SHEET_DOWNSTREAM`), come il
+    container lo è del trituratore: aspirazione, insonorizzazione e l'impianto
+    di separazione a blocchi (gli stessi della M5.19 — nastri, piano vibrante,
+    tamburo magnetico, overbelt, ECS, cabina di cernita). Sono due allestimenti
+    che montano persone diverse in momenti diversi, e tenendoli in una scheda
+    sola quella non arrivava al 100% finché non era finito anche l'altro pezzo.
+    *Linea di aspirazione* e *insonorizzazione* hanno **fornitore + N.A.** al
+    posto di *Previsto / Non previsto* col fornitore nella colonna matricola —
+    due modi per dire la stessa cosa erano uno di troppo — e nel mulino non
+    c'è più il tamburo magnetico, che lì non si allestisce. Il codice **M5.21 è
+    provvisorio** come la M5.19. I valori già scritti sulla M5.6 sono stati
+    spostati sulla scheda nuova (compresi gli elenchi `allestimentoOptions`,
+    archiviati col nome della scheda): a video non doveva sembrare perso nulla.
 - **Scheda linea di separazione** (M5.19, `BLUE SORTER`) — non ha niente a che
   vedere con i BLUE DEVIL: carpenteria, **nastri**, separatori e cabina di
   cernita.

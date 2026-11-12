@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
-import { hasAllestimentoSheets, isSheetKind, sheetKindsFor, type SheetKind } from "@/lib/allestimento";
+import { hasAllestimentoSheets, isSheetKind, machineSheetKinds, type SheetKind } from "@/lib/allestimento";
 import { ensureSheetComponents, getSheetOptions, loadSheet, saveSheet, signSheet } from "@/lib/allestimentoService";
 import { isGoogleConfigured, resolveSenderEmail } from "@/lib/google";
 
@@ -16,7 +16,10 @@ import { isGoogleConfigured, resolveSenderEmail } from "@/lib/google";
 async function guard(id: string) {
   const user = await currentUser();
   if (!user) return { error: NextResponse.json({ error: "Non autorizzato" }, { status: 401 }) };
-  const machine = await prisma.machine.findUnique({ where: { id }, select: { id: true, plantType: true } });
+  const machine = await prisma.machine.findUnique({
+    where: { id },
+    select: { id: true, plantType: true, sheetKinds: true },
+  });
   if (!machine) return { error: NextResponse.json({ error: "Macchina non trovata" }, { status: 404 }) };
   if (!hasAllestimentoSheets(machine.plantType))
     return {
@@ -25,7 +28,8 @@ async function guard(id: string) {
         { status: 400 }
       ),
     };
-  return { user, kinds: sheetKindsFor(machine.plantType) };
+  // solo le schede che questo fascicolo prevede davvero (scelta alla creazione)
+  return { user, kinds: machineSheetKinds(machine.plantType, machine.sheetKinds) };
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {

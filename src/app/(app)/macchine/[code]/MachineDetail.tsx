@@ -21,7 +21,14 @@ import {
   type AnagraficaField,
   type AnagraficaGroup,
 } from "@/lib/machineProgress";
-import { blockKindOf, hasAllestimentoSheets } from "@/lib/allestimento";
+import {
+  blockKindOf,
+  hasAllestimentoSheets,
+  machineSheetKinds,
+  sheetDef,
+  sheetKindsFor,
+  SHEET_LABEL,
+} from "@/lib/allestimento";
 import AllestimentoSheets from "@/components/AllestimentoSheets";
 import GooglePhotosPick from "@/components/GooglePhotosPick";
 import HoursAnalysisCard from "@/components/HoursAnalysisCard";
@@ -56,6 +63,8 @@ type Machine = {
   erpStandOrder: string | null; erpBladesOrder: string | null;
   erpDescription: string | null; erpHours: number | null; erpSyncedAt: string | null;
   plantType: string | null;
+  /** Schede di allestimento previste; vuoto = tutte quelle della tipologia. */
+  sheetKinds: string[];
   model: string; year: number; customer: string; customerId: string | null; country: string; countryCode: string;
   site: string | null; status: MachineStatus;
   naCustomerCode: string | null; naCustomer: string | null;
@@ -639,14 +648,22 @@ function TabAnagrafica({
   const [form, setForm] = useState(initForm);
   const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
   const setFF = (k: string, v: string) => setForm((s) => ({ ...s, [k]: v }));
+  // Schede previste dal fascicolo: si parte da quelle che valgono adesso, cosi'
+  // le caselle mostrano quello che si vede nella linguetta Componenti.
+  const [sheetPick, setSheetPick] = useState<string[]>(() =>
+    machineSheetKinds(machine.plantType, machine.sheetKinds)
+  );
+  const sheetChoices = sheetKindsFor(edit ? form.plantType : machine.plantType);
 
   function startEdit() {
     setForm(initForm());
+    setSheetPick(machineSheetKinds(machine.plantType, machine.sheetKinds));
     setSites([]);
     setEdit(true);
   }
   function cancelEdit() {
     setForm(initForm());
+    setSheetPick(machineSheetKinds(machine.plantType, machine.sheetKinds));
     setEdit(false);
   }
   function pickCustomer(c: CustomerHit | null) {
@@ -677,6 +694,7 @@ function TabAnagrafica({
         jobBody: jobKeys.includes("jobBody") ? form.jobBody : "",
         jobContainer: jobKeys.includes("jobContainer") ? form.jobContainer : "",
         plantType: form.plantType,
+        sheetKinds: sheetPick,
         model,
         year,
         customerId: form.customerId,
@@ -797,6 +815,8 @@ function TabAnagrafica({
                         model: modelsFor(pt)[0],
                         customModel: "",
                       }));
+                      // le schede della tipologia precedente non c'entrano piu'
+                      setSheetPick(sheetKindsFor(pt));
                     }}
                   >
                     {(plantNames.includes(form.plantType) || !form.plantType
@@ -811,6 +831,48 @@ function TabAnagrafica({
                 )}
               </dd>
             </div>
+            {sheetChoices.length > 1 && (
+              <div>
+                <dt>Schede componenti</dt>
+                <dd>
+                  {edit ? (
+                    <>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                        {sheetChoices.map((k) => (
+                          <label
+                            key={k}
+                            style={{ display: "flex", alignItems: "center", gap: 6 }}
+                            title={`${sheetDef(k).code} — ${sheetDef(k).title}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={sheetPick.includes(k)}
+                              onChange={(e) =>
+                                setSheetPick((cur) =>
+                                  e.target.checked
+                                    ? sheetChoices.filter((x) => x === k || cur.includes(x))
+                                    : cur.filter((x) => x !== k)
+                                )
+                              }
+                            />
+                            {SHEET_LABEL[k]} <span className="mono small">{sheetDef(k).code}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="muted small" style={{ marginTop: 4 }}>
+                        {sheetPick.length
+                          ? "Le schede non spuntate spariscono dal fascicolo; quello che c'è già scritto resta."
+                          : "Lasciandole tutte vuote valgono comunque entrambe: scegline almeno una."}
+                      </div>
+                    </>
+                  ) : (
+                    machineSheetKinds(machine.plantType, machine.sheetKinds)
+                      .map((k) => `${SHEET_LABEL[k]} (${sheetDef(k).code})`)
+                      .join(" + ")
+                  )}
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Modello</dt>
               <dd>

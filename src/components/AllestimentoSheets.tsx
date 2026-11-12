@@ -21,6 +21,7 @@ import {
   serialListKey,
   serialListOptions,
   sheetCommessa,
+  SHEET_LABEL,
   sheetCtx,
   sheetDef,
   visibleRows,
@@ -57,13 +58,15 @@ type SheetDTO = {
   updatedByName: string | null;
 };
 
-const KIND_META: Record<SheetKind, { label: string; icon: string }> = {
-  TRITURATORE: { label: "Trituratore", icon: "gear" },
-  CONTAINER: { label: "Container", icon: "box" },
-  MULINO: { label: "Mulino", icon: "rotor" },
-  CESOIA: { label: "Cesoia", icon: "blade" },
-  SEPARAZIONE: { label: "Linea di separazione", icon: "rotor" },
-  DOWNSTREAM: { label: "Downstream", icon: "box" },
+// L'icona della linguetta; il nome arriva da SHEET_LABEL, che e' lo stesso che
+// si legge in anagrafica e nel wizard.
+const KIND_ICON: Record<SheetKind, string> = {
+  TRITURATORE: "gear",
+  CONTAINER: "box",
+  MULINO: "rotor",
+  CESOIA: "blade",
+  SEPARAZIONE: "rotor",
+  DOWNSTREAM: "box",
 };
 
 const filled = (v: string | undefined) => !!(v ?? "").trim();
@@ -451,11 +454,11 @@ export default function AllestimentoSheets({
                   onClick={() => setKind(k)}
                 >
                   <span className="al-kind-icon">
-                    <Icon name={KIND_META[k].icon} size={17} />
+                    <Icon name={KIND_ICON[k]} size={17} />
                   </span>
                   <span className="al-kind-text">
                     <span className="al-kind-label">
-                      {KIND_META[k].label}
+                      {SHEET_LABEL[k]}
                       {dirty[k] && <span className="al-unsaved-dot" title="Modifiche non salvate" />}
                     </span>
                     <span className="al-kind-sub mono">
@@ -842,7 +845,7 @@ export default function AllestimentoSheets({
 
       {signOpen && (
         <SignSheetModal
-          title={`${def.code} · ${KIND_META[kind].label}`}
+          title={`${def.code} · ${SHEET_LABEL[kind]}`}
           hasSavedSignature={hasSavedSignature}
           onClose={() => setSignOpen(false)}
           onSign={async (body) => {
@@ -1148,7 +1151,7 @@ function SendSheetsModal({
                   </span>
                   <span className="al-send-file-text">
                     <strong>
-                      {sheetDef(k).code} · {KIND_META[k].label}
+                      {sheetDef(k).code} · {SHEET_LABEL[k]}
                     </strong>
                     <span className="muted small">
                       {signed[k] ? "firmata" : "non firmata"}

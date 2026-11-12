@@ -747,6 +747,44 @@ export function sheetKindsFor(plantType: string | null | undefined): SheetKind[]
   return p ? SHEET_KINDS.filter((k) => SHEET_DEFS[k].plantTypes.includes(p)) : [];
 }
 
+/**
+ * Come si chiama una scheda in pagina (linguette, anagrafica, wizard): il
+ * titolo del modulo ("SCHEDA ALLESTIMENTO TRITURATORE") e' da intestazione,
+ * non da pulsante. Sta qui e non nel componente perche' lo stesso nome serve
+ * anche dove la scheda si sceglie, e due elenchi di nomi divergono.
+ */
+export const SHEET_LABEL: Record<SheetKind, string> = {
+  TRITURATORE: "Trituratore",
+  CONTAINER: "Container",
+  MULINO: "Mulino",
+  CESOIA: "Cesoia",
+  SEPARAZIONE: "Linea di separazione",
+  DOWNSTREAM: "Downstream",
+};
+
+/**
+ * Le schede di QUESTO fascicolo: quelle previste dalla tipologia, ristrette a
+ * quelle scelte alla creazione.
+ *
+ * Un BLUE DEVIL non e' sempre corpo + container: capita di dover compilare solo
+ * una delle due, e l'altra resterebbe vuota per sempre — scheda a 0%,
+ * avanzamento fermo e semaforo rosso che nessuno puo' spegnere.
+ *
+ * Elenco vuoto = nessuna scelta fatta (tutti i fascicoli precedenti): valgono
+ * tutte. Se la scelta non interseca piu' la tipologia (qualcuno l'ha cambiata)
+ * si torna a tutte, invece di lasciare un fascicolo senza nessuna scheda.
+ */
+export function machineSheetKinds(
+  plantType: string | null | undefined,
+  selected: string[] | null | undefined
+): SheetKind[] {
+  const all = sheetKindsFor(plantType);
+  const want = (selected ?? []).filter(isSheetKind);
+  if (!want.length) return all;
+  const picked = all.filter((k) => want.includes(k));
+  return picked.length ? picked : all;
+}
+
 export function isSheetKind(v: unknown): v is SheetKind {
   return typeof v === "string" && (SHEET_KINDS as string[]).includes(v);
 }

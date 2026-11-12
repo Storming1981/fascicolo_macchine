@@ -145,6 +145,7 @@ export async function loadMachineDetailProps(code: string) {
     erpHours: machine.erpHours,
     erpSyncedAt: machine.erpSyncedAt?.toISOString() ?? null,
     plantType: machine.plantType,
+    sheetKinds: machine.sheetKinds,
     model: machine.model,
     year: machine.year,
     customer: machine.customer,

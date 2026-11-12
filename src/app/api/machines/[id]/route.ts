@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { resolveCountry, statusToPhase } from "@/lib/domain";
 import { jobFields } from "@/lib/plant";
 import { resolveCustomerLink } from "@/lib/machineService";
+import { isSheetKind, machineSheetKinds, sheetDef, sheetKindsFor } from "@/lib/allestimento";
 import type { MachineStatus } from "@prisma/client";
 
 const VALID: MachineStatus[] = [
@@ -52,6 +53,7 @@ const FIELD_LABEL: Record<string, string> = {
   platePower: "Potenza",
   plateVoltage: "Tensione",
   pressureSettings: "Settaggi pressione",
+  sheetKinds: "Schede componenti",
 };
 
 /** Su mulini, cesoie e linee il `jobBody` è il **Job Pro**: a diario va così. */
@@ -64,7 +66,13 @@ function fieldLabel(key: string, plantType: string | null): string {
 }
 
 const fmt = (v: unknown) =>
-  v === null || v === undefined || v === ""
+  // l'unico campo a elenco sono le schede previste: vuoto = tutte quelle della
+  // tipologia, che a diario si legge meglio del nulla
+  Array.isArray(v)
+    ? v.length
+      ? v.map((k) => (isSheetKind(k) ? sheetDef(k).code : String(k))).join(" + ")
+      : "tutte quelle della tipologia"
+    : v === null || v === undefined || v === ""
     ? "—"
     : v instanceof Date
     ? v.toISOString().slice(0, 10)
@@ -91,6 +99,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   for (const k of TEXT_FIELDS) {
     if (typeof b[k] === "string") data[k] = b[k].trim() || null;
   }
+
+  // Schede di allestimento previste dal fascicolo: si validano sulla tipologia
+  // che il fascicolo AVRA' dopo il salvataggio, quindi si risolvono piu' sotto,
+  // quando c'e' anche lo stato precedente.
+  const wantSheets: string[] | null = Array.isArray(b.sheetKinds)
+    ? (b.sheetKinds as unknown[]).filter(isSheetKind)
+    : null;
 
   // Anagrafica
   if (typeof b.model === "string" && b.model.trim()) data.model = b.model.trim();
@@ -135,12 +150,24 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     data.country = c.label;
   }
 
-  if (Object.keys(data).length === 0)
+  if (Object.keys(data).length === 0 && wantSheets === null)
     return NextResponse.json({ error: "Nessun campo valido" }, { status: 400 });
 
   // snapshot precedente, per annotare a diario le correzioni di anagrafica
   const before = await prisma.machine.findUnique({ where: { id } });
   if (!before) return NextResponse.json({ error: "Fascicolo non trovato" }, { status: 404 });
+
+  // Cambiando tipologia la scelta delle schede non vuol piu' dire niente: si
+  // azzera (= tutte quelle della nuova tipologia) invece di lasciare appeso un
+  // elenco che parla di un'altra macchina. Tutte = elenco vuoto, cosi' una
+  // scheda aggiunta domani alla tipologia compare anche sui fascicoli di oggi.
+  const plantAfter = (data.plantType as string | null | undefined) ?? before.plantType;
+  const plantChanged = "plantType" in data && data.plantType !== before.plantType;
+  if (wantSheets || plantChanged) {
+    const all = sheetKindsFor(plantAfter);
+    const picked = wantSheets && !plantChanged ? machineSheetKinds(plantAfter, wantSheets) : all;
+    data.sheetKinds = picked.length === all.length ? [] : picked;
+  }
 
   const machine = await prisma.machine.update({ where: { id }, data });
 

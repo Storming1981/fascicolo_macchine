@@ -6,6 +6,7 @@ import Icon from "@/components/Icon";
 import CustomerPicker, { type CustomerHit } from "@/components/CustomerPicker";
 import { COUNTRIES } from "@/lib/domain";
 import { hasDualJob, jobFields, CUSTOM_MODEL } from "@/lib/plant";
+import { sheetDef, sheetKindsFor, SHEET_LABEL } from "@/lib/allestimento";
 
 type PlantConfig = { name: string; models: string[] }[];
 
@@ -50,6 +51,13 @@ export default function NewMachineForm({
     deliveryDate: "",
   });
   const set = (k: string, v: string | number) => setF((s) => ({ ...s, [k]: v }));
+
+  // Schede di allestimento del fascicolo. Un BLUE DEVIL non e' sempre corpo +
+  // container: capita di doverne compilare una sola, e l'altra resterebbe vuota
+  // per sempre — 0%, avanzamento fermo e semaforo rosso che non si spegne.
+  // Si parte da tutte quelle della tipologia, che e' il caso normale.
+  const [sheets, setSheets] = useState<string[]>(() => sheetKindsFor(PLANT_TYPES[0]));
+  const sheetChoices = sheetKindsFor(f.plantType);
 
   // Cliente selezionato dall'anagrafica (Customer): serve il collegamento
   // `customerId`, altrimenti il fascicolo non compare tra le macchine del
@@ -97,7 +105,9 @@ export default function NewMachineForm({
     }));
     setNewCust(null);
   }
-  const setPlant = (pt: string) =>
+  const setPlant = (pt: string) => {
+    // le schede della tipologia precedente non c'entrano piu' niente
+    setSheets(sheetKindsFor(pt));
     setF((s) => ({
       ...s,
       plantType: pt,
@@ -110,6 +120,7 @@ export default function NewMachineForm({
           .map((k) => [k, ""])
       ),
     }));
+  };
   const modelOptions = modelsForPlant(f.plantType);
 
   async function submit() {
@@ -123,6 +134,10 @@ export default function NewMachineForm({
       return setErr(
         "Seleziona il cliente dall'anagrafica: senza collegamento il fascicolo non comparirà tra le macchine del cliente."
       );
+    }
+    if (sheetChoices.length > 1 && !sheets.length) {
+      setStep(0);
+      return setErr("Scegli almeno una scheda componenti da compilare.");
     }
     const resolvedModel =
       f.model === CUSTOM_MODEL ? f.customModel.trim() : f.model;
@@ -139,6 +154,7 @@ export default function NewMachineForm({
         ...f,
         model: resolvedModel,
         country: country?.label || "Italia",
+        sheetKinds: sheets,
       }),
     });
     setBusy(false);
@@ -253,6 +269,38 @@ export default function NewMachineForm({
                 />
               </div>
             ))}
+            {sheetChoices.length > 1 && (
+              <div className="form-row" style={{ gridColumn: "1 / -1" }}>
+                <label>Schede componenti da compilare</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 16, padding: "4px 0" }}>
+                  {sheetChoices.map((k) => (
+                    <label
+                      key={k}
+                      style={{ display: "flex", alignItems: "center", gap: 7 }}
+                      title={`${sheetDef(k).code} — ${sheetDef(k).title}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={sheets.includes(k)}
+                        onChange={(e) =>
+                          setSheets((cur) =>
+                            e.target.checked
+                              ? sheetChoices.filter((x) => x === k || cur.includes(x))
+                              : cur.filter((x) => x !== k)
+                          )
+                        }
+                      />
+                      {SHEET_LABEL[k]} <span className="mono small">{sheetDef(k).code}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="muted small">
+                  Togli la spunta alla scheda che questo fascicolo non ha: non comparirà fra le
+                  linguette e non terrà il semaforo rosso in attesa di una firma che non arriverà
+                  mai. Si può correggere dopo, dall'anagrafica del fascicolo.
+                </div>
+              </div>
+            )}
             {hasDualJob(f.plantType) && (
               <div className="form-ok" style={{ gridColumn: "1 / -1" }}>
                 Un impianto <strong>BLUE DEVIL</strong> si compone di{" "}

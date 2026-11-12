@@ -31,6 +31,8 @@ export type CreateMachineInput = {
   plateWeight?: string | null;
   platePower?: string | null;
   plateVoltage?: string | null;
+  /** Schede di allestimento previste; vuoto = tutte quelle della tipologia. */
+  sheetKinds?: string[];
   components?: ComponentInput[];
 };
 
@@ -101,6 +103,7 @@ export async function createMachine(input: CreateMachineInput, authorName = "Sis
       plateWeight: input.plateWeight || null,
       platePower: input.platePower || null,
       plateVoltage: input.plateVoltage || null,
+      sheetKinds: input.sheetKinds ?? [],
       components: {
         create: (input.components && input.components.length
           ? input.components

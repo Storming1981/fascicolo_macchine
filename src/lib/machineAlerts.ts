@@ -4,7 +4,7 @@
 //
 // Modulo puro (client + server): niente import server-only.
 
-import { sheetDef, sheetKindsFor } from "./allestimento";
+import { machineSheetKinds, sheetDef } from "./allestimento";
 import { hasCollaudo } from "./plant";
 
 /** Le tre firme in calce al collaudo (card *Firme* della scheda fascicolo). */
@@ -18,15 +18,17 @@ export type AlertState = "ok" | "pending" | "na";
 export type MachineAlert = { state: AlertState; detail: string };
 
 /**
- * Schede di allestimento: verde solo quando **tutte** quelle previste dalla
- * tipologia esistono e sono firmate. Una scheda non ancora aperta conta come
- * da firmare: il dato non c'è, non è che non serve.
+ * Schede di allestimento: verde solo quando **tutte** quelle previste dal
+ * fascicolo esistono e sono firmate. Una scheda non ancora aperta conta come
+ * da firmare: il dato non c'è, non è che non serve. Quelle escluse alla
+ * creazione (un BLUE DEVIL di solo container) non contano: non si compilano.
  */
 export function sheetsAlert(
   plantType: string | null,
-  signedKinds: Set<string>
+  signedKinds: Set<string>,
+  selected?: string[] | null
 ): MachineAlert {
-  const kinds = sheetKindsFor(plantType);
+  const kinds = machineSheetKinds(plantType, selected);
   if (!kinds.length) return { state: "na", detail: "Nessuna scheda prevista per questa tipologia" };
   const missing = kinds.filter((k) => !signedKinds.has(k));
   if (!missing.length)

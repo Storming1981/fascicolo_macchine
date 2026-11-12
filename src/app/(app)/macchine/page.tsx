@@ -76,7 +76,7 @@ export default async function MachinesPage({
       : null,
     tiranteGiunto: m.tiranteGiunto,
     filtroMaggiorato: m.filtroMaggiorato,
-    schede: sheetsAlert(m.plantType, signedSheets.get(m.id) ?? empty),
+    schede: sheetsAlert(m.plantType, signedSheets.get(m.id) ?? empty, m.sheetKinds),
     collaudo: collaudoAlert(
       m.plantType,
       collaudoByMachine.get(m.id) ?? null,

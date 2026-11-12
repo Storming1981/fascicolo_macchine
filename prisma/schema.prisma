@@ -191,6 +191,11 @@ model Machine {
   jobBody         String?       // Corpo trituratore (BLUE DEVIL)
   jobContainer    String?       // Container (BLUE DEVIL)
   plantType       String?       // Tipologia impianto: BLUE DEVIL, BLUE SHARK, ...
+  /// Schede di allestimento che questo fascicolo prevede davvero, fra quelle
+  /// della tipologia (un BLUE DEVIL puo' essere solo corpo o solo container).
+  /// Elenco VUOTO = tutte quelle della tipologia: e' come si e' sempre
+  /// comportato, quindi i fascicoli esistenti non vanno toccati.
+  sheetKinds      String[]      @default([])
   model           String
   year            Int
   customer        String
