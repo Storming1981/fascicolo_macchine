@@ -63,6 +63,7 @@ const KIND_META: Record<SheetKind, { label: string; icon: string }> = {
   MULINO: { label: "Mulino", icon: "rotor" },
   CESOIA: { label: "Cesoia", icon: "blade" },
   SEPARAZIONE: { label: "Linea di separazione", icon: "rotor" },
+  DOWNSTREAM: { label: "Downstream", icon: "box" },
 };
 
 const filled = (v: string | undefined) => !!(v ?? "").trim();

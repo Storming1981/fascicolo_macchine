@@ -13,8 +13,15 @@
 
 import type { KitFlag } from "./kits";
 
-export type SheetKind = "TRITURATORE" | "CONTAINER" | "MULINO" | "CESOIA" | "SEPARAZIONE";
-export const SHEET_KINDS: SheetKind[] = ["TRITURATORE", "CONTAINER", "MULINO", "CESOIA", "SEPARAZIONE"];
+export type SheetKind = "TRITURATORE" | "CONTAINER" | "MULINO" | "CESOIA" | "SEPARAZIONE" | "DOWNSTREAM";
+export const SHEET_KINDS: SheetKind[] = [
+  "TRITURATORE",
+  "CONTAINER",
+  "MULINO",
+  "CESOIA",
+  "SEPARAZIONE",
+  "DOWNSTREAM",
+];
 
 export type SheetInput = "text" | "yesno" | "yesnona";
 /**
@@ -440,22 +447,46 @@ export const SHEET_MULINO: SheetDef = {
         { key: "griglie_lavorazione", label: "Lavorazione", inlineWith: "griglie", suggest: ["PSP", "GELLI"] },
         { key: "piano_vibrante", label: "Piano vibrante" },
         { key: "centrale_idraulica", label: "Centrale Idraulica", bind: { group: "hyd_unit", field: "brand" }, serials: "hyd_unit", suggest: ["MAGNUM"] },
-        // Il fornitore al posto di "Previsto / Non previsto": chi c'e' lo si
-        // scrive, chi non c'e' lo dice il N.A. — due modi per la stessa cosa
-        // erano uno di troppo.
-        { key: "linea_aspirazione", label: "Impianto linea aspirazione", suggest: ["TVT"], naButton: true },
-        { key: "insonorizzazione", label: "Insonorizzazione", suggest: ["MIRO"], naButton: true },
         { key: "verniciatura_corpo", label: "Verniciatura corpo", suggest: PAINT_MULINO, list: "verniciatura" },
         { key: "verniciatura_impalcato", label: "Verniciatura impalcato", suggest: PAINT_MULINO, list: "verniciatura" },
         { key: "imballaggio", label: "Imballaggio", suggest: ["PARZIALE", "TOTALE", "NON PREVISTO"], serialList: ["EUROIMBALLI", "ALTRO"] },
         { key: "colore", label: "Colore", suggest: COLORS, list: "colori" },
       ],
     },
+  ],
+};
+
+/**
+ * **Downstream del mulino**: tutto quello che sta a valle della macchina —
+ * aspirazione, insonorizzazione e la linea di separazione.
+ *
+ * E' una scheda a se' e non una sezione del mulino per la stessa ragione per
+ * cui il BLUE DEVIL ha corpo e container separati: sono due allestimenti, li
+ * monta gente diversa in momenti diversi, e tenerli insieme voleva dire una
+ * scheda che non arrivava mai al 100% finche' non era finito anche l'altro.
+ * I pezzi sono gli stessi della M5.19, quindi stesso catalogo `BLOCKS`.
+ */
+export const SHEET_DOWNSTREAM: SheetDef = {
+  kind: "DOWNSTREAM",
+  code: "M5.21",
+  title: "SCHEDA ALLESTIMENTO DOWNSTREAM",
+  rev: "rev.00",
+  plantTypes: ["BLUE SHARK"],
+  typeLabel: "IMPIANTO",
+  sections: [
     {
-      // La linea di separazione di un mulino si allestisce come quella di un
-      // BLUE SORTER: stessi pezzi, stessi campi, stesse foto. Era una riga
-      // sola ("Impianto separazione: Previsto"), che di una linea non diceva
-      // niente — ne' quanti nastri, ne' che separatori.
+      key: "aspirazione",
+      title: "ASPIRAZIONE E INSONORIZZAZIONE",
+      icon: "bolt",
+      rows: [
+        // Il fornitore al posto di "Previsto / Non previsto": chi c'e' lo si
+        // scrive, chi non c'e' lo dice il N.A. — due modi per la stessa cosa
+        // erano uno di troppo.
+        { key: "linea_aspirazione", label: "Impianto linea aspirazione", suggest: ["TVT"], naButton: true },
+        { key: "insonorizzazione", label: "Insonorizzazione", suggest: ["MIRO"], naButton: true },
+      ],
+    },
+    {
       key: "separazione",
       title: "IMPIANTO DI SEPARAZIONE",
       subtitle: "Si aggiunge quello che la linea monta davvero: puo' anche non essercene nessuno",
@@ -694,6 +725,7 @@ const SHEET_DEFS: Record<SheetKind, SheetDef> = {
   MULINO: SHEET_MULINO,
   CESOIA: SHEET_CESOIA,
   SEPARAZIONE: SHEET_SEPARAZIONE,
+  DOWNSTREAM: SHEET_DOWNSTREAM,
 };
 
 export function sheetDef(kind: SheetKind): SheetDef {
