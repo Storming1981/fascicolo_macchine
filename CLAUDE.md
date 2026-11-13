@@ -72,10 +72,20 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
     stavano già lì (i 6 fascicoli non-BLUE DEVIL avevano `jobBody` compilato e
     `jobContainer` vuoto), quindi ERP, schede di allestimento e Analisi ore
     continuano a leggere la stessa colonna. Cambia il nome, non il posto.
-  - Salvando l'anagrafica i job **non previsti dalla tipologia si svuotano**
-    (il cambio va a diario, quindi resta tracciato) e il wizard li azzera al
-    cambio tipologia: un numero nascosto in un campo che non si vede più
-    finirebbe lo stesso nelle query del gestionale.
+  - **Un BLUE DEVIL di sola scheda ha un job solo.** `jobFields()` guarda
+    anche le schede scelte (`Machine.sheetKinds`): solo container → il solo
+    *Job Container*, solo corpo → il solo *Job Body*. Chiedere il job di un
+    pezzo che quel fascicolo non monta è lo stesso errore del doppio job sui
+    mulini. Ne segue tutto il resto: avanzamento (`anagraficaFields`),
+    convalida, etichetta a diario e, in Analisi ore, le tendine degli ordini —
+    **Cavalletto e Lame spariscono dove non c'è il corpo**, perché sono pezzi
+    del trituratore.
+  - Salvando l'anagrafica i job **non previsti dalla tipologia o dalle schede
+    si svuotano** (il cambio va a diario, quindi resta tracciato) e il wizard
+    li azzera al cambio di tipologia o di schede: un numero nascosto in un
+    campo che non si vede più finirebbe lo stesso nelle query del gestionale.
+    Lo fa anche `createMachine`, che altrimenti riempirebbe `jobBody` col job
+    di vendita su un fascicolo di solo container.
   - A diario il campo si chiama come in pagina (`fieldLabel()` in
     `api/machines/[id]/route.ts`): "Job Pro" su mulini, cesoie e linee.
   - In **Analisi ore** l'ordine di produzione del job principale si chiama
@@ -1169,6 +1179,27 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     collaudo registrato qui, **non sono al 100%** — perché il loro fascicolo
     non è completo, ed è proprio la domanda a cui la barra deve rispondere.
 - **Stato macchina** modificabile dal dettaglio (select), evento a diario.
+- **Eliminare un fascicolo** (card *Elimina fascicolo* in fondo all'Anagrafica,
+  `DELETE /api/machines/[id]`): **solo ADMIN**, e non per permesso in matrice —
+  `machine.edit` ce l'hanno anche i responsabili, e una cancellazione
+  irreversibile non è una modifica. Serve ai fascicoli **aperti per errore o
+  doppi**: *Dismessa* racconta il fine vita di una macchina che è esistita, e
+  lasciarli lì significa sporcare per sempre elenco, conteggi e ricerche.
+  - **Il codice del fascicolo va riscritto** nel corpo della richiesta (non
+    solo nella UI): è irreversibile e un clic andato a male non deve bastare.
+  - **Cosa sopravvive**: gli **interventi di service** (relazione `SetNull`: il
+    cantiere c'è stato anche se il fascicolo era sbagliato), le **chat** e le
+    **foto scattate su un intervento** — queste ultime vengono staccate
+    (`machineId = null`) *prima* della cancellazione, altrimenti la cascata se
+    le porterebbe via da rapportini e chat di quel cantiere.
+  - **Cosa sparisce**: componenti, matricole, foto del fascicolo (cestino
+    compreso), documenti, diario, firme, schede di allestimento, note,
+    collaudo, date di stato — più i **file su disco** di foto e documenti
+    (`deleteUploads`, poi la cartella se è rimasta vuota) e la riga
+    `GphotoAlbum`, che non ha una chiave esterna e resterebbe orfana. Le foto
+    già copiate sul Google Foto dell'operatore **restano sue**.
+  - L'eliminazione finisce **nei log del container** con chi, quale fascicolo,
+    job e cliente: dopo, in banca dati non resta niente da guardare.
 - **Nuovo intervento**: fase, tipo (sostituzione/ispezione/riparazione/nota),
   matricole, foto, firma PIN o a penna su canvas → diario + firma + aggiorna seriale.
 - **Nuova macchina**: wizard 4 step (identificazione, cliente, targa, componenti).

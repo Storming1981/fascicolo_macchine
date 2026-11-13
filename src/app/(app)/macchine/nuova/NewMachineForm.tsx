@@ -116,7 +116,7 @@ export default function NewMachineForm({
       // i job non previsti dalla nuova tipologia non restano scritti di nascosto
       ...Object.fromEntries(
         (["jobBody", "jobContainer"] as const)
-          .filter((k) => !jobFields(pt).some((j) => j.key === k))
+          .filter((k) => !jobFields(pt, sheetKindsFor(pt)).some((j) => j.key === k))
           .map((k) => [k, ""])
       ),
     }));
@@ -256,7 +256,7 @@ export default function NewMachineForm({
                 placeholder="es. 1260200"
               />
             </div>
-            {jobFields(f.plantType).map((j) => (
+            {jobFields(f.plantType, sheets).map((j) => (
               <div className="form-row" key={j.key}>
                 <label>
                   {j.label} — {j.hint}
@@ -282,13 +282,19 @@ export default function NewMachineForm({
                       <input
                         type="checkbox"
                         checked={sheets.includes(k)}
-                        onChange={(e) =>
-                          setSheets((cur) =>
-                            e.target.checked
-                              ? sheetChoices.filter((x) => x === k || cur.includes(x))
-                              : cur.filter((x) => x !== k)
-                          )
-                        }
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? sheetChoices.filter((x) => x === k || sheets.includes(x))
+                            : sheets.filter((x) => x !== k);
+                          setSheets(next);
+                          // il job del pezzo che non c'e' piu' non resta scritto
+                          const keep = jobFields(f.plantType, next).map((j) => j.key);
+                          setF((st) => ({
+                            ...st,
+                            jobBody: keep.includes("jobBody") ? st.jobBody : "",
+                            jobContainer: keep.includes("jobContainer") ? st.jobContainer : "",
+                          }));
+                        }}
                       />
                       {SHEET_LABEL[k]} <span className="mono small">{sheetDef(k).code}</span>
                     </label>
@@ -301,7 +307,7 @@ export default function NewMachineForm({
                 </div>
               </div>
             )}
-            {hasDualJob(f.plantType) && (
+            {hasDualJob(f.plantType) && jobFields(f.plantType, sheets).length > 1 && (
               <div className="form-ok" style={{ gridColumn: "1 / -1" }}>
                 Un impianto <strong>BLUE DEVIL</strong> si compone di{" "}
                 <strong>corpo trituratore</strong> (Job Body) e{" "}

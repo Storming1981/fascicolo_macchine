@@ -3,7 +3,8 @@ import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { resolveCountry, statusToPhase } from "@/lib/domain";
-import { jobFields } from "@/lib/plant";
+import { jobFields, type JobFieldKey } from "@/lib/plant";
+import { deleteUploads, removeScopeIfEmpty } from "@/lib/uploads";
 import { resolveCustomerLink } from "@/lib/machineService";
 import { isSheetKind, machineSheetKinds, sheetDef, sheetKindsFor } from "@/lib/allestimento";
 import type { MachineStatus } from "@prisma/client";
@@ -57,9 +58,9 @@ const FIELD_LABEL: Record<string, string> = {
 };
 
 /** Su mulini, cesoie e linee il `jobBody` è il **Job Pro**: a diario va così. */
-function fieldLabel(key: string, plantType: string | null): string {
+function fieldLabel(key: string, plantType: string | null, sheets?: string[] | null): string {
   if (key === "jobBody" || key === "jobContainer") {
-    const def = jobFields(plantType).find((j) => j.key === key);
+    const def = jobFields(plantType, sheets).find((j) => j.key === key);
     if (def) return def.label;
   }
   return FIELD_LABEL[key];
@@ -167,6 +168,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const all = sheetKindsFor(plantAfter);
     const picked = wantSheets && !plantChanged ? machineSheetKinds(plantAfter, wantSheets) : all;
     data.sheetKinds = picked.length === all.length ? [] : picked;
+
+    // Un fascicolo di solo container non ha un corpo trituratore: il suo Job
+    // Body sparisce dalla pagina, quindi deve sparire anche dal dato — un
+    // numero nascosto in un campo che non si vede piu' finirebbe lo stesso
+    // nelle query del gestionale. Il cambio va a diario, quindi resta tracciato.
+    const keep = jobFields(plantAfter, picked).map((j) => j.key);
+    for (const k of ["jobBody", "jobContainer"] as JobFieldKey[])
+      if (!keep.includes(k)) data[k] = null;
   }
 
   const machine = await prisma.machine.update({ where: { id }, data });
@@ -178,7 +187,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       const next = (machine as unknown as Record<string, unknown>)[k];
       const a = fmt(prev);
       const bv = fmt(next);
-      return a === bv ? null : `${fieldLabel(k, machine.plantType)}: ${a} → ${bv}`;
+      return a === bv ? null : `${fieldLabel(k, machine.plantType, before.sheetKinds)}: ${a} → ${bv}`;
     })
     .filter(Boolean) as string[];
 
@@ -225,5 +234,67 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       },
     });
   }
+  return NextResponse.json({ ok: true, code: machine.code });
+}
+
+/**
+ * **Elimina davvero** un fascicolo: riga, componenti, matricole, foto,
+ * documenti, diario, firme, schede e note. Non e' il cambio di stato a
+ * *Dismessa* — quello e' il fine vita di una macchina che e' esistita; questo
+ * serve ai fascicoli aperti per errore o doppi, che non devono restare in
+ * elenco a sporcare conteggi e ricerche.
+ *
+ * **Solo ADMIN**, e non per permesso in matrice: `machine.edit` ce l'hanno
+ * anche i responsabili, e una cancellazione irreversibile non e' una modifica.
+ * Il codice del fascicolo va riscritto nella richiesta: e' l'unico modo per
+ * essere certi che non sia un clic andato a male.
+ */
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const user = await currentUser();
+  if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  if (user.role !== "ADMIN")
+    return NextResponse.json(
+      { error: "Solo un amministratore puo' eliminare un fascicolo" },
+      { status: 403 }
+    );
+  const { id } = await ctx.params;
+  const machine = await prisma.machine.findUnique({
+    where: { id },
+    select: { id: true, code: true, job: true, customer: true },
+  });
+  if (!machine) return NextResponse.json({ error: "Fascicolo non trovato" }, { status: 404 });
+
+  const b = await req.json().catch(() => ({}));
+  if (String(b?.code ?? "").trim().toUpperCase() !== machine.code.toUpperCase())
+    return NextResponse.json(
+      { error: `Per eliminare, riscrivi il codice del fascicolo (${machine.code})` },
+      { status: 400 }
+    );
+
+  // Le foto scattate su un INTERVENTO restano all'intervento: sono la prova di
+  // un lavoro fatto in cantiere, non del fascicolo. Senza questo passaggio la
+  // cascata se le porterebbe via dai rapportini e dalle chat di quel cantiere.
+  await prisma.photo.updateMany({
+    where: { machineId: id, interventoId: { not: null } },
+    data: { machineId: null },
+  });
+
+  // i file su disco delle righe che stanno per sparire (le altre non si toccano)
+  const [photos, docs] = await Promise.all([
+    prisma.photo.findMany({ where: { machineId: id }, select: { path: true } }),
+    prisma.document.findMany({ where: { machineId: id }, select: { path: true } }),
+  ]);
+  // GphotoAlbum non ha una chiave esterna verso Machine: resterebbe orfano
+  await prisma.gphotoAlbum.deleteMany({ where: { machineId: id } });
+
+  // Gli interventi di service restano (relazione SetNull): il cantiere c'e'
+  // stato anche se il fascicolo era sbagliato.
+  await prisma.machine.delete({ where: { id } });
+  await deleteUploads([...photos.map((x) => x.path), ...docs.map((x) => x.path)]);
+  await removeScopeIfEmpty(machine.code);
+
+  console.log(
+    `[macchine] ${user.name} ha eliminato il fascicolo ${machine.code} (job ${machine.job}, ${machine.customer})`
+  );
   return NextResponse.json({ ok: true, code: machine.code });
 }

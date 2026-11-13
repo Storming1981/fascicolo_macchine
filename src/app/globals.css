@@ -179,7 +179,7 @@ h1, h2, h3, h4 { margin: 0; }
 .btn-success:hover { filter: brightness(1.06); }
 .btn-danger { background: var(--surface); color: var(--red); border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
 .btn-danger:hover { background: #fef2f2; }
-.btn-primary-sm, .btn-ghost-sm {
+.btn-primary-sm, .btn-ghost-sm, .btn-danger-sm {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 6px 11px; border-radius: 7px; font: inherit; font-size: 12px;
   font-weight: 500; cursor: pointer; border: 1px solid transparent; white-space: nowrap;
@@ -188,6 +188,14 @@ h1, h2, h3, h4 { margin: 0; }
 .btn-primary-sm:hover { background: #2557c8; }
 .btn-ghost-sm { background: var(--surface); color: var(--text-2); border-color: var(--border); }
 .btn-ghost-sm:hover { background: var(--hover); color: var(--text); }
+.btn-danger-sm { background: var(--surface); color: var(--red); border-color: #fecaca; }
+.btn-danger-sm:hover:not(:disabled) { background: #fef2f2; }
+.btn-danger-sm:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Azione irreversibile (elimina fascicolo): si vede che non e' una card come
+   le altre, senza gridare. */
+.danger-zone { border-color: #fecaca; }
+.danger-zone .card-header h3 { color: var(--red); }
 
 /* ── Stats ───────────────────────────────────────────────── */
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/Icon";
 import { fmtDate, fmtDateTime, fmtHM } from "@/lib/format";
-import { hasDualJob, mainOrderRole } from "@/lib/plant";
+import { jobFields, mainOrderRole } from "@/lib/plant";
 import { ordiniRequired } from "@/lib/machineProgress";
 import type { HoursAnalysis, SiteLink } from "@/lib/hoursAnalysis";
 
@@ -66,6 +66,8 @@ export type HoursMachine = {
   id: string;
   /** Serve a sapere quanti job di produzione ha il fascicolo (BLUE DEVIL: due). */
   plantType: string | null;
+  /** Schede previste: un BLUE DEVIL di solo container non ha il job del corpo. */
+  sheetKinds: string[];
   job: string | null;
   jobBody: string | null;
   jobContainer: string | null;
@@ -96,9 +98,13 @@ export default function HoursAnalysisCard({
   // ordine di cui si stanno guardando le timbrature (riquadro sopra la card)
   const [orderOpen, setOrderOpen] = useState<ErpOrderDto | null>(null);
 
-  // Layout dei job: il BLUE DEVIL ha corpo + container, le altre tipologie un
-  // Job Pro solo. Il gestionale continua a chiamare "Corpo" quell'ordine.
-  const dual = hasDualJob(machine.plantType);
+  // Layout dei job: il BLUE DEVIL ha corpo + container (uno solo se il
+  // fascicolo ha una sola scheda), le altre tipologie un Job Pro solo. Il
+  // gestionale continua a chiamare "Corpo" quell'ordine.
+  const jobs = jobFields(machine.plantType, machine.sheetKinds).map((j) => j.key);
+  const hasBody = jobs.includes("jobBody");
+  const hasContainer = jobs.includes("jobContainer");
+  const dual = jobs.length > 1;
   const ordini = (() => {
     const fields = ordiniRequired(machine);
     return { done: fields.filter((f) => f.filled).length, total: fields.length, missing: fields.filter((f) => !f.filled) };
@@ -305,7 +311,8 @@ export default function HoursAnalysisCard({
 
           {/* Ordini di produzione: per gli impianti nuovi la commessa è la
               generica 999999999 e le ore stanno sull'ORDINE, non sulla commessa */}
-          {(isGeneric(machine.jobBody) || (dual && isGeneric(machine.jobContainer))) && (
+          {((hasBody && isGeneric(machine.jobBody)) ||
+            (hasContainer && isGeneric(machine.jobContainer))) && (
             <div style={{ marginTop: 12 }}>
               <div className="muted small" style={{ fontWeight: 600, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
                 <span>Ordini di produzione (impianto nuovo, commessa {GENERIC_COMMESSA})</span>
@@ -322,15 +329,15 @@ export default function HoursAnalysisCard({
                   </span>
                 )}
               </div>
-              {isGeneric(machine.jobBody) && (
+              {hasBody && isGeneric(machine.jobBody) && (
                 <OrderPicker machineId={machine.id} role={mainOrderRole(machine.plantType)} field="erpBodyOrder" currentKey={machine.erpBodyOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
               )}
-              {dual && isGeneric(machine.jobContainer) && (
+              {hasContainer && isGeneric(machine.jobContainer) && (
                 <OrderPicker machineId={machine.id} role="Container" field="erpContainerOrder" currentKey={machine.erpContainerOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
               )}
-              {/* Cavalletto e lame sono pezzi del trituratore: sulle altre
-                  tipologie sarebbero due tendine che non si compilano mai. */}
-              {dual && (
+              {/* Cavalletto e lame sono pezzi del trituratore: dove il corpo
+                  non c'e' sarebbero due tendine che non si compilano mai. */}
+              {dual && hasBody && (
                 <>
                   <OrderPicker machineId={machine.id} role="Cavalletto" field="erpStandOrder" currentKey={machine.erpStandOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
                   <OrderPicker machineId={machine.id} role="Lame" field="erpBladesOrder" currentKey={machine.erpBladesOrder} canEdit={canEdit} onDone={onDone} notify={notify} />

@@ -145,6 +145,36 @@ export async function readUploadBytes(
   }
 }
 
+/**
+ * Cancella dal disco i file di una lista di path pubblici `/uploads/...`.
+ *
+ * Best-effort: un file gia' sparito non e' un errore (la riga in banca dati e'
+ * la verita', il file e' la copia). Ritorna quanti ne ha tolti davvero.
+ */
+export async function deleteUploads(paths: (string | null | undefined)[]): Promise<number> {
+  let n = 0;
+  for (const p of paths) {
+    if (!p || !p.startsWith("/uploads/")) continue;
+    try {
+      await fs.unlink(uploadLocalPath(p));
+      n++;
+    } catch {
+      /* gia' cancellato o mai scritto */
+    }
+  }
+  return n;
+}
+
+/** Toglie la cartella di uno scope **solo se e' rimasta vuota**. */
+export async function removeScopeIfEmpty(scope: string): Promise<boolean> {
+  try {
+    await fs.rmdir(path.join(ROOT, safeSegment(scope)));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function sha256(s: string) {
   return crypto.createHash("sha256").update(s).digest("hex");
 }

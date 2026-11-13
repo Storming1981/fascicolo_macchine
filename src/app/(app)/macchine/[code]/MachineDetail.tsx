@@ -147,6 +147,8 @@ export default function MachineDetail({
     interventoCreate: boolean;
     chatSend: boolean;
     customerManage?: boolean;
+    /** amministratore: l'unico che puo' eliminare il fascicolo */
+    admin?: boolean;
     /** collaudatore esterno: solo la linguetta Collaudo */
     collaudoOnly?: boolean;
     collaudoCompile?: boolean;
@@ -259,6 +261,7 @@ export default function MachineDetail({
           hasSavedSignature={currentUser.hasSignature}
           plantConfig={plantConfig}
           canEdit={caps.edit}
+          canDelete={!!caps.admin}
           onDone={refresh}
           notify={notify}
         />
@@ -551,6 +554,7 @@ function TabAnagrafica({
   machine,
   plantConfig,
   canEdit,
+  canDelete,
   hasSavedSignature,
   onDone,
   notify,
@@ -558,6 +562,8 @@ function TabAnagrafica({
   machine: Machine;
   plantConfig: PlantConfig;
   canEdit: boolean;
+  /** Eliminare il fascicolo: solo amministratori. */
+  canDelete?: boolean;
   hasSavedSignature: boolean;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
@@ -620,8 +626,10 @@ function TabAnagrafica({
     const pt = machine.plantType || plantNames[0] || "";
     const known = modelsFor(pt).includes(machine.model);
     // Tipologia a job singolo: il Job Pro è il `jobBody`; se per errore il
-    // numero stava nel container lo si recupera invece di perderlo.
-    const single = jobFields(pt).length === 1;
+    // numero stava nel container lo si recupera invece di perderlo. Non vale
+    // per un BLUE DEVIL di solo container, dove l'unico job È il container.
+    const fields = jobFields(pt, machine.sheetKinds);
+    const single = fields.length === 1 && fields[0].key === "jobBody";
     return {
       job: machine.job,
       jobBody: (single ? machine.jobBody || machine.jobContainer : machine.jobBody) || "",
@@ -683,7 +691,7 @@ function TabAnagrafica({
     const year = Number(form.year);
     if (!Number.isInteger(year) || year < 1900 || year > 2100)
       return notify("Anno non valido", "err");
-    const jobKeys = jobFields(form.plantType).map((j) => j.key);
+    const jobKeys = jobFields(form.plantType, sheetPick).map((j) => j.key);
     setBusy(true);
     const res = await fetch(`/api/machines/${machine.id}`, {
       method: "PATCH",
@@ -916,7 +924,10 @@ function TabAnagrafica({
                 )}
               </dd>
             </div>
-            {jobFields(edit ? form.plantType : machine.plantType).map((j) => (
+            {jobFields(
+              edit ? form.plantType : machine.plantType,
+              edit ? sheetPick : machine.sheetKinds
+            ).map((j) => (
               <div key={j.key}>
                 <dt>
                   {j.label} ({j.hint})
@@ -1272,7 +1283,103 @@ function TabAnagrafica({
           </ul>
         </section>
       </div>
+
+      {canDelete && <DeleteMachineCard machine={machine} notify={notify} />}
     </div>
+  );
+}
+
+/**
+ * Eliminazione definitiva del fascicolo (solo amministratori).
+ *
+ * *Dismessa* racconta il fine vita di una macchina che è esistita; un
+ * fascicolo aperto per errore o doppio non è dismesso, non deve proprio
+ * esserci — altrimenti resta in elenco, nei conteggi e nelle ricerche per
+ * sempre. Il codice va riscritto a mano: è irreversibile, e un clic andato a
+ * male non deve bastare.
+ */
+function DeleteMachineCard({
+  machine,
+  notify,
+}: {
+  machine: Machine;
+  notify: (m: string, k?: "ok" | "err") => void;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [conferma, setConferma] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const cose = [
+    [machine.components.reduce((n, c) => n + c.items.length, 0), "matricole"],
+    [machine.photos.length + machine.photoTrash.length, "foto"],
+    [machine.documents.length, "documenti"],
+    [machine.diary.length, "voci di diario"],
+    [machine.notesLog.length, "note"],
+  ].filter(([n]) => (n as number) > 0) as [number, string][];
+
+  async function remove() {
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: conferma.trim() }),
+    });
+    const d = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) return notify(d.error || "Errore eliminazione", "err");
+    router.push("/macchine");
+    router.refresh();
+  }
+
+  return (
+    <section className="card danger-zone" style={{ marginTop: 18 }}>
+      <div className="card-header">
+        <h3>Elimina fascicolo</h3>
+      </div>
+      <p className="muted small" style={{ marginTop: 0 }}>
+        Toglie <strong>definitivamente</strong> il fascicolo {machine.code}
+        {cose.length > 0 && <> con {cose.map(([n, l]) => `${n} ${l}`).join(", ")}</>}. Gli
+        interventi di service restano, scollegati dal fascicolo. Non si può annullare: se la
+        macchina è esistita davvero, metti lo stato <strong>Dismessa</strong> invece di
+        eliminarla.
+      </p>
+      {!open ? (
+        <button className="btn-danger-sm" onClick={() => setOpen(true)}>
+          <Icon name="trash" size={13} /> Elimina fascicolo
+        </button>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          <label className="muted small">
+            Scrivi <strong className="mono">{machine.code}</strong> per confermare
+          </label>
+          <input
+            className="input mono"
+            style={{ maxWidth: 200 }}
+            value={conferma}
+            placeholder={machine.code}
+            onChange={(e) => setConferma(e.target.value)}
+          />
+          <button
+            className="btn-danger-sm"
+            disabled={busy || conferma.trim().toUpperCase() !== machine.code.toUpperCase()}
+            onClick={remove}
+          >
+            {busy ? "Elimino…" : "Elimina definitivamente"}
+          </button>
+          <button
+            className="btn-ghost-sm"
+            disabled={busy}
+            onClick={() => {
+              setOpen(false);
+              setConferma("");
+            }}
+          >
+            Annulla
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 

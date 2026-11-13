@@ -299,6 +299,9 @@ export async function loadMachineDetailProps(code: string) {
       // "Apri chat" crea una conversazione: non e' scrivere, quindi non per i visualizzatori
       chatSend: caps["chat.send"] && !!user && !isReadOnlyRole(user.role),
       customerManage: caps["customer.manage"],
+      // Eliminare un fascicolo e' irreversibile: non e' un permesso in matrice,
+      // e' il solo amministratore.
+      admin: user!.role === "ADMIN",
       collaudoOnly: external,
       collaudoCompile: caps["machine.intervention"] || external,
     },

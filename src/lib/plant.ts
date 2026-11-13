@@ -71,8 +71,23 @@ const SINGLE_JOB_FIELDS: JobFieldDef[] = [
   { key: "jobBody", label: "Job Pro", hint: "commessa produzione", placeholder: "Commessa di produzione" },
 ];
 
-export function jobFields(plant?: string | null): JobFieldDef[] {
-  return hasDualJob(plant) ? DUAL_JOB_FIELDS : SINGLE_JOB_FIELDS;
+/**
+ * `sheets` = le schede di allestimento che il fascicolo prevede davvero
+ * (`Machine.sheetKinds`). Un BLUE DEVIL di **solo container** non ha un corpo
+ * trituratore, quindi non ha nemmeno un Job Body: chiederlo vorrebbe dire un
+ * campo vuoto per sempre e un'anagrafica che non arriva mai al 100% — lo
+ * stesso motivo per cui le tipologie a macchina singola hanno un job solo.
+ *
+ * I nomi delle schede si confrontano come stringhe per non legare questo
+ * modulo (puro, usato ovunque) alle definizioni delle schede.
+ */
+export function jobFields(plant?: string | null, sheets?: string[] | null): JobFieldDef[] {
+  if (!hasDualJob(plant)) return SINGLE_JOB_FIELDS;
+  const want = (sheets ?? []).filter((k) => k === "TRITURATORE" || k === "CONTAINER");
+  // nessuna scelta (o entrambe): il BLUE DEVIL completo, corpo + container
+  if (want.length !== 1) return DUAL_JOB_FIELDS;
+  const only: JobFieldKey = want[0] === "TRITURATORE" ? "jobBody" : "jobContainer";
+  return DUAL_JOB_FIELDS.filter((f) => f.key === only);
 }
 
 /** Ruolo dell'ordine di produzione legato al job di produzione principale. */

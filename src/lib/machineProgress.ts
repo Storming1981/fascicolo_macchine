@@ -28,6 +28,8 @@ export type CollaudoState = "NONE" | "DRAFT" | "COMPILED" | "APPROVED";
  */
 export type AnagraficaFields = {
   plantType: string | null;
+  /** Schede previste dal fascicolo: dicono anche quanti job ha (vedi jobFields). */
+  sheetKinds?: string[] | null;
   model: string | null;
   year: number | null;
   job: string | null;
@@ -75,13 +77,14 @@ export type AnagraficaField = { key: string; label: string; group: AnagraficaGro
  */
 export function ordiniRequired(a: {
   plantType: string | null;
+  sheetKinds?: string[] | null;
   jobBody: string | null;
   jobContainer: string | null;
   erpBodyOrder: string | null;
   erpContainerOrder: string | null;
 }): AnagraficaField[] {
   const out: AnagraficaField[] = [];
-  const jobs = jobFields(a.plantType);
+  const jobs = jobFields(a.plantType, a.sheetKinds);
   for (const f of jobs) {
     if ((a[f.key] ?? "").trim() !== STOCK_COMMESSA) continue;
     const key = f.key === "jobBody" ? "erpBodyOrder" : "erpContainerOrder";
@@ -94,8 +97,9 @@ export function ordiniRequired(a: {
 /**
  * I campi anagrafici che contano come "compilati", uno per uno: così la card
  * può dire quanti ne mancano e quali, come fanno le schede di allestimento.
- * I job seguono il **layout della tipologia** (`jobFields`): sui BLUE DEVIL
- * corpo + container, sulle altre il solo Job Pro.
+ * I job seguono il **layout del fascicolo** (`jobFields`): sui BLUE DEVIL
+ * corpo + container — o uno solo, se il fascicolo ha una sola scheda — sulle
+ * altre tipologie il solo Job Pro.
  *
  * Non tutto ciò che sta in pagina fa punteggio: della card *Cliente e
  * destinazione* conta il solo **Cliente** (vedi sotto).
@@ -111,7 +115,7 @@ export function anagraficaFields(a: AnagraficaFields): AnagraficaField[] {
     f("plantType", "Tipologia impianto", "macchina", a.plantType),
     f("model", "Modello", "macchina", a.model),
     f("job", "Job Number", "macchina", a.job),
-    ...jobFields(a.plantType).map((j) => f(j.key, j.label, "macchina", a[j.key])),
+    ...jobFields(a.plantType, a.sheetKinds).map((j) => f(j.key, j.label, "macchina", a[j.key])),
     f("year", "Anno", "macchina", a.year),
     // Di *Cliente e destinazione* conta il solo **Cliente**: paese, sito e le
     // due date si sanno in momenti diversi della commessa (e certe volte non

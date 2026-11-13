@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { COMPONENT_GROUPS } from "./components";
 import { machineCode } from "./excel";
+import { jobFields } from "./plant";
 import { Prisma } from "@prisma/client";
 import type { MachineStatus } from "@prisma/client";
 
@@ -82,12 +83,20 @@ export async function createMachine(input: CreateMachineInput, authorName = "Sis
   const code = await nextMachineCode(input.year);
   const link = await resolveCustomerLink(input);
   const customerName = link.name ?? input.customer;
+  // Il fascicolo di solo container non ha un corpo trituratore: il job che non
+  // gli compete non si scrive, altrimenti resterebbe nascosto in un campo che
+  // la pagina non mostra piu' e finirebbe lo stesso nelle query del gestionale.
+  const jobs = jobFields(input.plantType, input.sheetKinds).map((j) => j.key);
+  const jobBody = jobs.includes("jobBody") ? input.jobBody || input.job : null;
+  const jobContainer = jobs.includes("jobContainer")
+    ? input.jobContainer || (jobs.includes("jobBody") ? null : input.job)
+    : null;
   const machine = await prisma.machine.create({
     data: {
       code,
       job: input.job,
-      jobBody: input.jobBody || input.job,
-      jobContainer: input.jobContainer || null,
+      jobBody,
+      jobContainer,
       year: input.year,
       plantType: input.plantType || null,
       model: input.model,
