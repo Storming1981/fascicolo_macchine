@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
-import { getUserAccessToken, hasPickerScope } from "./google";
+import { getArchiveAccessToken, getPhotoArchiveInfo, getUserAccessToken, hasPickerScope } from "./google";
 import { saveBytes } from "./uploads";
 import { preferIpv4 } from "./ipv4";
 import crypto from "crypto";
@@ -40,6 +40,9 @@ const MAX_ITEMS = 30;
 export type PickerSession = {
   sessionId: string;
   pickerUri: string;
+  /** Account Google che possiede la sessione: e' con questo che va fatto l'accesso. */
+  account: string;
+  source: PickerSource;
   /** Millisecondi consigliati da Google fra un controllo e il successivo. */
   pollMs: number;
   /** Millisecondi dopo i quali smettere di controllare. */
@@ -47,6 +50,28 @@ export type PickerSession = {
 };
 
 export type PickerError = { error: string; needsAuth?: boolean };
+
+/**
+ * Da quale Google Foto si pesca:
+ *
+ * - `me` — l'account personale di chi sta lavorando (il caso di partenza: la
+ *   foto l'ha scattata lui col suo telefono);
+ * - `archive` — l'**archivio foto aziendale**, un account collegato una volta
+ *   sola in Impostazioni e disponibile a *tutti* gli operatori, perche' le foto
+ *   di produzione storiche stanno li' e non nella libreria del singolo.
+ *
+ * Il token dell'archivio sta sul server come quello della casella aziendale:
+ * l'operatore non lo vede e non deve collegare niente di suo. Google pero'
+ * pretende che la finestra di scelta sia aperta **dallo stesso account che
+ * possiede la sessione** ("the user must be logged into the Google account that
+ * owns this session"), quindi nella finestra va fatto l'accesso con l'indirizzo
+ * dell'archivio: per questo `createSession` ritorna anche quale account e'.
+ */
+export type PickerSource = "me" | "archive";
+
+export function isPickerSource(v: unknown): v is PickerSource {
+  return v === "me" || v === "archive";
+}
 
 type ApiSession = {
   id?: string;
@@ -73,22 +98,53 @@ function durationMs(v: string | undefined, fallback: number): number {
  * ancora autorizzato" (si risolve con un clic) da "l'account non c'è": sono due
  * problemi diversi e la UI propone due cose diverse.
  */
-async function auth(userId: string): Promise<{ token: string; email: string } | PickerError> {
-  const t = await getUserAccessToken(userId);
-  // Anche "account non collegato" è `needsAuth`: il consenso di Google è lo
-  // stesso passaggio, e mandare l'utente a cercarsi la pagina del profilo per
-  // tornare qui dopo sarebbe un giro che non aggiunge niente.
-  if (!t) return { error: "Collega il tuo account Google per scegliere da Google Foto.", needsAuth: true };
-  if (!(await hasPickerScope(userId)))
-    return { error: "Devi autorizzare l'accesso al tuo Google Foto.", needsAuth: true };
-  return t;
+async function auth(
+  userId: string,
+  source: PickerSource
+): Promise<{ token: string; email: string } | PickerError> {
+  try {
+    if (source === "archive") {
+      // L'archivio non lo collega l'operatore: se manca, o se manca il
+      // permesso, la cosa da fare non è sua — e dirgli "autorizza" lo
+      // manderebbe a collegare il proprio account, che è un'altra cosa.
+      const info = await getPhotoArchiveInfo();
+      if (!info)
+        return {
+          error:
+            "L'archivio foto aziendale non è collegato: lo collega un amministratore da Impostazioni → Google.",
+        };
+      if (!info.canPick)
+        return {
+          error: `L'archivio ${info.email} è collegato ma senza il permesso di scegliere le foto: va ricollegato da Impostazioni.`,
+        };
+      const t = await getArchiveAccessToken();
+      if (!t) return { error: "Archivio foto aziendale non disponibile: ricollegalo da Impostazioni." };
+      return t;
+    }
+
+    const t = await getUserAccessToken(userId);
+    // Anche "account non collegato" è `needsAuth`: il consenso di Google è lo
+    // stesso passaggio, e mandare l'utente a cercarsi la pagina del profilo per
+    // tornare qui dopo sarebbe un giro che non aggiunge niente.
+    if (!t) return { error: "Collega il tuo account Google per scegliere da Google Foto.", needsAuth: true };
+    if (!(await hasPickerScope(userId)))
+      return { error: "Devi autorizzare l'accesso al tuo Google Foto.", needsAuth: true };
+    return t;
+  } catch (e) {
+    // Token illeggibile o rinnovo fallito: è una frase, non un 500 — chi legge
+    // deve capire che va ricollegato un account, e quale.
+    return { error: e instanceof Error ? e.message : "Google Foto non disponibile" };
+  }
 }
 
 const isErr = (x: unknown): x is PickerError => !!x && typeof x === "object" && "error" in x;
 
 /** Apre una sessione di selezione e ritorna il link da far aprire all'utente. */
-export async function createSession(userId: string): Promise<PickerSession | PickerError> {
-  const a = await auth(userId);
+export async function createSession(
+  userId: string,
+  source: PickerSource = "me"
+): Promise<PickerSession | PickerError> {
+  const a = await auth(userId, source);
   if (isErr(a)) return a;
 
   const res = await fetch(`${PICKER}/sessions`, {
@@ -102,6 +158,8 @@ export async function createSession(userId: string): Promise<PickerSession | Pic
 
   return {
     sessionId: d.id,
+    account: a.email,
+    source,
     // `/autoclose`: finita la scelta la finestra si chiude da sola, invece di
     // lasciare l'utente dentro Google Foto a chiedersi se ha finito.
     pickerUri: `${d.pickerUri}/autoclose`,
@@ -113,9 +171,10 @@ export async function createSession(userId: string): Promise<PickerSession | Pic
 /** L'utente ha finito di scegliere? */
 export async function sessionState(
   userId: string,
-  sessionId: string
+  sessionId: string,
+  source: PickerSource = "me"
 ): Promise<{ ready: boolean; pollMs: number } | PickerError> {
-  const a = await auth(userId);
+  const a = await auth(userId, source);
   if (isErr(a)) return a;
 
   const res = await fetch(`${PICKER}/sessions/${encodeURIComponent(sessionId)}`, {
@@ -153,8 +212,10 @@ export async function importPicked(opts: {
   machineCode: string;
   category: string;
   componentItemId?: string | null;
+  /** Da quale libreria: la propria o l'archivio aziendale. */
+  source?: PickerSource;
 }): Promise<{ photoIds: string[]; skipped: string[] } | PickerError> {
-  const a = await auth(opts.userId);
+  const a = await auth(opts.userId, opts.source ?? "me");
   if (isErr(a)) return a;
 
   const res = await fetch(`${PICKER}/mediaItems?sessionId=${encodeURIComponent(opts.sessionId)}&pageSize=${MAX_ITEMS}`, {

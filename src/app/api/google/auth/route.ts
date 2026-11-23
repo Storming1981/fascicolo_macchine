@@ -6,6 +6,7 @@ import { userCan } from "@/lib/settings";
 import {
   isGoogleConfigured,
   buildConsentUrl,
+  ARCHIVE_SCOPES,
   GOOGLE_SCOPES,
   GPHOTO_SCOPE,
   GPICKER_SCOPE,
@@ -20,6 +21,10 @@ const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret-c
  * Avvia il collegamento di una casella Gmail e reindirizza al consenso Google.
  * `?target=me` (default) → casella personale dell'utente (qualsiasi utente).
  * `?target=company` → casella aziendale (richiede `settings.manage`).
+ * `?target=archive` → **archivio foto aziendale**: un account Google da cui
+ * tutti gli operatori possono pescare le foto dei componenti, collegato una
+ * volta sola (richiede `settings.manage`). Chiede il solo permesso delle foto:
+ * l'archivio non spedisce mail.
  * Lo `state` è firmato (10 min) e contiene target + userId.
  */
 export async function GET(req: Request) {
@@ -27,12 +32,15 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.redirect(absoluteUrl(req, "/login"));
 
   const sp = new URL(req.url).searchParams;
-  const target: GoogleTarget = sp.get("target") === "company" ? "company" : "me";
+  const t = sp.get("target");
+  const target: GoogleTarget = t === "company" ? "company" : t === "archive" ? "archive" : "me";
   // Pagina a cui tornare dopo il consenso. Elenco chiuso (piu' il fascicolo,
   // col solo codice macchina): il valore finisce in una redirect, e accettare
   // un path qualunque vorrebbe dire farsi spedire gli utenti dove capita.
   const ret = returnTarget(sp.get("return"));
-  if (target === "company" && !(await userCan(user.role, "settings.manage")))
+  // Casella aziendale e archivio foto sono risorse comuni: le collega chi
+  // amministra, non il singolo operatore.
+  if (target !== "me" && !(await userCan(user.role, "settings.manage")))
     return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
 
   if (!isGoogleConfigured())
@@ -44,9 +52,10 @@ export async function GET(req: Request) {
   // `?photos=1` (copia su Google Foto) e `?picker=1` (pesca dal proprio Google
   // Foto) chiedono permessi in piu', uno per volta e solo a chi li attiva: chi
   // collega la casella per spedire non deve vedersi chiedere le proprie foto.
-  const want = [sp.get("photos") === "1" ? GPHOTO_SCOPE : "", sp.get("picker") === "1" ? GPICKER_SCOPE : ""].filter(
-    Boolean
-  );
+  const want =
+    target === "archive"
+      ? [GPICKER_SCOPE]
+      : [sp.get("photos") === "1" ? GPHOTO_SCOPE : "", sp.get("picker") === "1" ? GPICKER_SCOPE : ""].filter(Boolean);
   const extra = want.join(" ");
 
   const state = await new SignJWT({
@@ -64,5 +73,8 @@ export async function GET(req: Request) {
     .setExpirationTime("600s")
     .sign(SECRET);
 
-  return NextResponse.redirect(buildConsentUrl(state, extra ? `${GOOGLE_SCOPES} ${extra}` : GOOGLE_SCOPES));
+  // L'archivio foto non manda e-mail: chiedergli `gmail.send` sarebbe un
+  // permesso che non si usa mai su un account che non è di chi lo collega.
+  const scopes = target === "archive" ? ARCHIVE_SCOPES : extra ? `${GOOGLE_SCOPES} ${extra}` : GOOGLE_SCOPES;
+  return NextResponse.redirect(buildConsentUrl(state, scopes));
 }

@@ -5,6 +5,7 @@ import { ROLE_LABEL } from "./domain";
 import { isReadOnlyRole, isExternalTester } from "./permissions";
 import { userCaps } from "./caps";
 import { getPlantConfig } from "./settings";
+import { getPhotoArchiveInfo } from "./google";
 import { COMPONENT_GROUPS } from "./components";
 import { resolveMilestones } from "./milestoneAuto";
 import { progressForMachine } from "./progressService";
@@ -46,6 +47,9 @@ export async function loadMachineDetailProps(code: string) {
   );
   // tipologie/modelli configurabili: servono alla modifica dell'anagrafica
   const plantConfig = await getPlantConfig();
+  // Archivio foto aziendale: il pulsante "Dall'archivio ZATO" compare solo se
+  // l'account e' collegato e ha davvero il permesso di scegliere le foto.
+  const archive = await getPhotoArchiveInfo();
 
   const serviceInterventi = await prisma.intervento.findMany({
     where: { machineId: machine.id, deletedAt: null },
@@ -290,6 +294,7 @@ export async function loadMachineDetailProps(code: string) {
       hasPin: !!user!.pinHash,
       hasSignature: !!user!.signatureImage,
     },
+    photoArchive: archive?.canPick ? { email: archive.email } : null,
     caps: {
       edit: caps["machine.edit"],
       intervention: caps["machine.intervention"],

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { importPicked } from "@/lib/googlePicker";
+import { importPicked, isPickerSource } from "@/lib/googlePicker";
 
 /**
  * Porta nel fascicolo le foto che l'utente ha scelto dal suo Google Foto.
@@ -26,6 +26,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     sessionId?: string;
     category?: string;
     componentItemId?: string | null;
+    source?: string;
   } | null;
   const sessionId = typeof b?.sessionId === "string" ? b.sessionId : "";
   if (!sessionId) return NextResponse.json({ error: "sessionId mancante" }, { status: 400 });
@@ -49,6 +50,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     machineCode: machine.code,
     category: typeof b?.category === "string" && b.category ? b.category : "produzione",
     componentItemId,
+    // dalla propria libreria o dall'archivio foto aziendale
+    source: isPickerSource(b?.source) ? b.source : "me",
   });
   if ("error" in r) return NextResponse.json(r, { status: 409 });
 

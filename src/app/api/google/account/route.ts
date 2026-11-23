@@ -5,8 +5,10 @@ import {
   isGoogleConfigured,
   getUserGoogleInfo,
   getCompanyGoogleInfo,
+  getPhotoArchiveInfo,
   disconnectUser,
   disconnectCompany,
+  disconnectArchive,
   sendGmailAs,
 } from "@/lib/google";
 
@@ -20,6 +22,9 @@ export async function GET() {
     configured: isGoogleConfigured(),
     me: await getUserGoogleInfo(user.id),
     company: canCompany ? await getCompanyGoogleInfo() : null,
+    // L'archivio foto lo vedono tutti (serve a sapere se il pulsante c'è);
+    // collegarlo e scollegarlo resta a chi amministra.
+    photoArchive: await getPhotoArchiveInfo(),
     canManageCompany: canCompany,
   });
 }
@@ -48,16 +53,21 @@ export async function POST(req: Request) {
   }
 }
 
-/** Scollega una casella. `?target=me` (default) o `?target=company` (settings.manage). */
+/**
+ * Scollega un account. `?target=me` (default), `?target=company` o
+ * `?target=archive` (gli ultimi due: `settings.manage`).
+ */
 export async function DELETE(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
 
-  const target = new URL(req.url).searchParams.get("target") === "company" ? "company" : "me";
-  if (target === "company") {
+  const t = new URL(req.url).searchParams.get("target");
+  const target = t === "company" ? "company" : t === "archive" ? "archive" : "me";
+  if (target !== "me") {
     if (!(await userCan(user.role, "settings.manage")))
       return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
-    await disconnectCompany();
+    if (target === "company") await disconnectCompany();
+    else await disconnectArchive();
   } else {
     await disconnectUser(user.id);
   }

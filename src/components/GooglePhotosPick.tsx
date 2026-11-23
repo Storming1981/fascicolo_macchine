@@ -15,10 +15,18 @@ import Icon from "@/components/Icon";
  * apre una finestra sua dove l'utente sceglie, e si aspetta che abbia finito.
  * Da qui le due cose che si vedono: la finestra nuova (l'iframe è vietato) e
  * l'attesa con il pulsante *Ho finito* per chi chiude la finestra a modo suo.
+ *
+ * Con `source="archive"` si pesca invece dall'**archivio foto aziendale**: un
+ * account Google collegato una volta sola in Impostazioni, uguale per tutti gli
+ * operatori. Il token sta sul server, quindi non c'è niente da collegare — ma
+ * Google pretende che la finestra sia aperta *dallo stesso account che possiede
+ * la sessione*, perciò lì dentro va fatto l'accesso con l'indirizzo
+ * dell'archivio, che infatti viene mostrato durante l'attesa.
  */
 export default function GooglePhotosPick({
   machineId,
   machineCode,
+  source = "me",
   category,
   componentItemId,
   label = "Da Google Foto",
@@ -32,6 +40,8 @@ export default function GooglePhotosPick({
   machineId: string;
   /** Serve solo per tornare sul fascicolo giusto dopo il consenso Google. */
   machineCode: string;
+  /** `me` = il proprio Google Foto · `archive` = l'archivio foto aziendale. */
+  source?: "me" | "archive";
   /** Cartella in cui finisce la foto (produzione, collaudo…). */
   category?: string;
   /** Slot componente a cui agganciarla: la foto nasce già sulla matricola. */
@@ -47,6 +57,9 @@ export default function GooglePhotosPick({
 }) {
   const [phase, setPhase] = useState<"idle" | "open" | "waiting" | "importing">("idle");
   const [needsAuth, setNeedsAuth] = useState(false);
+  /** Account che possiede la sessione: con questo va fatto l'accesso. */
+  const [account, setAccount] = useState("");
+  const archive = source === "archive";
   const session = useRef<{ id: string; uri: string } | null>(null);
   const win = useRef<Window | null>(null);
   const stop = useRef(false);
@@ -64,7 +77,11 @@ export default function GooglePhotosPick({
   async function start() {
     setNeedsAuth(false);
     setPhase("open");
-    const res = await fetch("/api/google/picker", { method: "POST" });
+    const res = await fetch("/api/google/picker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source }),
+    });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) {
       setPhase("idle");
@@ -72,6 +89,7 @@ export default function GooglePhotosPick({
       return notify(d.error || "Google Foto non disponibile", "err");
     }
     session.current = { id: d.sessionId, uri: d.pickerUri };
+    setAccount(typeof d.account === "string" ? d.account : "");
     // La finestra si apre **dentro** il gesto dell'utente: aprirla dopo una
     // risposta asincrona la farebbe bloccare come popup su quasi tutti i
     // browser. Per questo il link resta anche a video, se è successo lo stesso.
@@ -85,7 +103,9 @@ export default function GooglePhotosPick({
     while (!stop.current && Date.now() < until) {
       await new Promise((r) => setTimeout(r, pollMs));
       if (stop.current) return;
-      const res = await fetch(`/api/google/picker?sessionId=${encodeURIComponent(sessionId)}`);
+      const res = await fetch(
+        `/api/google/picker?sessionId=${encodeURIComponent(sessionId)}&source=${source}`
+      );
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
         setPhase("idle");
@@ -111,7 +131,7 @@ export default function GooglePhotosPick({
     const res = await fetch(`/api/machines/${machineId}/photos/google`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, category, componentItemId }),
+      body: JSON.stringify({ sessionId, category, componentItemId, source }),
     });
     const d = await res.json().catch(() => ({}));
     setPhase("idle");
@@ -120,7 +140,8 @@ export default function GooglePhotosPick({
     onDone();
     if (onImported && Array.isArray(d.paths) && d.paths.length) await onImported(d.paths);
     notify(
-      `${d.count} ${d.count === 1 ? "foto importata" : "foto importate"} da Google Foto` +
+      `${d.count} ${d.count === 1 ? "foto importata" : "foto importate"} ` +
+        (archive ? "dall'archivio aziendale" : "da Google Foto") +
         (d.skipped?.length ? ` · ${d.skipped.length} saltate` : "")
     );
   }
@@ -140,7 +161,14 @@ export default function GooglePhotosPick({
   if (phase === "waiting")
     return (
       <span className="gphoto-wait">
-        <span className="muted small">Scegli le foto nella finestra di Google…</span>
+        <span className="muted small">
+          {archive && account
+            ? // Google vuole che la finestra sia aperta dall'account che possiede
+              // la sessione: senza dirlo, chi è loggato col proprio Google vede
+              // "account sbagliato" e pensa che la piattaforma sia rotta.
+              `Accedi con ${account} nella finestra di Google e scegli le foto…`
+            : "Scegli le foto nella finestra di Google…"}
+        </span>
         <button className="btn-primary-sm" onClick={() => session.current && finish(session.current.id)}>
           Ho finito
         </button>
@@ -157,10 +185,26 @@ export default function GooglePhotosPick({
       className={className}
       disabled={phase !== "idle"}
       onClick={start}
-      title={title ?? "Scegli una foto dal tuo account Google Foto"}
+      title={
+        title ??
+        (archive
+          ? "Scegli una foto dall'archivio foto aziendale (serve l'accesso a quell'account nella finestra di Google)"
+          : "Scegli una foto dal tuo account Google Foto")
+      }
     >
       <Icon name={icon} size={14} />
-      {label && <> {phase === "open" ? "Apro Google Foto…" : phase === "importing" ? "Importo…" : label}</>}
+      {label && (
+        <>
+          {" "}
+          {phase === "open"
+            ? archive
+              ? "Apro l'archivio…"
+              : "Apro Google Foto…"
+            : phase === "importing"
+              ? "Importo…"
+              : label}
+        </>
+      )}
     </button>
   );
 }

@@ -133,11 +133,14 @@ export default function MachineDetail({
   service,
   currentUser,
   caps,
+  photoArchive,
 }: {
   machine: Machine;
   plantConfig: PlantConfig;
   qrDataUrl: string;
   service: ServiceData;
+  /** Archivio foto aziendale collegato (Impostazioni → Google), se c'è. */
+  photoArchive?: { email: string } | null;
   currentUser: { id: string; name: string; role: string; hasPin: boolean; hasSignature: boolean };
   caps: {
     edit: boolean;
@@ -273,6 +276,7 @@ export default function MachineDetail({
           canSign={caps.intervention}
           canManageOptions={caps.edit}
           hasSavedSignature={currentUser.hasSignature}
+          photoArchive={photoArchive}
           onReplace={caps.intervention ? (c) => setIntervention(c) : undefined}
           onDone={refresh}
           notify={notify}
@@ -282,6 +286,7 @@ export default function MachineDetail({
         <TabFoto
           machine={machine}
           userId={currentUser.id}
+          photoArchive={photoArchive}
           canEdit={caps.edit}
           onDone={refresh}
           notify={notify}
@@ -1390,6 +1395,7 @@ function TabComponenti({
   canSign,
   canManageOptions,
   hasSavedSignature,
+  photoArchive,
   onReplace,
   onDone,
   notify,
@@ -1399,6 +1405,7 @@ function TabComponenti({
   canSign?: boolean;
   canManageOptions?: boolean;
   hasSavedSignature?: boolean;
+  photoArchive?: { email: string } | null;
   onReplace?: (c: { groupId: string; itemId: string; itemLabel: string; oldSerial: string }) => void;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
@@ -1575,6 +1582,7 @@ function TabComponenti({
           slot={pickFor}
           machineId={machine.id}
           machineCode={machine.code}
+          photoArchive={photoArchive}
           onClose={() => setPickFor(null)}
           onPick={(photoId) => linkPhoto(photoId, pickFor.id)}
           onDone={() => {
@@ -2302,12 +2310,14 @@ function TabFoto({
   machine,
   userId,
   canEdit,
+  photoArchive,
   onDone,
   notify,
 }: {
   machine: Machine;
   userId: string;
   canEdit: boolean;
+  photoArchive?: { email: string } | null;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
@@ -2447,6 +2457,19 @@ function TabFoto({
               onDone={onDone}
               notify={notify}
             />
+            {photoArchive && (
+              <GooglePhotosPick
+                machineId={machine.id}
+                machineCode={machine.code}
+                source="archive"
+                category={current.id}
+                label="Dall'archivio ZATO"
+                icon="box"
+                title={`Archivio foto aziendale (${photoArchive.email}): nella finestra di Google accedi con quell'account`}
+                onDone={onDone}
+                notify={notify}
+              />
+            )}
             <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => upload(e.target.files)} />
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
           </div>
@@ -4382,6 +4405,7 @@ function PhotoPickerModal({
   slot,
   machineId,
   machineCode,
+  photoArchive,
   onClose,
   onPick,
   onDone,
@@ -4391,6 +4415,7 @@ function PhotoPickerModal({
   slot: { id: string; title: string };
   machineId: string;
   machineCode: string;
+  photoArchive?: { email: string } | null;
   onClose: () => void;
   onPick: (photoId: string) => void;
   onDone: () => void;
@@ -4415,19 +4440,34 @@ function PhotoPickerModal({
         <div className="modal-body">
           <div className="pick-sources">
             <span className="muted small">
-              Dal fascicolo, oppure direttamente dal tuo Google Foto: la foto entra nel fascicolo e resta
-              anche se la togli da Google.
+              Dal fascicolo, dal tuo Google Foto oppure dall'archivio aziendale: la foto entra nel
+              fascicolo e resta anche se la togli da Google.
             </span>
             <GooglePhotosPick
               machineId={machineId}
               machineCode={machineCode}
               componentItemId={slot.id}
               category="produzione"
-              label="Scegli da Google Foto"
+              label="Dal mio Google Foto"
               className="btn-primary-sm"
               onDone={onDone}
               notify={notify}
             />
+            {photoArchive && (
+              <GooglePhotosPick
+                machineId={machineId}
+                machineCode={machineCode}
+                source="archive"
+                componentItemId={slot.id}
+                category="produzione"
+                label="Dall'archivio ZATO"
+                icon="box"
+                className="btn-ghost-sm"
+                title={`Archivio foto aziendale (${photoArchive.email}): nella finestra di Google accedi con quell'account`}
+                onDone={onDone}
+                notify={notify}
+              />
+            )}
           </div>
           {list.length === 0 ? (
             <p className="muted">Nel fascicolo non ci sono altre foto da collegare.</p>

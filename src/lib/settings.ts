@@ -101,6 +101,27 @@ export async function clearGoogleAccount() {
   await prisma.setting.deleteMany({ where: { key: "googleAccount" } });
 }
 
+/**
+ * **Archivio foto aziendale**: un secondo account Google, collegato una volta
+ * sola, da cui *tutti* gli operatori possono pescare le foto dei componenti.
+ *
+ * E' un account a se' e non la casella aziendale: quella spedisce le mail, e
+ * chiederle anche le foto vorrebbe dire un permesso in piu' su una casella che
+ * serve ad altro. Stessa forma (`GoogleAccount`), chiave diversa.
+ */
+export async function getPhotoArchive(): Promise<GoogleAccount | null> {
+  const stored = await readSetting<GoogleAccount>("googlePhotoArchive");
+  return stored && typeof stored.refreshToken === "string" && stored.refreshToken ? stored : null;
+}
+
+export async function savePhotoArchive(acc: GoogleAccount) {
+  await writeSetting("googlePhotoArchive", acc);
+}
+
+export async function clearPhotoArchive() {
+  await prisma.setting.deleteMany({ where: { key: "googlePhotoArchive" } });
+}
+
 /** Verifica permesso leggendo la matrice da DB. */
 export async function userCan(role: Role, action: PermAction): Promise<boolean> {
   if (role === "ADMIN") return true;

@@ -61,7 +61,8 @@ export async function GET(req: Request) {
     if (!state) throw new Error("state mancante");
     const { payload } = await jwtVerify(state, SECRET);
     if (payload.uid !== user.id) throw new Error("state non corrispondente");
-    target = payload.target === "company" ? "company" : "me";
+    target =
+      payload.target === "company" ? "company" : payload.target === "archive" ? "archive" : "me";
     ret = returnTarget(typeof payload.ret === "string" ? payload.ret : null);
     want = Array.isArray(payload.want) ? payload.want.filter((x): x is string => typeof x === "string") : [];
   } catch {
@@ -77,7 +78,7 @@ export async function GET(req: Request) {
   if (err) return back(req, { google: "err", msg: googleErrorText(err) }, ret);
   if (!code) return back(req, { google: "err", msg: "Risposta Google incompleta" }, ret);
 
-  if (target === "company" && !(await userCan(user.role, "settings.manage")))
+  if (target !== "me" && !(await userCan(user.role, "settings.manage")))
     return back(req, { google: "err", msg: "Permesso negato" }, ret);
 
   try {
@@ -94,8 +95,11 @@ export async function GET(req: Request) {
         {
           google: "err",
           msg:
-            `Casella ${email} collegata, ma Google non ha concesso ${missing.map((m) => SCOPE_LABEL[m] ?? m).join(" e ")}. ` +
-            "Riprova e, nella schermata di Google, spunta la casella delle foto.",
+            target === "archive"
+              ? `Account ${email} collegato, ma Google non ha concesso l'accesso alle foto: senza quello l'archivio ` +
+                "non si può sfogliare. Riprova e, nella schermata di Google, spunta la casella delle foto."
+              : `Casella ${email} collegata, ma Google non ha concesso ${missing.map((m) => SCOPE_LABEL[m] ?? m).join(" e ")}. ` +
+                "Riprova e, nella schermata di Google, spunta la casella delle foto.",
         },
         ret
       );

@@ -3,7 +3,12 @@ import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getPlantConfig, getPermissions, getNavVisibility, getAppAccess } from "@/lib/settings";
 import { can } from "@/lib/permissions";
-import { isGoogleConfigured, getUserGoogleInfo, getCompanyGoogleInfo } from "@/lib/google";
+import {
+  isGoogleConfigured,
+  getUserGoogleInfo,
+  getCompanyGoogleInfo,
+  getPhotoArchiveInfo,
+} from "@/lib/google";
 import {
   getRapportinoMailConfig,
   getRapportinoMailState,
@@ -18,12 +23,14 @@ export default async function SettingsPage() {
   if (!user) redirect("/login");
   const perms = await getPermissions();
   if (!can(user.role, "settings.manage", perms)) redirect("/dashboard");
-  const [plantConfig, navVisibility, appAccess, googleMe, googleCompany, usage] = await Promise.all([
+  const [plantConfig, navVisibility, appAccess, googleMe, googleCompany, googleArchive, usage] =
+    await Promise.all([
     getPlantConfig(),
     getNavVisibility(),
     getAppAccess(),
     getUserGoogleInfo(user.id),
     getCompanyGoogleInfo(),
+    getPhotoArchiveInfo(),
     // Modelli effettivamente usati dai fascicoli: servono a riallineare quelli
     // rinominati o tolti dalla configurazione.
     prisma.machine.groupBy({ by: ["plantType", "model"], _count: { _all: true } }),
@@ -51,6 +58,7 @@ export default async function SettingsPage() {
       googleConfigured={isGoogleConfigured()}
       googleMe={googleMe}
       googleCompany={googleCompany}
+      googleArchive={googleArchive}
       currentUserEmail={user.email}
       rapportinoMail={rapportinoMail}
       rapportinoMailState={rapportinoMailState}

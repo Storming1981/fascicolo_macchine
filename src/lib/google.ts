@@ -5,6 +5,9 @@ import {
   getGoogleAccount,
   saveGoogleAccount,
   clearGoogleAccount,
+  getPhotoArchive,
+  savePhotoArchive,
+  clearPhotoArchive,
   type GoogleAccount,
 } from "./settings";
 
@@ -54,8 +57,21 @@ export const GPHOTO_SCOPE = "https://www.googleapis.com/auth/photoslibrary.appen
  */
 export const GPICKER_SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
 
-/** Bersaglio del collegamento: casella personale dell'utente o aziendale. */
-export type GoogleTarget = "me" | "company";
+/**
+ * **Archivio foto aziendale**: l'unico permesso che serve e' pescare le foto.
+ * Niente `gmail.send` — l'archivio non spedisce niente, e chiedere l'accesso
+ * alla posta di quell'account sarebbe un permesso che non si usa mai.
+ */
+export const ARCHIVE_SCOPES = [
+  "https://www.googleapis.com/auth/userinfo.email",
+  GPICKER_SCOPE,
+].join(" ");
+
+/**
+ * Bersaglio del collegamento: casella personale dell'utente, casella aziendale
+ * (invio mail) o **archivio foto aziendale** (da cui pescano tutti).
+ */
+export type GoogleTarget = "me" | "company" | "archive";
 
 export function isGoogleConfigured(): boolean {
   return Boolean(
@@ -112,6 +128,25 @@ async function writeCompanyAccess(accessEnc: string, expiresAtMs: number) {
   const acc = await getGoogleAccount();
   if (!acc) return;
   await saveGoogleAccount({ ...acc, accessToken: accessEnc, expiresAt: expiresAtMs });
+}
+
+/** Legge il token dell'archivio foto aziendale (Setting). */
+async function readArchiveToken(): Promise<StoredToken | null> {
+  const acc = await getPhotoArchive();
+  if (!acc) return null;
+  return {
+    email: acc.email,
+    refreshEnc: acc.refreshToken,
+    accessEnc: acc.accessToken,
+    expiresAtMs: acc.expiresAt,
+    scope: acc.scope,
+  };
+}
+
+async function writeArchiveAccess(accessEnc: string, expiresAtMs: number) {
+  const acc = await getPhotoArchive();
+  if (!acc) return;
+  await savePhotoArchive({ ...acc, accessToken: accessEnc, expiresAt: expiresAtMs });
 }
 
 /* ─────────────────────────── OAuth flow ─────────────────────────── */
@@ -181,7 +216,17 @@ export async function exchangeCodeAndSave(
   const expiresAtMs = Date.now() + (tok.expires_in ?? 3600) * 1000;
   const scope = tok.scope ?? GOOGLE_SCOPES;
 
-  if (target === "company") {
+  if (target === "archive") {
+    await savePhotoArchive({
+      email,
+      refreshToken: encryptSecret(tok.refresh_token),
+      accessToken: encryptSecret(tok.access_token),
+      expiresAt: expiresAtMs,
+      scope,
+      connectedByName,
+      connectedAt: new Date().toISOString(),
+    } satisfies GoogleAccount);
+  } else if (target === "company") {
     await saveGoogleAccount({
       email,
       refreshToken: encryptSecret(tok.refresh_token),
@@ -266,6 +311,16 @@ export async function disconnectCompany(): Promise<void> {
 }
 
 /**
+ * Scollega l'archivio foto aziendale. Le foto gia' importate nei fascicoli
+ * restano dove sono: sono state **copiate**, non collegate.
+ */
+export async function disconnectArchive(): Promise<void> {
+  const acc = await getPhotoArchive();
+  if (acc && !(await emailStillLinked(acc.email, { exceptArchive: true }))) await revoke(acc.refreshToken);
+  await clearPhotoArchive();
+}
+
+/**
  * La stessa casella Gmail è collegata anche altrove (un altro utente o la
  * casella aziendale)? Succede davvero: admin@zato.it e s.camisani@zato.it usano
  * entrambi s.camisani@zato.it.
@@ -278,7 +333,7 @@ export async function disconnectCompany(): Promise<void> {
  */
 async function emailStillLinked(
   email: string,
-  opts: { exceptUserId?: string; exceptCompany?: boolean }
+  opts: { exceptUserId?: string; exceptCompany?: boolean; exceptArchive?: boolean }
 ): Promise<boolean> {
   const others = await prisma.googleToken.count({
     where: {
@@ -287,9 +342,12 @@ async function emailStillLinked(
     },
   });
   if (others > 0) return true;
-  if (opts.exceptCompany) return false;
-  const acc = await getGoogleAccount();
-  return !!acc && acc.email.toLowerCase() === email.toLowerCase();
+  const same = (x: { email: string } | null) => !!x && x.email.toLowerCase() === email.toLowerCase();
+  // L'archivio foto e' spesso la casella di una persona che ha anche il proprio
+  // collegamento personale: revocando si spegnerebbe anche quello.
+  if (!opts.exceptCompany && same(await getGoogleAccount())) return true;
+  if (!opts.exceptArchive && same(await getPhotoArchive())) return true;
+  return false;
 }
 
 /* ─────────────────────── Info per la UI (no token) ─────────────────────── */
@@ -322,6 +380,33 @@ export async function getUserAccessToken(userId: string): Promise<{ token: strin
   const stored = await readUserToken(userId);
   if (!stored) return null;
   const token = await ensureAccessToken(stored, (a, e) => writeUserAccess(userId, a, e));
+  return { token, email: stored.email };
+}
+
+/**
+ * Archivio foto aziendale per la UI: chi e' collegato e se il permesso di
+ * scelta c'e' davvero (Google lascia togliere la spunta: senza questo
+ * controllo il pulsante comparirebbe e fallirebbe al primo clic).
+ */
+export async function getPhotoArchiveInfo(): Promise<
+  { email: string; connectedAt: string; connectedByName: string | null; canPick: boolean } | null
+> {
+  const acc = await getPhotoArchive();
+  return acc
+    ? {
+        email: acc.email,
+        connectedAt: acc.connectedAt,
+        connectedByName: acc.connectedByName,
+        canPick: (acc.scope ?? "").includes(GPICKER_SCOPE),
+      }
+    : null;
+}
+
+/** Access token dell'archivio foto aziendale (refresh automatico). */
+export async function getArchiveAccessToken(): Promise<{ token: string; email: string } | null> {
+  const stored = await readArchiveToken();
+  if (!stored) return null;
+  const token = await ensureAccessToken(stored, writeArchiveAccess);
   return { token, email: stored.email };
 }
 

@@ -35,6 +35,7 @@ export default function SettingsClient({
   googleConfigured,
   googleMe,
   googleCompany,
+  googleArchive,
   currentUserEmail,
   rapportinoMail,
   rapportinoMailState,
@@ -50,6 +51,13 @@ export default function SettingsClient({
   googleConfigured: boolean;
   googleMe: { email: string; connectedAt: string } | null;
   googleCompany: { email: string; connectedAt: string; connectedByName: string | null } | null;
+  /** Archivio foto aziendale: l'account Google da cui pescano tutti gli operatori. */
+  googleArchive: {
+    email: string;
+    connectedAt: string;
+    connectedByName: string | null;
+    canPick: boolean;
+  } | null;
   currentUserEmail: string;
   rapportinoMail: RapportinoMailConfig;
   rapportinoMailState: RapportinoMailState;
@@ -115,7 +123,9 @@ export default function SettingsClient({
     );
     router.refresh();
   }
-  const [gBusy, setGBusy] = useState<"test" | "unlink-me" | "unlink-company" | null>(null);
+  const [gBusy, setGBusy] = useState<"test" | "unlink-me" | "unlink-company" | "unlink-archive" | null>(
+    null
+  );
   const [testTo, setTestTo] = useState(currentUserEmail);
   const [navm, setNavm] = useState<NavVisibility>(JSON.parse(JSON.stringify(navVisibility)));
   const [appm, setAppm] = useState<AppAccessMatrix>(JSON.parse(JSON.stringify(appAccess)));
@@ -163,13 +173,16 @@ export default function SettingsClient({
     }
   }
 
-  async function googleUnlink(target: "me" | "company") {
+  async function googleUnlink(target: "me" | "company" | "archive") {
     const msg =
       target === "me"
         ? "Scollegare la tua casella Gmail? Tornerai a inviare dalla casella aziendale (se disponibile)."
-        : "Scollegare la casella aziendale? Chi non ha collegato la propria non potrà più inviare.";
+        : target === "company"
+          ? "Scollegare la casella aziendale? Chi non ha collegato la propria non potrà più inviare."
+          : // Le foto già importate restano: sono copie sul server, non link.
+            "Scollegare l'archivio foto aziendale? Gli operatori non potranno più pescare da lì. Le foto già portate nei fascicoli restano.";
     if (!confirm(msg)) return;
-    setGBusy(target === "me" ? "unlink-me" : "unlink-company");
+    setGBusy(target === "me" ? "unlink-me" : target === "company" ? "unlink-company" : "unlink-archive");
     try {
       const res = await fetch(`/api/google/account?target=${target}`, { method: "DELETE" });
       if (res.ok) {
@@ -852,6 +865,84 @@ export default function SettingsClient({
                 <p className="muted small" style={{ marginTop: 10 }}>
                   I token sono salvati <strong>cifrati</strong> nel database e non lasciano mai il server. Il rinnovo
                   dell&apos;accesso è automatico: non serve rifare il login.
+                </p>
+              </div>
+
+              <div className="card">
+                <div className="card-header">
+                  <h3>Archivio foto aziendale</h3>
+                  {!googleArchive && (
+                    <a className="btn-ghost-sm" href="/api/google/auth?target=archive">
+                      <Icon name="upload" size={14} /> Collega archivio foto
+                    </a>
+                  )}
+                </div>
+                {!googleArchive ? (
+                  <p className="muted small">
+                    L&apos;account Google Foto che fa da <strong>archivio delle foto di produzione</strong> (es.{" "}
+                    <span className="mono">f.zanotti@zato.it</span>). Collegandolo, nei fascicoli compare il
+                    pulsante <em>Dall&apos;archivio ZATO</em> accanto a <em>Dal mio Google Foto</em>: vale per{" "}
+                    <strong>tutti gli operatori</strong>, che non devono collegare niente di loro.
+                  </p>
+                ) : (
+                  <>
+                    <div className="card no-pad" style={{ marginTop: 4 }}>
+                      <div className="table-wrap">
+                        <table className="data-table">
+                          <tbody>
+                            <tr>
+                              <td>Account archivio</td>
+                              <td style={{ fontWeight: 600 }}>{googleArchive.email}</td>
+                            </tr>
+                            <tr>
+                              <td>Accesso alle foto</td>
+                              <td>
+                                {googleArchive.canPick ? (
+                                  <span className="badge">
+                                    <Icon name="check" size={12} /> concesso
+                                  </span>
+                                ) : (
+                                  <span className="badge" style={{ color: "var(--red)", borderColor: "#fecaca" }}>
+                                    mancante — ricollega
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Collegato da</td>
+                              <td>{googleArchive.connectedByName ?? "—"}</td>
+                            </tr>
+                            <tr>
+                              <td>Data collegamento</td>
+                              <td>{fmtDateTime(googleArchive.connectedAt)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="cmp-toolbar" style={{ marginTop: 12 }}>
+                      <div className="cmp-summary" />
+                      <div className="cmp-actions">
+                        <a className="btn-ghost-sm" href="/api/google/auth?target=archive">
+                          <Icon name="clock" size={13} /> Ricollega
+                        </a>
+                        <button
+                          className="btn-ghost-sm danger"
+                          onClick={() => googleUnlink("archive")}
+                          disabled={gBusy !== null}
+                        >
+                          <Icon name="trash" size={13} /> {gBusy === "unlink-archive" ? "Scollego…" : "Scollega"}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+                <p className="muted small" style={{ marginTop: 10 }}>
+                  <strong>Nella finestra di Google serve l&apos;accesso a quell&apos;account.</strong> Google
+                  impone che la scelta avvenga dall&apos;account proprietario della sessione, quindi l&apos;operatore
+                  deve avere l&apos;archivio fra gli account del suo browser (o farvi accesso al primo uso). Non è
+                  un limite della piattaforma: dal 2025 un&apos;applicazione non può più leggere la libreria di una
+                  persona per conto suo.
                 </p>
               </div>
             </>

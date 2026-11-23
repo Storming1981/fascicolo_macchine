@@ -1119,6 +1119,47 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     trappola dell'IPv6 descritta in *Backup delle foto su Google Foto*: un 403
     in HTML non è un permesso mancante. Un permesso mancante risponde in JSON,
     `ACCESS_TOKEN_SCOPE_INSUFFICIENT`.
+- **Archivio foto aziendale: un secondo account, per tutti** (`PickerSource`
+  in `googlePicker.ts`, `Setting.googlePhotoArchive`). Le foto di produzione
+  storiche stanno nel Google Foto di una persona (f.zanotti@zato.it), che in
+  azienda *è* l'archivio: accanto a *Dal mio Google Foto* c'è quindi
+  **Dall'archivio ZATO**, che pesca da lì. Si collega una volta sola in
+  **Impostazioni → Google → Archivio foto aziendale** (`settings.manage`,
+  `target=archive`) e vale per **tutti gli operatori**: il token sta sul
+  server, cifrato, e nessuno deve collegare niente di suo.
+  - **Chiede il solo permesso delle foto** (`ARCHIVE_SCOPES` = `userinfo.email`
+    + picker): l'archivio non spedisce mail, e chiedere `gmail.send` sulla
+    casella di una persona sarebbe un permesso che non si usa mai.
+  - **Nella finestra di Google serve l'accesso a quell'account.** Non è una
+    scelta nostra: *"the user must be logged into the Google account that owns
+    this session in their web browser"* ([riferimento
+    sessioni](https://developers.google.com/photos/picker/reference/rest/v1/sessions)).
+    Per questo `createSession` ritorna anche `account` e l'attesa dice *"Accedi
+    con … nella finestra di Google"*: senza, chi è loggato col proprio Google
+    vede "account sbagliato" e pensa che la piattaforma sia rotta.
+  - **Quello che NON si può fare, e perché non si riproverà**: aprire
+    l'archivio di qualcun altro per conto suo. Dal 31 marzo 2025 la Library API
+    vede solo ciò che l'app stessa ha caricato (*"You can now only list,
+    search, and retrieve albums and media items that were created by your
+    app"*) e le **API Google Foto non supportano i service account** (*"The
+    Google Photos APIs don't support service accounts"*), quindi niente
+    impersonificazione del dominio. Restano due strade: l'account condiviso
+    (questa) oppure condividere gli album con ogni operatore lato Google Foto.
+  - Il pulsante compare **solo se l'account è collegato e ha davvero il
+    permesso** (`getPhotoArchiveInfo().canPick`, passato dal
+    `machineDetailLoader` come `photoArchive`): Google lascia togliere la
+    spunta, e un pulsante che fallisce al primo clic è peggio di nessun
+    pulsante. Sta nella barra della scheda **Foto** (dentro una cartella) e nel
+    riquadro **Scegli una foto** degli slot — da lì la foto arriva già agganciata
+    allo slot e l'OCR parte da solo, come per il Google Foto personale. Nella
+    cella della matricola non c'è: le icone erano già quattro.
+  - Le foto importate restano **copie sul server** (`gphotoAccount` registra da
+    quale archivio arrivano, `gphotoId = "picked:…"` impedisce al backup
+    personale di rispedirle), quindi scollegare l'archivio non toglie niente ai
+    fascicoli.
+  - `emailStillLinked` guarda **anche l'archivio**: spesso è la casella di una
+    persona che ha pure il proprio collegamento, e revocando si spegnerebbe
+    quello (è la stessa trappola già pagata con la casella aziendale).
 - **Profilo utente** (`/profilo`, clic su avatar o nome in topbar/sidebar):
   foto (ridotta a 256 px), telefono, **casella Gmail personale** (Accedi con
   Google → `/api/google/auth?target=me&return=profilo`, la callback torna al
