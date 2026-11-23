@@ -1149,10 +1149,14 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     permesso** (`getPhotoArchiveInfo().canPick`, passato dal
     `machineDetailLoader` come `photoArchive`): Google lascia togliere la
     spunta, e un pulsante che fallisce al primo clic è peggio di nessun
-    pulsante. Sta nella barra della scheda **Foto** (dentro una cartella) e nel
-    riquadro **Scegli una foto** degli slot — da lì la foto arriva già agganciata
-    allo slot e l'OCR parte da solo, come per il Google Foto personale. Nella
-    cella della matricola non c'è: le icone erano già quattro.
+    pulsante. Sta in quattro punti: la barra della scheda **Foto** (dentro una
+    cartella), il riquadro **Scegli una foto** degli slot, e la **cella della
+    matricola** — sia nell'elenco per gruppo sia nelle schede di allestimento,
+    che usano lo stesso `SlotSerialCell`. Da tutti e tre i punti legati a uno
+    slot la foto arriva già agganciata e **l'OCR parte da solo**, come per il
+    Google Foto personale. In cella è la **quinta icona** (una cassetta accanto
+    alla nuvola): compare solo con l'archivio collegato, quindi dove non c'è la
+    riga resta a quattro icone come prima.
   - Le foto importate restano **copie sul server** (`gphotoAccount` registra da
     quale archivio arrivano, `gphotoId = "picked:…"` impedisce al backup
     personale di rispedirle), quindi scollegare l'archivio non toglie niente ai

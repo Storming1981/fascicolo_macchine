@@ -1603,6 +1603,7 @@ function TabComponenti({
           kits={{ tiranteGiunto: machine.tiranteGiunto, filtroMaggiorato: machine.filtroMaggiorato }}
           renderSerial={(it, groupId) => (
             <SlotSerialCell
+              photoArchive={photoArchive}
               machineId={machine.id}
               machineCode={machine.code}
               item={it}
@@ -1680,6 +1681,7 @@ function TabComponenti({
                               <SlotSerialCell
                                 machineId={machine.id}
                                 machineCode={machine.code}
+                                photoArchive={photoArchive}
                                 item={it}
                                 lotLabel={g.lot?.label}
                                 photoPath={photoByItem.get(it.id)?.path}
@@ -1774,6 +1776,7 @@ function TabComponenti({
                               <SlotSerialCell
                                 machineId={machine.id}
                                 machineCode={machine.code}
+                                photoArchive={photoArchive}
                                 item={it}
                                 canEdit={!!canEdit}
                                 onDone={onDone}
@@ -1936,12 +1939,15 @@ function SlotSerialCell({
   lotLabel: lotName,
   photoPath,
   canEdit,
+  photoArchive,
   onDone,
   notify,
 }: {
   machineId: string;
   /** Per tornare su questo fascicolo dopo il consenso Google. */
   machineCode: string;
+  /** Archivio foto aziendale, se collegato: la seconda nuvola nella cella. */
+  photoArchive?: { email: string } | null;
   item: Item;
   /** Se il componente porta anche un lotto (es. blocchi motore), la sua etichetta. */
   lotLabel?: string;
@@ -2151,6 +2157,24 @@ function SlotSerialCell({
         onImported={(paths) => readFromPath(paths[0])}
         notify={notify}
       />
+      {/* La stessa cosa, ma dall'**archivio foto aziendale**: le targhette dei
+          componenti stanno spesso lì e non nella libreria di chi compila. */}
+      {photoArchive && (
+        <GooglePhotosPick
+          machineId={machineId}
+          machineCode={machineCode}
+          source="archive"
+          componentItemId={item.id}
+          category="componente"
+          label=""
+          icon="box"
+          className="icon-btn sm"
+          title={`Prendi la foto dall'archivio foto aziendale (${photoArchive.email}) e leggi la matricola — nella finestra di Google accedi con quell'account`}
+          onDone={onDone}
+          onImported={(paths) => readFromPath(paths[0])}
+          notify={notify}
+        />
+      )}
       {photoPath && (
         <button
           type="button"
