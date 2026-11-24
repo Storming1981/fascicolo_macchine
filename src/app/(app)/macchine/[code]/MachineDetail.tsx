@@ -27,6 +27,7 @@ import {
   machineSheetKinds,
   sheetDef,
   sheetKindsFor,
+  sheetDocDef,
   SHEET_LABEL,
 } from "@/lib/allestimento";
 import AllestimentoSheets from "@/components/AllestimentoSheets";
@@ -647,8 +648,6 @@ function TabAnagrafica({
       customerId: machine.customerId || "",
       countryCode: machine.countryCode,
       site: machine.site || "",
-      productionStart: isoToDay(machine.productionStart || undefined),
-      deliveryDate: isoToDay(machine.deliveryDate || undefined),
       naCustomer: machine.naCustomer || "",
       naCustomerCode: machine.naCustomerCode || "",
       plateWeight: machine.plateWeight || "",
@@ -714,8 +713,6 @@ function TabAnagrafica({
         customer: form.customer,
         countryCode: form.countryCode,
         site: form.site,
-        productionStart: form.productionStart,
-        deliveryDate: form.deliveryDate,
         naCustomer: form.naCustomer,
         naCustomerCode: form.naCustomerCode,
         plateWeight: form.plateWeight,
@@ -1095,36 +1092,6 @@ function TabAnagrafica({
                 )}
               </dd>
             </div>
-            <div>
-              <dt>Inizio produzione</dt>
-              <dd>
-                {edit ? (
-                  <input
-                    className="input"
-                    type="date"
-                    value={form.productionStart}
-                    onChange={(e) => setFF("productionStart", e.target.value)}
-                  />
-                ) : (
-                  fmtDate(machine.productionStart)
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Data consegna</dt>
-              <dd>
-                {edit ? (
-                  <input
-                    className="input"
-                    type="date"
-                    value={form.deliveryDate}
-                    onChange={(e) => setFF("deliveryDate", e.target.value)}
-                  />
-                ) : (
-                  fmtDate(machine.deliveryDate)
-                )}
-              </dd>
-            </div>
           </dl>
         </section>
 
@@ -1276,15 +1243,22 @@ function TabAnagrafica({
             <p className="muted small">Nessun documento. Carica schemi, manuali, dichiarazione CE…</p>
           )}
           <ul className="doc-list">
-            {machine.documents.map((d) => (
-              <li key={d.id}>
-                <Icon name="doc" size={16} />
-                <a className="fname" href={d.path} target="_blank" rel="noreferrer">
-                  {d.name}
-                </a>
-                <span className="muted mono small">{fmtBytes(d.sizeBytes)}</span>
-              </li>
-            ))}
+            {machine.documents.map((d) => {
+              // I documenti caricati da una casella di scheda (collaudo
+              // dimensionale, rilievo alberi) si riconoscono: altrimenti qui
+              // sembrano allegati sciolti come gli altri.
+              const slot = sheetDocDef(d.category);
+              return (
+                <li key={d.id}>
+                  <Icon name="doc" size={16} />
+                  <a className="fname" href={d.path} target="_blank" rel="noreferrer">
+                    {d.name}
+                  </a>
+                  {slot && <span className="doc-slot-tag">{slot.label}</span>}
+                  <span className="muted mono small">{fmtBytes(d.sizeBytes)}</span>
+                </li>
+              );
+            })}
           </ul>
         </section>
       </div>

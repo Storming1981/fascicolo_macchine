@@ -6,7 +6,7 @@ import Icon, { Flag } from "@/components/Icon";
 import { STATUS_META, STATUS_ORDER } from "@/lib/domain";
 import { hasKit, KITS } from "@/lib/kits";
 import { containerType } from "@/lib/allestimento";
-import type { MachineAlert } from "@/lib/machineAlerts";
+import type { MachineAlert, SheetsScope } from "@/lib/machineAlerts";
 import type { MachineStatus } from "@prisma/client";
 
 type M = {
@@ -23,9 +23,12 @@ type M = {
   progress: number;
   tiranteGiunto: boolean;
   filtroMaggiorato: boolean;
-  /** Semafori: schede di allestimento firmate · collaudo chiuso. */
+  /** Quali schede comprende il fascicolo (corpo + container, o una sola). */
+  scope: SheetsScope;
+  /** Semafori: schede di allestimento firmate · collaudo chiuso · documenti albero. */
   schede: MachineAlert;
   collaudo: MachineAlert;
+  docAlberi: MachineAlert;
   /** Tipo container dalla scheda M5.17 (null = scheda non ancora compilata). */
   containerType: string | null;
 };
@@ -123,6 +126,7 @@ export default function MachinesList({
                 <th>Commessa</th>
                 <th>Tipologia</th>
                 <th>Modello</th>
+                <th title="Quali schede di allestimento comprende la commessa">Schede incluse</th>
                 <th title="Tipo container dalla scheda di allestimento M5.17">Tipo container</th>
                 {KITS.map((k) => (
                   <th key={k.key} title={k.hint}>
@@ -136,6 +140,7 @@ export default function MachinesList({
                 <th>Avanzamento</th>
                 <th title="Schede di allestimento: rosso finché non sono tutte firmate">Schede</th>
                 <th title="Collaudo: rosso finché check list e firme non sono complete">Collaudo</th>
+                <th title="Collaudo dimensionale e rilievo alberi allegati al fascicolo">Doc. alberi</th>
                 <th />
               </tr>
             </thead>
@@ -155,6 +160,20 @@ export default function MachinesList({
                   <td className="mono">{m.job}</td>
                   <td>{m.plantType || <span className="muted">—</span>}</td>
                   <td>{m.model}</td>
+                  {/* Una commessa di mezzo impianto (solo corpo, solo
+                      container) si vede subito: in ambra, perche' e'
+                      l'eccezione da tenere d'occhio. */}
+                  <td>
+                    {m.scope.na ? (
+                      <span className="muted">—</span>
+                    ) : m.scope.partial ? (
+                      <span className="alert-pill warn" title="Il fascicolo comprende una sola scheda">
+                        Solo {m.scope.label.toLowerCase()}
+                      </span>
+                    ) : (
+                      <span className="small">{m.scope.label}</span>
+                    )}
+                  </td>
                   <td>
                     {ct ? (
                       <span className="ctype-badge" style={{ background: `${ct.color}1f`, color: ct.color }}>
@@ -216,6 +235,9 @@ export default function MachinesList({
                     <AlertCell alert={m.collaudo} />
                   </td>
                   <td>
+                    <AlertCell alert={m.docAlberi} />
+                  </td>
+                  <td>
                     <Icon name="chev-right" size={16} color="var(--muted)" />
                   </td>
                 </tr>
@@ -223,7 +245,7 @@ export default function MachinesList({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="empty">
+                  <td colSpan={16} className="empty">
                     Nessuna macchina trovata.
                   </td>
                 </tr>

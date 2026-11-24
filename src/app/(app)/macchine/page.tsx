@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/db";
 import { userCaps } from "@/lib/caps";
 import { progressForMachines } from "@/lib/progressService";
-import { defaultTipo } from "@/lib/allestimento";
-import { collaudoAlert, sheetsAlert, SIGN_ROLES } from "@/lib/machineAlerts";
+import { defaultTipo, SHAFT_DOC_CATEGORIES } from "@/lib/allestimento";
+import { collaudoAlert, sheetsAlert, sheetsScope, shaftDocsAlert, SIGN_ROLES } from "@/lib/machineAlerts";
 import MachinesList from "./MachinesList";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export default async function MachinesPage({
   // non una per riga. Dalle schede esce sia il tipo container (intestazione
   // della M5.17) sia quali sono firmate.
   const ids = machines.map((m) => m.id);
-  const [sheets, collaudi, firme] = await Promise.all([
+  const [sheets, collaudi, firme, shaftDocs] = await Promise.all([
     prisma.allestimentoSheet.findMany({
       where: { machineId: { in: ids } },
       select: { machineId: true, kind: true, status: true, header: true },
@@ -34,6 +34,11 @@ export default async function MachinesPage({
     prisma.signature.findMany({
       where: { machineId: { in: ids }, diaryEventId: null, role: { in: [...SIGN_ROLES] } },
       select: { machineId: true, role: true },
+    }),
+    // Documenti dell'albero: una query per tutta la pagina, non una per riga.
+    prisma.document.findMany({
+      where: { machineId: { in: ids }, category: { in: SHAFT_DOC_CATEGORIES } },
+      select: { machineId: true, category: true },
     }),
   ]);
 
@@ -56,6 +61,12 @@ export default async function MachinesPage({
     set.add(f.role);
     rolesByMachine.set(f.machineId, set);
   }
+  const shaftByMachine = new Map<string, Set<string>>();
+  for (const d of shaftDocs) {
+    const set = shaftByMachine.get(d.machineId) ?? new Set<string>();
+    set.add(d.category);
+    shaftByMachine.set(d.machineId, set);
+  }
   const empty = new Set<string>();
   const data = machines.map((m) => ({
     id: m.id,
@@ -76,7 +87,9 @@ export default async function MachinesPage({
       : null,
     tiranteGiunto: m.tiranteGiunto,
     filtroMaggiorato: m.filtroMaggiorato,
+    scope: sheetsScope(m.plantType, m.sheetKinds),
     schede: sheetsAlert(m.plantType, signedSheets.get(m.id) ?? empty, m.sheetKinds),
+    docAlberi: shaftDocsAlert(m.plantType, m.sheetKinds, shaftByMachine.get(m.id) ?? empty),
     collaudo: collaudoAlert(
       m.plantType,
       collaudoByMachine.get(m.id) ?? null,

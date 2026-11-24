@@ -30,6 +30,7 @@ import {
   type SheetHeader,
   type SheetKind,
   type SheetOptions,
+  type SheetDocDef,
   type SheetRow,
   type SheetValues,
 } from "@/lib/allestimento";
@@ -97,6 +98,8 @@ export default function AllestimentoSheets({
     jobContainer: string | null;
     country: string;
     components: Comp[];
+    /** Allegati del fascicolo: le caselle documento delle righe leggono qui. */
+    documents: { id: string; name: string; path: string; category: string }[];
   };
   canEdit: boolean;
   canSign: boolean;
@@ -331,6 +334,27 @@ export default function AllestimentoSheets({
         placeholder="Nota…"
       />
     );
+    // Caselle documento della riga (collaudo dimensionale, rilievo alberi):
+    // sono allegati del fascicolo, quindi stanno sotto le matricole e non
+    // fanno punteggio di riga — il semaforo dell'elenco macchine dice se
+    // mancano.
+    const docs = row.docs ? (
+      <div className="al-docs">
+        {row.docs.map((d) => (
+          <DocSlot
+            key={d.category}
+            machineId={machine.id}
+            def={d}
+            files={machine.documents.filter((x) => x.category === d.category)}
+            loose={machine.documents.filter((x) => x.category === "documento")}
+            disabled={disabled}
+            onDone={onDone}
+            notify={notify}
+          />
+        ))}
+      </div>
+    ) : null;
+
     // colonna Matricola a elenco (marche del modulo cartaceo)
     if (row.serialList) {
       const list = serialListKey(kind, row);
@@ -384,7 +408,15 @@ export default function AllestimentoSheets({
         </div>
       );
     }
-    if (!row.serials) return note;
+    if (!row.serials)
+      return docs ? (
+        <div className="al-side-stack">
+          {docs}
+          {note}
+        </div>
+      ) : (
+        note
+      );
     const c = compOf(row.serials);
     // slot oltre il numero dichiarato (es. un solo motore elettrico): nascosti
     // se vuoti, mostrati se qualcuno ci ha gia' scritto una matricola
@@ -410,6 +442,7 @@ export default function AllestimentoSheets({
             <Icon name="plus" size={13} /> Aggiungi {row.addSlots.toLowerCase()}
           </button>
         )}
+        {docs}
         {note}
       </div>
     );
@@ -876,6 +909,124 @@ export default function AllestimentoSheets({
  * Campo a elenco: si sceglie una voce o se ne scrive una nuova e la si aggiunge
  * all'elenco con un clic, così la volta dopo è già fra le scelte.
  */
+/**
+ * Casella documento di una riga di scheda: ci si carica un PDF (collaudo
+ * dimensionale, rilievo alberi) che diventa un **allegato del fascicolo** —
+ * quindi compare anche in *Documenti allegati* dell'Anagrafica, dove la
+ * produzione lo cerca.
+ *
+ * Oltre al caricamento c'e' *collega*: in officina si allega prima e si
+ * archivia dopo, e senza quella scorciatoia lo stesso PDF andrebbe ricaricato
+ * per finire nella sua casella, lasciandone due copie nel fascicolo.
+ */
+function DocSlot({
+  machineId,
+  def,
+  files,
+  loose,
+  disabled,
+  onDone,
+  notify,
+}: {
+  machineId: string;
+  def: SheetDocDef;
+  files: { id: string; name: string; path: string }[];
+  loose: { id: string; name: string }[];
+  disabled: boolean;
+  onDone: () => void;
+  notify: (m: string, k?: "ok" | "err") => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [pick, setPick] = useState(false);
+
+  async function upload(list: FileList | null) {
+    if (!list || !list.length) return;
+    setBusy(true);
+    const fd = new FormData();
+    Array.from(list).forEach((f) => fd.append("files", f));
+    fd.append("category", def.category);
+    const res = await fetch(`/api/machines/${machineId}/documents`, { method: "POST", body: fd });
+    setBusy(false);
+    if (ref.current) ref.current.value = "";
+    if (res.ok) {
+      onDone();
+      notify(`${def.label}: documento allegato`);
+    } else notify("Errore nel caricamento del documento", "err");
+  }
+
+  async function move(documentId: string, category: string) {
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machineId}/documents`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentId, category }),
+    });
+    setBusy(false);
+    setPick(false);
+    if (res.ok) {
+      onDone();
+      notify(category === "documento" ? "Documento riportato fra gli allegati" : `${def.label}: documento collegato`);
+    } else notify((await res.json().catch(() => null))?.error ?? "Errore", "err");
+  }
+
+  return (
+    <div className={"al-doc" + (files.length ? " ok" : "")}>
+      <span className="al-doc-label" title={def.hint}>
+        <Icon name="doc" size={13} /> {def.label}
+      </span>
+      <div className="al-doc-files">
+        {files.map((f) => (
+          <span key={f.id} className="al-doc-file">
+            <a href={f.path} target="_blank" rel="noreferrer" title={f.name}>
+              {f.name}
+            </a>
+            {!disabled && (
+              <button
+                className="icon-btn"
+                disabled={busy}
+                title="Togli dalla casella (resta fra i documenti allegati)"
+                onClick={() => move(f.id, "documento")}
+              >
+                <Icon name="x" size={12} />
+              </button>
+            )}
+          </span>
+        ))}
+        {!files.length && <span className="muted small">Nessun file</span>}
+      </div>
+      {!disabled && (
+        <div className="al-doc-actions">
+          <input ref={ref} type="file" hidden onChange={(e) => upload(e.target.files)} />
+          <button className="btn-ghost-sm" disabled={busy} onClick={() => ref.current?.click()}>
+            <Icon name="upload" size={12} /> Carica
+          </button>
+          {loose.length > 0 && !pick && (
+            <button className="btn-ghost-sm" disabled={busy} onClick={() => setPick(true)} title="Scegli un file gia' allegato al fascicolo">
+              <Icon name="folder" size={12} /> Collega
+            </button>
+          )}
+          {pick && (
+            <select
+              className="al-input"
+              defaultValue=""
+              disabled={busy}
+              onChange={(e) => (e.target.value ? move(e.target.value, def.category) : setPick(false))}
+            >
+              <option value="">— scegli un documento allegato…</option>
+              {loose.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Combobox({
   value,
   options,

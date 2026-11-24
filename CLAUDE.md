@@ -624,10 +624,11 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   account esistono) e c'è **una richiesta all'ora per persona**.
 - **Dashboard**: KPI flotta, pipeline per stato, attività recenti.
 - **Macchine**: ricerca + filtri di stato; tabella responsive.
-- **Due semafori nell'elenco macchine** (`src/lib/machineAlerts.ts`): colonna
+- **Tre semafori nell'elenco macchine** (`src/lib/machineAlerts.ts`): colonna
   **Schede** (le schede di allestimento previste dalla tipologia sono tutte
-  firmate?) e colonna **Collaudo** (check list **approvata** *e* le tre firme
-  `SIGN_ROLES` raccolte). **Rosso lampeggiante** finché manca qualcosa, **verde
+  firmate?), colonna **Collaudo** (check list **approvata** *e* le tre firme
+  `SIGN_ROLES` raccolte) e colonna **Doc. alberi** (collaudo dimensionale e
+  rilievo alberi allegati). **Rosso lampeggiante** finché manca qualcosa, **verde
   fisso** quando è a posto, "—" dove quella cosa non è prevista (la linea di
   separazione non ha collaudo): un semaforo che non si può mai spegnere è solo
   rumore. Il `title` della targhetta dice **cosa** manca ("Da firmare: M5.17",
@@ -638,10 +639,19 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     ancora da compilare.
   - Una scheda **mai aperta** conta come da firmare: il dato non c'è, non è che
     non serve.
-  - Costo: **tre query per pagina** (schede, collaudi, firme con
+  - I **documenti dell'albero** si chiedono solo dove c'è il trituratore
+    (`shaftDocsAlert` guarda `machineSheetKinds`): su un fascicolo di solo
+    container l'albero non esiste.
+  - Costo: **quattro query per pagina** (schede, collaudi, firme con
     `diaryEventId: null` — quelle legate a un evento di diario sono degli
-    interventi), non una per riga. L'animazione si spegne con
-    `prefers-reduced-motion`.
+    interventi, e i documenti dell'albero), non una per riga. L'animazione si
+    spegne con `prefers-reduced-motion`.
+  - **Colonna «Schede incluse»** (`sheetsScope`, non è un semaforo): dice se la
+    commessa è *Trituratore + Container* o una scheda sola, e la scheda sola è
+    in **ambra** perché è l'eccezione da tenere d'occhio. Su 200 BLUE DEVIL
+    quasi identici la composizione si scopriva solo aprendo il fascicolo.
+    Vale per qualunque tipologia con più di una scheda (il mulino: *Mulino +
+    Downstream*), "—" dove la scheda è una sola.
 - **Dettaglio macchina** (6 tab): Anagrafica + documenti, Componenti & Matricole
   (accordion con sostituzione pezzo e foto per slot), Foto produzione (upload con
   categorie), Collaudo & Firme (firme per ruolo PIN/penna), Diario macchina
@@ -829,6 +839,27 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     conta. Il lotto già scritto
     a mano **si sposta sullo slot** alla creazione del gruppo (`moveShaftLot`):
     senza, sparirebbe dalla scheda di ogni fascicolo già compilato.
+  - **I due documenti dell'albero stanno sulla riga del lotto**
+    (`SheetRow.docs`, `SHAFT_DOCS` in `allestimento.ts`): *Collaudo
+    dimensionale* e *Rilievo alberi*, una casella ciascuno. Sono **allegati del
+    fascicolo** (`Document.category = albero_collaudo | albero_rilievo`), non
+    valori della scheda: così compaiono anche in *Documenti allegati*
+    dell'Anagrafica — dove la produzione li cerca — restando un file solo in un
+    posto solo, e il fascicolo eliminato se li porta via come gli altri
+    allegati. Il caricamento va a diario col nome della casella.
+    - **C'è anche *Collega***: in officina si allega prima e si archivia dopo,
+      quindi la casella pesca anche fra i documenti generici già caricati
+      (`PATCH …/documents {documentId, category}`). Senza, lo stesso PDF andava
+      ricaricato per finire nella sua casella e il fascicolo ne aveva due copie.
+      *Togli dalla casella* lo riporta fra i generici: non lo cancella.
+    - **Non fanno punteggio di riga**: la riga *Lotto albero* resta compilata
+      quando c'è la matricola. A dire se mancano è il semaforo **Doc. alberi**
+      dell'elenco macchine, che è dove serve guardarlo su tutta la flotta.
+    - Lo storico si archivia con `npm run machine:backfill-doc-alberi`
+      (`--dry` per provare): riconosce i file dal **nome**
+      (`collaudo dimensional…`, `rilievo alber…`), che è l'unico dato che si
+      ha. Chi non combacia resta allegato generico — una casella vuota è meglio
+      di un documento archiviato nella casella sbagliata.
   - **Lotto lame: foto e OCR come l'albero.** Era un campo `extra` del gruppo
     (testo a mano, nessuna prova): ora è la matricola dello slot *Set lame*,
     quindi ha fotocamera, foto e lettura automatica. Il valore già scritto si
@@ -1266,6 +1297,13 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     job e cliente: dopo, in banca dati non resta niente da guardare.
 - **Nuovo intervento**: fase, tipo (sostituzione/ispezione/riparazione/nota),
   matricole, foto, firma PIN o a penna su canvas → diario + firma + aggiorna seriale.
+- **Inizio produzione e Data consegna non si scrivono più a mano**: via dal
+  wizard *Nuova macchina* e dalla card *Cliente e destinazione* (le colonne
+  `productionStart` / `deliveryDate` restano in banca dati). Le date vere
+  stanno in **Date di stato**, dove arrivano dal gestionale (prima e ultima
+  timbratura): due posti per la stessa data erano uno di troppo, e quello
+  scritto a mano era sempre il più vecchio. Non facevano punteggio nemmeno
+  prima (`anagraficaFields`), quindi l'avanzamento non cambia.
 - **Nuova macchina**: wizard 4 step (identificazione, cliente, targa, componenti).
   Il **cliente si sceglie dall'anagrafica** con tendina ricercabile
   (`src/components/CustomerPicker.tsx` → `/api/customers/search`), non a mano:

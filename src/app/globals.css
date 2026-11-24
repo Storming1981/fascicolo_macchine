@@ -352,6 +352,9 @@ img.user-avatar.small { object-fit: cover; }
 .doc-list li { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-radius: 7px; font-size: 13px; }
 .doc-list li:hover { background: var(--hover); }
 .doc-list li > a, .doc-list li > span.fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Da quale casella di scheda arriva l'allegato (collaudo dimensionale,
+   rilievo alberi): senza, qui sembrano tutti file sciolti. */
+.doc-slot-tag { font-size: 11px; font-weight: 600; color: #15803d; background: #16a34a14; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
 
 /* ── Components tab ───────────────────────────────────────── */
 .cmp-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }

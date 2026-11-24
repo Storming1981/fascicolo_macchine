@@ -47,8 +47,6 @@ export default function NewMachineForm({
     customerId: "",
     countryCode: "IT",
     site: "",
-    productionStart: new Date().toISOString().slice(0, 10),
-    deliveryDate: "",
   });
   const set = (k: string, v: string | number) => setF((s) => ({ ...s, [k]: v }));
 
@@ -433,24 +431,6 @@ export default function NewMachineForm({
                 value={f.site}
                 onChange={(e) => set("site", e.target.value)}
                 placeholder="es. Hannover, DE"
-              />
-            </div>
-            <div className="form-row">
-              <label>Inizio produzione</label>
-              <input
-                className="input"
-                type="date"
-                value={f.productionStart}
-                onChange={(e) => set("productionStart", e.target.value)}
-              />
-            </div>
-            <div className="form-row">
-              <label>Data consegna prevista</label>
-              <input
-                className="input"
-                type="date"
-                value={f.deliveryDate}
-                onChange={(e) => set("deliveryDate", e.target.value)}
               />
             </div>
           </div>

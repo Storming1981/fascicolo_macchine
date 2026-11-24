@@ -4,7 +4,7 @@
 //
 // Modulo puro (client + server): niente import server-only.
 
-import { machineSheetKinds, sheetDef } from "./allestimento";
+import { machineSheetKinds, sheetDef, SHEET_LABEL, SHAFT_DOCS, sheetKindsFor } from "./allestimento";
 import { hasCollaudo } from "./plant";
 
 /** Le tre firme in calce al collaudo (card *Firme* della scheda fascicolo). */
@@ -37,6 +37,44 @@ export function sheetsAlert(
     state: "pending",
     detail: `Da firmare: ${missing.map((k) => sheetDef(k).code).join(", ")}`,
   };
+}
+
+/**
+ * Quali schede comprende il fascicolo: su una flotta di BLUE DEVIL quasi
+ * identici serve sapere a colpo d'occhio se quella commessa e' corpo +
+ * container o un pezzo solo — oggi lo si scopriva solo aprendo il fascicolo.
+ *
+ * `na` dove la tipologia ha una scheda sola: non c'e' niente da comporre.
+ */
+export type SheetsScope = { label: string; partial: boolean; na: boolean };
+
+export function sheetsScope(plantType: string | null, selected?: string[] | null): SheetsScope {
+  const all = sheetKindsFor(plantType);
+  const kinds = machineSheetKinds(plantType, selected);
+  if (all.length < 2) return { label: "", partial: false, na: true };
+  return {
+    label: kinds.map((k) => SHEET_LABEL[k]).join(" + "),
+    partial: kinds.length < all.length,
+    na: false,
+  };
+}
+
+/**
+ * Documenti dell'albero (collaudo dimensionale + rilievo): rosso finché
+ * mancano. Si chiedono **solo dove c'e' il trituratore** — su un fascicolo di
+ * solo container l'albero non esiste, e un semaforo che non si può spegnere è
+ * solo rumore.
+ */
+export function shaftDocsAlert(
+  plantType: string | null,
+  selected: string[] | null | undefined,
+  present: Set<string>
+): MachineAlert {
+  if (!machineSheetKinds(plantType, selected).includes("TRITURATORE"))
+    return { state: "na", detail: "Nessun albero in questo fascicolo" };
+  const missing = SHAFT_DOCS.filter((d) => !present.has(d.category));
+  if (!missing.length) return { state: "ok", detail: "Collaudo dimensionale e rilievo alberi allegati" };
+  return { state: "pending", detail: `Manca: ${missing.map((d) => d.label.toLowerCase()).join(", ")}` };
 }
 
 /**

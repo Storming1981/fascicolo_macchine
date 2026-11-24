@@ -92,8 +92,53 @@ export type SheetRow = {
    * del gruppo. Il valore e' il nome degli slot aggiunti ("Set lame #2").
    */
   addSlots?: string;
+  /**
+   * Documenti allegati della riga: caselle in cui si carica un PDF (collaudo
+   * dimensionale, rilievo alberi). Non sono valori della scheda ma allegati
+   * del **fascicolo** (`Document.category`), quindi compaiono anche in
+   * *Documenti allegati* dell'Anagrafica: il file e' uno solo, in un posto
+   * solo — due copie e poi non si sa quale vale.
+   */
+  docs?: SheetDocDef[];
   when?: (ctx: SheetCtx) => boolean;
 };
+
+/**
+ * Casella documento di una riga di scheda. La **categoria** e' il legame col
+ * file (`Document.category`), non il nome del file: un PDF rinominato resta
+ * nella sua casella.
+ */
+export type SheetDocDef = {
+  category: string;
+  label: string;
+  hint?: string;
+};
+
+/**
+ * I due documenti dell'albero, chiesti sulla riga *Lotto albero* della M5.16:
+ * il collaudo dimensionale arriva dall'officina che lavora gli alberi, il
+ * rilievo e' la misura di controllo. Vanno sul fascicolo perche' il cliente
+ * puo' chiederli anni dopo.
+ */
+export const SHAFT_DOCS: SheetDocDef[] = [
+  {
+    category: "albero_collaudo",
+    label: "Collaudo dimensionale",
+    hint: "Collaudo dimensionale e costruttivo dell'albero (PDF dell'officina)",
+  },
+  {
+    category: "albero_rilievo",
+    label: "Rilievo alberi",
+    hint: "Rilievo di controllo degli alberi montati",
+  },
+];
+
+export const SHAFT_DOC_CATEGORIES = SHAFT_DOCS.map((d) => d.category);
+
+/** Tutte le caselle documento dichiarate dalle schede, per categoria. */
+export function sheetDocDef(category: string): SheetDocDef | undefined {
+  return SHAFT_DOCS.find((d) => d.category === category);
+}
 
 export type SheetSection = {
   key: string;
@@ -277,7 +322,7 @@ export const SHEET_TRITURATORE: SheetDef = {
         { key: "lotto_lame", label: "Lotto lame", serials: "blades", noSpec: true, addSlots: "Set lame" },
         { key: "lav_portalame", label: "Lav portalame - distanziali - alberi", suggest: ["DGS"], list: "lavorazioni" },
         { key: "montaggio_albero", label: "Montaggio albero", suggest: ["DGS"], list: "lavorazioni" },
-        { key: "lotto_albero", label: "Lotto albero", serials: "shaft", noSpec: true },
+        { key: "lotto_albero", label: "Lotto albero", serials: "shaft", noSpec: true, docs: SHAFT_DOCS },
         { key: "lav_cassa", label: "Lav cassa", suggest: ["OFFICINE FN"], list: "lavorazioni" },
         { key: "corazzine", label: "Corazzine inferiori", input: "yesno" },
         { key: "materiale_ghiere", label: "Materiale ghiere", suggest: ["C45"] },
