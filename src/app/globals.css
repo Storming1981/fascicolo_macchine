@@ -1255,6 +1255,10 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 /* Cella matricola editabile + OCR nel tab Componenti */
 .slot-serial { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .slot-serial input { width: 160px; max-width: 44vw; padding: 7px 9px; font-size: 12.5px; }
+/* Col menu delle sorgenti aperto il campo prende la riga: una matricola di
+   dodici cifre deve restare leggibile mentre si sceglie da dove prendere la
+   foto. */
+.slot-serial.open input { width: 100%; max-width: none; }
 .slot-serial .slot-save { color: var(--accent); }
 /* Sorgenti della foto raccolte dietro una freccetta: cinque icone senza
    etichetta nella stessa cella si leggevano solo col passaggio del mouse, che

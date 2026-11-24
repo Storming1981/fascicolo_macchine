@@ -2131,7 +2131,9 @@ function SlotSerialCell({
     );
 
   return (
-    <div className="slot-serial">
+    // `open`: col menu aperto la cella va a capo invece di stringere il campo
+    // della matricola — nelle schede il contenitore e' `nowrap`.
+    <div className={"slot-serial" + (srcOpen ? " open" : "")}>
       <input
         className={"mono" + (dirty ? " unsaved" : "")}
         title={dirty ? "Non ancora salvata: premi ✓" : undefined}

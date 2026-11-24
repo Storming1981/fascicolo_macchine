@@ -215,6 +215,12 @@
 .al-serial-cell { min-width: 0; }
 .al-serial-cell .slot-serial { flex-wrap: nowrap; gap: 4px; }
 .al-serial-cell .slot-serial input { flex: 1; width: auto; min-width: 0; max-width: none; height: 34px; border-radius: 7px; }
+/* Menu delle sorgenti aperto: la riga va a capo (il menu occupa tutta la
+   larghezza) e il campo della matricola resta leggibile invece di schiacciarsi
+   a pochi pixel — con `nowrap` il riquadro gli rubava lo spazio sulla stessa
+   riga. */
+.al-serial-cell .slot-serial.open { flex-wrap: wrap; }
+.al-serial-cell .slot-serial.open input { flex: 1 1 100%; min-width: 140px; }
 /* Il lotto sta accanto alla matricola: fisso e stretto, il resto va alla matricola */
 .al-serial-cell .slot-serial .slot-lot { flex: 0 0 76px; width: 76px; }
 .al-serial-cell .slot-serial .icon-btn.sm { width: 26px; height: 26px; padding: 0; flex: 0 0 26px; }

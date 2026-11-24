@@ -133,7 +133,28 @@ async function auth(
   } catch (e) {
     // Token illeggibile o rinnovo fallito: è una frase, non un 500 — chi legge
     // deve capire che va ricollegato un account, e quale.
-    return { error: e instanceof Error ? e.message : "Google Foto non disponibile" };
+    //
+    // Il caso più frequente è il consenso revocato o scaduto, e Google lo dice
+    // in inglese ("Token has been expired or revoked"): mostrato così non dice
+    // a nessuno cosa fare. Sul proprio account si risolve da soli, quindi
+    // `needsAuth` trasforma il pulsante in "Autorizza Google Foto";
+    // sull'archivio no, lo ricollega un amministratore.
+    const msg = e instanceof Error ? e.message : "";
+    const scaduto = /expired|revoked|invalid_grant|illeggibile/i.test(msg);
+    if (scaduto && source === "archive") {
+      const info = await getPhotoArchiveInfo().catch(() => null);
+      return {
+        error:
+          `L'archivio foto aziendale${info ? ` (${info.email})` : ""} va ricollegato: il consenso di Google è ` +
+          "scaduto o è stato revocato. Lo rifà un amministratore da Impostazioni → Google.",
+      };
+    }
+    if (scaduto)
+      return {
+        error: "Il tuo collegamento a Google è scaduto o è stato revocato: autorizzalo di nuovo.",
+        needsAuth: true,
+      };
+    return { error: msg || "Google Foto non disponibile" };
   }
 }
 
