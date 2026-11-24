@@ -259,4 +259,11 @@
   .al-kind { min-width: 0; flex: 1; }
   .al-serial { grid-template-columns: minmax(0, 1fr) 152px; }
   .al-serial-label { grid-column: 1 / -1; }
+  /* Su telefono la cella e' larga ~200px: matricola + fotocamera + freccetta +
+     lotto sulla stessa riga lasciavano all'input una sessantina di pixel, e una
+     matricola come MM104353 usciva tagliata. La matricola prende una riga sua;
+     fotocamera, freccetta e lotto vanno sotto. */
+  .al-serial-cell .slot-serial { flex-wrap: wrap; row-gap: 6px; }
+  .al-serial-cell .slot-serial input { flex: 1 1 100%; }
+  .al-serial-cell .slot-serial .slot-lot { flex: 0 0 92px; width: 92px; }
 }
