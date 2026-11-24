@@ -1960,6 +1960,13 @@ function SlotSerialCell({
   const [val, setValState] = useState(() => pendingSerials.get(item.id) ?? item.serial ?? "");
   const [lot, setLotState] = useState(() => pendingLots.get(item.id) ?? item.lot ?? "");
   const [busy, setBusy] = useState<null | "save" | "ocr">(null);
+  // Menu delle altre sorgenti della foto: cinque icone senza etichetta nella
+  // stessa cella si distinguevano solo passandoci sopra col mouse, che su un
+  // tablet in officina non esiste. Resta fuori la fotocamera, che e' il gesto
+  // di nove volte su dieci.
+  const [srcOpen, setSrcOpen] = useState(false);
+  /** Scelta su Google in corso: chiudere il menu la interromperebbe. */
+  const [picking, setPicking] = useState(false);
   const camRef = useRef<HTMLInputElement>(null);
   const dirty = val.trim() !== (item.serial ?? "") || lot.trim() !== (item.lot ?? "");
 
@@ -2132,59 +2139,91 @@ function SlotSerialCell({
         onChange={(e) => setVal(e.target.value)}
         placeholder="matricola…"
       />
+      {/* Azione primaria: la fotocamera. È il gesto normale in officina, e un
+          menu non deve costare un clic in più a chi lo fa sempre. */}
       <button
         type="button"
         className="icon-btn sm"
-        title="Leggi matricola da foto"
+        title="Scatta la foto della targhetta e leggi la matricola"
         onClick={() => camRef.current?.click()}
         disabled={busy !== null}
       >
         <Icon name="camera" size={15} />
       </button>
-      {/* La foto della targhetta spesso è già nel Google Foto di chi l'ha
-          scattata col telefono: si prende di là e la matricola si legge subito,
-          senza passare dal computer. */}
-      <GooglePhotosPick
-        machineId={machineId}
-        machineCode={machineCode}
-        componentItemId={item.id}
-        category="componente"
-        label=""
-        icon="cloud"
-        className="icon-btn sm"
-        title="Prendi la foto dal tuo Google Foto e leggi la matricola"
-        onDone={onDone}
-        onImported={(paths) => readFromPath(paths[0])}
-        notify={notify}
-      />
-      {/* La stessa cosa, ma dall'**archivio foto aziendale**: le targhette dei
-          componenti stanno spesso lì e non nella libreria di chi compila. */}
-      {photoArchive && (
-        <GooglePhotosPick
-          machineId={machineId}
-          machineCode={machineCode}
-          source="archive"
-          componentItemId={item.id}
-          category="componente"
-          label=""
-          icon="box"
-          className="icon-btn sm"
-          title={`Prendi la foto dall'archivio foto aziendale (${photoArchive.email}) e leggi la matricola — nella finestra di Google accedi con quell'account`}
-          onDone={onDone}
-          onImported={(paths) => readFromPath(paths[0])}
-          notify={notify}
-        />
-      )}
-      {photoPath && (
-        <button
-          type="button"
-          className="icon-btn sm"
-          title={`Rileggi la foto già caricata${lotName ? ` (matricola e ${lotName.toLowerCase()})` : ""}`}
-          onClick={rereadPhoto}
-          disabled={busy !== null}
-        >
-          <Icon name="refresh" size={14} />
-        </button>
+      {/* Le altre sorgenti stanno dietro una freccetta, con le etichette per
+          esteso: la foto può essere già nel proprio Google Foto, nell'archivio
+          aziendale, o già caricata su questo slot. */}
+      <button
+        type="button"
+        className={"icon-btn sm slot-more" + (srcOpen ? " on" : "")}
+        title="Altre sorgenti per la foto della targhetta"
+        aria-expanded={srcOpen}
+        onClick={() => setSrcOpen((v) => !v)}
+        // chiudere il menu mentre Google è aperto interromperebbe la scelta
+        disabled={picking}
+      >
+        <Icon name="caret" size={14} />
+      </button>
+      {srcOpen && (
+        <div className="slot-src">
+          {/* La foto della targhetta spesso è già nel Google Foto di chi l'ha
+              scattata col telefono: si prende di là e la matricola si legge
+              subito, senza passare dal computer. */}
+          <GooglePhotosPick
+            machineId={machineId}
+            machineCode={machineCode}
+            componentItemId={item.id}
+            category="componente"
+            label="Dal mio Google Foto"
+            icon="cloud"
+            className="src-item"
+            title="Prendi la foto dal tuo Google Foto e leggi la matricola"
+            onDone={() => {
+              setSrcOpen(false);
+              onDone();
+            }}
+            onImported={(paths) => readFromPath(paths[0])}
+            onBusyChange={setPicking}
+            notify={notify}
+          />
+          {/* La stessa cosa, ma dall'**archivio foto aziendale**: le targhette
+              dei componenti stanno spesso lì e non nella libreria di chi
+              compila. */}
+          {photoArchive && (
+            <GooglePhotosPick
+              machineId={machineId}
+              machineCode={machineCode}
+              source="archive"
+              componentItemId={item.id}
+              category="componente"
+              label="Dall'archivio ZATO"
+              icon="box"
+              className="src-item"
+              title={`Archivio foto aziendale (${photoArchive.email}): nella finestra di Google accedi con quell'account`}
+              onDone={() => {
+                setSrcOpen(false);
+                onDone();
+              }}
+              onImported={(paths) => readFromPath(paths[0])}
+              onBusyChange={setPicking}
+              notify={notify}
+            />
+          )}
+          {photoPath && (
+            <button
+              type="button"
+              className="src-item"
+              onClick={() => {
+                setSrcOpen(false);
+                rereadPhoto();
+              }}
+              disabled={busy !== null}
+            >
+              <Icon name="refresh" size={14} /> Rileggi la foto già caricata
+              {lotName ? ` (matricola e ${lotName.toLowerCase()})` : ""}
+            </button>
+          )}
+        </div>
       )}
       {dirty && (
         <button

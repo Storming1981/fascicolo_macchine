@@ -26,6 +26,8 @@ export default function Icon({ name, size = 18, stroke = 1.7, color = "currentCo
       return <svg {...p}><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" /></svg>;
     case "engine":
       return <svg {...p}><path d="M3 10h2V8h3V6h6v2h3v2h2v8H3z" /><circle cx="9" cy="14" r="1.5" /><circle cx="15" cy="14" r="1.5" /></svg>;
+    case "caret":
+      return <svg {...p}><path d="M6 9l6 6 6-6" /></svg>;
     case "box":
       return <svg {...p}><path d="M3 7l9-4 9 4-9 4-9-4z" /><path d="M3 7v10l9 4 9-4V7M12 11v10" /></svg>;
     case "snow":

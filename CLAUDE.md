@@ -894,9 +894,21 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   - **L'intestazione delle colonne resta visibile** mentre si scorre
     (`.al-row-head` sticky): in una scheda da 36 voci, a metà pagina non si
     sapeva più quale colonna fosse quale.
-  - Matricola e foto hanno ora tre icone (scatta, rileggi, scegli dal
-    fascicolo): le colonne sono state strette, altrimenti l'ultima finiva fuori
-    dal riquadro.
+  - **La cella della matricola ha un'azione sola più un menu.** Le sorgenti
+    della foto erano arrivate a cinque icone senza etichetta nella stessa cella
+    (scatta · mio Google Foto · archivio ZATO · rileggi · scegli dal fascicolo),
+    e cinque icone uguali si distinguono solo passandoci sopra col mouse — che
+    su un tablet in officina non esiste. Ora resta **📷 scatta** come azione
+    primaria (il gesto di nove volte su dieci, che non deve costare un clic in
+    più) e una **freccetta** apre le altre sorgenti **con le etichette per
+    esteso**.
+    - Il menu si apre **sotto, dentro la cella** (`.slot-src`, `flex: 1 0
+      100%`): un riquadro in posizione assoluta verrebbe tagliato dallo
+      scorrimento orizzontale della tabella (`.table-wrap { overflow-x: auto }`).
+    - La freccetta **si disabilita mentre la scelta su Google è in corso**
+      (`GooglePhotosPick.onBusyChange`): chiudendo il menu il componente si
+      smonta, il giro di controlli si ferma e l'importazione resta a metà.
+      L'attesa con *Ho finito* vive dentro il menu, dove la si vede.
   - **Cavalletto e tramoggia** hanno la loro matricola con foto (gruppo
     `stand`), accanto al costruttore.
   - **Due specifiche su una riga sola** (`inlineWith`): la pompa di riempimento
@@ -1149,14 +1161,12 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     permesso** (`getPhotoArchiveInfo().canPick`, passato dal
     `machineDetailLoader` come `photoArchive`): Google lascia togliere la
     spunta, e un pulsante che fallisce al primo clic è peggio di nessun
-    pulsante. Sta in quattro punti: la barra della scheda **Foto** (dentro una
-    cartella), il riquadro **Scegli una foto** degli slot, e la **cella della
-    matricola** — sia nell'elenco per gruppo sia nelle schede di allestimento,
-    che usano lo stesso `SlotSerialCell`. Da tutti e tre i punti legati a uno
-    slot la foto arriva già agganciata e **l'OCR parte da solo**, come per il
-    Google Foto personale. In cella è la **quinta icona** (una cassetta accanto
-    alla nuvola): compare solo con l'archivio collegato, quindi dove non c'è la
-    riga resta a quattro icone come prima.
+    pulsante. Sta in tre punti: la barra della scheda **Foto** (dentro una
+    cartella), il riquadro **Scegli una foto** degli slot, e il menu delle
+    sorgenti nella **cella della matricola** — sia nell'elenco per gruppo sia
+    nelle schede di allestimento, che usano lo stesso `SlotSerialCell`. Dai
+    punti legati a uno slot la foto arriva già agganciata e **l'OCR parte da
+    solo**, come per il Google Foto personale.
   - Le foto importate restano **copie sul server** (`gphotoAccount` registra da
     quale archivio arrivano, `gphotoId = "picked:…"` impedisce al backup
     personale di rispedirle), quindi scollegare l'archivio non toglie niente ai

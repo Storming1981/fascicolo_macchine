@@ -1256,6 +1256,18 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .slot-serial { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .slot-serial input { width: 160px; max-width: 44vw; padding: 7px 9px; font-size: 12.5px; }
 .slot-serial .slot-save { color: var(--accent); }
+/* Sorgenti della foto raccolte dietro una freccetta: cinque icone senza
+   etichetta nella stessa cella si leggevano solo col passaggio del mouse, che
+   su un tablet in officina non esiste. Il menu si apre SOTTO, dentro la cella
+   (flex-basis 100%): un riquadro in posizione assoluta verrebbe tagliato dallo
+   scorrimento orizzontale della tabella. */
+.slot-serial .slot-more { color: var(--text-2); }
+.slot-serial .slot-more.on { background: var(--hover); color: var(--accent); }
+.slot-src { flex: 1 0 100%; display: flex; flex-direction: column; gap: 2px; margin-top: 2px; padding: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+.slot-src .src-item { display: inline-flex; align-items: center; gap: 8px; width: 100%; padding: 7px 9px; border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: 12.5px; color: var(--text); cursor: pointer; text-align: left; }
+.slot-src .src-item:hover:not(:disabled) { background: var(--hover); color: var(--accent); }
+.slot-src .src-item:disabled { opacity: .55; cursor: default; }
+.slot-src .gphoto-wait { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 9px; }
 .cmp-custom-actions { display: flex; gap: 8px; padding: 10px 4px 2px; flex-wrap: wrap; }
 .btn-ghost-sm.danger { color: #b91c1c; }
 .btn-ghost-sm.danger:hover { background: #fef2f2; }

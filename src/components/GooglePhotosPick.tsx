@@ -35,6 +35,7 @@ export default function GooglePhotosPick({
   title,
   onDone,
   onImported,
+  onBusyChange,
   notify,
 }: {
   machineId: string;
@@ -53,6 +54,12 @@ export default function GooglePhotosPick({
   onDone: () => void;
   /** Path delle foto appena importate: chi le aggancia a uno slot ci legge la matricola. */
   onImported?: (paths: string[]) => void | Promise<void>;
+  /**
+   * Scelta in corso (finestra di Google aperta, attesa, importazione). Serve a
+   * chi mette questo pulsante dentro un menu: chiudendolo a meta' il
+   * componente si smonta e l'importazione si interrompe.
+   */
+  onBusyChange?: (busy: boolean) => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
   const [phase, setPhase] = useState<"idle" | "open" | "waiting" | "importing">("idle");
@@ -73,6 +80,14 @@ export default function GooglePhotosPick({
     },
     []
   );
+
+  // Chi ci sta intorno (un menu) deve sapere che c'e' una scelta in corso.
+  useEffect(() => {
+    onBusyChange?.(phase !== "idle");
+    // onBusyChange e' una callback del genitore: inseguirla qui farebbe
+    // ripartire l'effetto a ogni render senza aggiungere niente.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   async function start() {
     setNeedsAuth(false);
