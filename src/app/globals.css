@@ -355,6 +355,9 @@ img.user-avatar.small { object-fit: cover; }
 /* Da quale casella di scheda arriva l'allegato (collaudo dimensionale,
    rilievo alberi): senza, qui sembrano tutti file sciolti. */
 .doc-slot-tag { font-size: 11px; font-weight: 600; color: #15803d; background: #16a34a14; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+/* Composizione del fascicolo (solo corpo / solo container): una targhetta
+   ferma, il colore dice quale scheda. Niente lampeggio: non manca niente. */
+.scope-tag { display: inline-block; font-size: 11.5px; font-weight: 600; border: 1px solid; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
 
 /* ── Components tab ───────────────────────────────────────── */
 .cmp-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }

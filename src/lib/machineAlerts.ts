@@ -46,14 +46,15 @@ export function sheetsAlert(
  *
  * `na` dove la tipologia ha una scheda sola: non c'e' niente da comporre.
  */
-export type SheetsScope = { label: string; partial: boolean; na: boolean };
+export type SheetsScope = { label: string; kinds: string[]; partial: boolean; na: boolean };
 
 export function sheetsScope(plantType: string | null, selected?: string[] | null): SheetsScope {
   const all = sheetKindsFor(plantType);
   const kinds = machineSheetKinds(plantType, selected);
-  if (all.length < 2) return { label: "", partial: false, na: true };
+  if (all.length < 2) return { label: "", kinds: [], partial: false, na: true };
   return {
     label: kinds.map((k) => SHEET_LABEL[k]).join(" + "),
+    kinds,
     partial: kinds.length < all.length,
     na: false,
   };

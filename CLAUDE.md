@@ -647,11 +647,15 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     interventi, e i documenti dell'albero), non una per riga. L'animazione si
     spegne con `prefers-reduced-motion`.
   - **Colonna «Schede incluse»** (`sheetsScope`, non è un semaforo): dice se la
-    commessa è *Trituratore + Container* o una scheda sola, e la scheda sola è
-    in **ambra** perché è l'eccezione da tenere d'occhio. Su 200 BLUE DEVIL
+    commessa è *Trituratore + Container* o una scheda sola. Su 200 BLUE DEVIL
     quasi identici la composizione si scopriva solo aprendo il fascicolo.
     Vale per qualunque tipologia con più di una scheda (il mulino: *Mulino +
     Downstream*), "—" dove la scheda è una sola.
+    La mezza commessa è una targhetta **ferma** e colorata **per scheda**
+    (*Solo corpo* azzurro, *Solo container* arancio, `SCOPE_TAG` in
+    `MachinesList.tsx`): non lampeggia come i semafori perché non manca
+    niente — è com'è fatta quella macchina — e il colore la distingue senza
+    leggere.
 - **Dettaglio macchina** (6 tab): Anagrafica + documenti, Componenti & Matricole
   (accordion con sostituzione pezzo e foto per slot), Foto produzione (upload con
   categorie), Collaudo & Firme (firme per ruolo PIN/penna), Diario macchina

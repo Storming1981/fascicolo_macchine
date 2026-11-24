@@ -167,9 +167,7 @@ export default function MachinesList({
                     {m.scope.na ? (
                       <span className="muted">—</span>
                     ) : m.scope.partial ? (
-                      <span className="alert-pill warn" title="Il fascicolo comprende una sola scheda">
-                        Solo {m.scope.label.toLowerCase()}
-                      </span>
+                      <ScopeTag scope={m.scope} />
                     ) : (
                       <span className="small">{m.scope.label}</span>
                     )}
@@ -255,6 +253,31 @@ export default function MachinesList({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Fascicolo con una scheda sola: targhetta **ferma** (non è una cosa da fare,
+ * è com'è fatta quella commessa) e un colore per scheda, così corpo e
+ * container si distinguono senza leggere.
+ */
+const SCOPE_TAG: Record<string, { text: string; color: string }> = {
+  TRITURATORE: { text: "Solo corpo", color: "#0284c7" },
+  CONTAINER: { text: "Solo container", color: "#ea580c" },
+};
+
+function ScopeTag({ scope }: { scope: SheetsScope }) {
+  const t = scope.kinds.length === 1 ? SCOPE_TAG[scope.kinds[0]] : undefined;
+  const text = t?.text ?? `Solo ${scope.label.toLowerCase()}`;
+  const color = t?.color ?? "var(--text-2)";
+  return (
+    <span
+      className="scope-tag"
+      style={{ color, background: `${color}1a`, borderColor: `${color}40` }}
+      title="Il fascicolo comprende una sola scheda di allestimento"
+    >
+      {text}
+    </span>
   );
 }
 
