@@ -13,7 +13,9 @@ export type ProgressMachine = AnagraficaFields & { id: string };
  * fascicoli (oltre diecimila righe) per contarli in JavaScript sarebbe il modo
  * più lento di ottenere due numeri. Fuori gli slot di **sola foto** (scheda di
  * lubrificazione, carpenteria, cabina): non hanno un numero da trascrivere,
- * quindi contarli vorrebbe dire un fascicolo incompleto per sempre.
+ * quindi contarli vorrebbe dire un fascicolo incompleto per sempre. Fuori
+ * anche i componenti **esclusi** (N.A. in scheda: riduttori o motori che non
+ * si spediscono con la macchina), per la stessa ragione.
  */
 export async function progressForMachines(machines: ProgressMachine[]): Promise<Map<string, MachineProgress>> {
   const out = new Map<string, MachineProgress>();
@@ -27,7 +29,7 @@ export async function progressForMachines(machines: ProgressMachine[]): Promise<
              COUNT(*) FILTER (WHERE COALESCE(BTRIM(i.serial), '') <> '') AS filled
       FROM "ComponentItem" i
       JOIN "Component" c ON c.id = i."componentId"
-      WHERE c."machineId" = ANY(${ids}) AND i."photoOnly" = false
+      WHERE c."machineId" = ANY(${ids}) AND i."photoOnly" = false AND c.excluded = false
       GROUP BY c."machineId"`,
   ]);
 

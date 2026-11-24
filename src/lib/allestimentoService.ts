@@ -7,8 +7,13 @@ import {
   SHEET_KINDS,
   defaultTipo,
   isListRow,
+  isNa,
   listKey,
+  naKey,
+  NA_VALUE,
   resolveValues,
+  sectionCanNa,
+  sectionGroups,
   sheetDef,
   sheetGroupIds,
   machineSheetKinds,
@@ -308,8 +313,49 @@ export async function saveSheet(
     if (Object.keys(entry).length) stored[row.key] = entry;
   }
 
+  // Voci messe a N.A.: i capitoli si salvano fra i valori, i componenti si
+  // escludono dalla macchina (`Component.excluded`) — altrimenti la matricola
+  // del cavalletto resterebbe da compilare su una macchina senza cavalletto, e
+  // il fascicolo non arriverebbe mai al 100%.
+  const kinds = machineSheetKinds(before.machine.plantType, before.machine.sheetKinds);
+  const excluded = new Map<string, boolean>();
+  const naNotes: { title: string; note?: string }[] = [];
+  for (const sec of def.sections) {
+    // Si guardano tutti i capitoli escludibili, non solo quelli che ora lo
+    // sono davvero: un fascicolo tornato corpo + container deve **perdere**
+    // l'esclusione di quando era di solo corpo, altrimenti la matricola del
+    // cavalletto resterebbe fuori dal conteggio senza che si veda piu' perche'.
+    if (!sec.naButton) continue;
+    const on = sectionCanNa(sec, kinds) && isNa(incoming, sec.key);
+    if (on) stored[naKey(sec.key)] = { spec: NA_VALUE };
+    for (const g of sectionGroups(sec)) excluded.set(g, on);
+    if (on !== isNa(before.values, sec.key))
+      naNotes.push({
+        title: `${def.code} — ${sec.title.replace(/^ALLESTIMENTO /, "")}: ${
+          on ? "capitolo non previsto (N.A.)" : "capitolo di nuovo previsto"
+        }`,
+      });
+  }
+  for (const row of allRows(def)) {
+    const group = row.naComponent ? row.serials ?? row.bind?.group : undefined;
+    if (!group) continue;
+    const on = isNa(incoming, row.key);
+    excluded.set(group, on);
+    if (on !== isNa(before.values, row.key))
+      naNotes.push({
+        title: `${row.label}: ${on ? "componente non previsto (N.A.)" : "componente di nuovo previsto"}`,
+        note: on
+          ? "Non spedito con la macchina: le sue matricole non contano più fra quelle del fascicolo."
+          : undefined,
+      });
+  }
+
   const comps = before.machine.components;
   const ops: Prisma.PrismaPromise<unknown>[] = [];
+  for (const [groupId, on] of excluded) {
+    const c = comps.find((x) => x.groupId === groupId);
+    if (c && c.excluded !== on) ops.push(prisma.component.update({ where: { id: c.id }, data: { excluded: on } }));
+  }
   for (const [groupId, u] of compUpdates) {
     const c = comps.find((x) => x.groupId === groupId);
     if (!c) continue;
@@ -330,6 +376,7 @@ export async function saveSheet(
       groupId: c.groupId,
       brand: u?.brand !== undefined ? u.brand : c.brand,
       extra: u?.extra ? { ...cur, ...u.extra } : c.extra,
+      excluded: excluded.get(c.groupId) ?? c.excluded,
     };
   }), before.machine);
   if (!header.tipo) header.tipo = defaultTipo(kind, before.machine.model);
@@ -362,6 +409,23 @@ export async function saveSheet(
           type: "note",
           title: `${def.code} ${def.title.toLowerCase()}: modificata dopo la firma`,
           note: `La firma di ${before.compilerName ?? "—"} è decaduta: la scheda va firmata di nuovo.`,
+          actorName: user.name,
+          authorId: user.id,
+        },
+      })
+    );
+  // Un componente escluso (o rimesso) non e' una voce qualunque della scheda:
+  // cambia che cosa monta quella macchina, quindi va a diario come le spunte
+  // di dotazione.
+  for (const n of naNotes)
+    ops.push(
+      prisma.diaryEvent.create({
+        data: {
+          machineId,
+          phase: "PRODUCTION",
+          type: "note",
+          title: n.title,
+          note: n.note,
           actorName: user.name,
           authorId: user.id,
         },

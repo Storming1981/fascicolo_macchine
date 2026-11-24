@@ -4,8 +4,14 @@
 //
 // Modulo puro (client + server): niente import server-only.
 
-import { machineSheetKinds, sheetDef, SHEET_LABEL, SHAFT_DOCS, sheetKindsFor } from "./allestimento";
-import { hasCollaudo } from "./plant";
+import {
+  machineHasCollaudo,
+  machineSheetKinds,
+  sheetDef,
+  SHEET_LABEL,
+  SHAFT_DOCS,
+  sheetKindsFor,
+} from "./allestimento";
 
 /** Le tre firme in calce al collaudo (card *Firme* della scheda fascicolo). */
 export const SIGN_ROLES = ["Montaggio", "Collaudo", "Capo officina"] as const;
@@ -86,10 +92,11 @@ export function shaftDocsAlert(
 export function collaudoAlert(
   plantType: string | null,
   collaudoStatus: string | null,
-  signedRoles: Set<string>
+  signedRoles: Set<string>,
+  selected?: string[] | null
 ): MachineAlert {
-  if (!hasCollaudo(plantType))
-    return { state: "na", detail: "Collaudo non previsto per questa tipologia" };
+  if (!machineHasCollaudo(plantType, selected))
+    return { state: "na", detail: "Collaudo non previsto per questo fascicolo" };
 
   const missing: string[] = [];
   if (collaudoStatus !== "APPROVED")

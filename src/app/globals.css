@@ -888,6 +888,9 @@ select.input { appearance: none; padding-right: 30px; background-image: url("dat
 .sig-readout { width: 100%; max-height: 120px; border: 1px solid var(--border); border-radius: 8px; background: #fff; object-fit: contain; }
 .rapportino-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .icon-btn.sm { width: 30px; height: 30px; }
+/* Azione distruttiva fra le icone (eliminare un allegato): si deve vedere che
+   non e' come le altre. */
+.icon-btn.danger:hover { background: #fef2f2; color: #b91c1c; }
 
 /* Rapportini giornalieri (multi-giorno) */
 .rap-list { display: flex; flex-direction: column; gap: 10px; }

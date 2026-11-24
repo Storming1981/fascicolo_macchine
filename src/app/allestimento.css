@@ -86,6 +86,17 @@
 .al-sec.complete .al-sec-meter-bar { background: #10b981; }
 .al-count { display: inline-flex; align-items: center; gap: 4px; min-width: 48px; justify-content: center; padding: 3px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--bg-3); color: var(--text-2); font-variant-numeric: tabular-nums; }
 .al-count.done { background: #ecfdf5; color: #047857; }
+/* Capitolo non previsto (N.A.): il corpo trituratore spedito da solo non ha
+   cavalletto-tramoggia ne' linea tubi. Grigio e fermo: non manca niente. */
+.al-sec.na { background: var(--bg-2); border-style: dashed; }
+.al-sec.na .al-sec-icon { background: var(--bg-3); color: var(--muted); }
+.al-sec.na .al-sec-title { color: var(--text-2); }
+.al-sec-na {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 0 18px 13px; font-size: 12.5px; color: var(--muted);
+}
+.al-sec-na.on { padding-top: 2px; }
+.al-sec-na > span { flex: 1; min-width: 180px; }
 
 /* ── Righe ───────────────────────────────────────────────── */
 .al-rows { border-top: 1px solid var(--border); }

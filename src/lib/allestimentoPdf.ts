@@ -8,6 +8,7 @@ import {
   sheetCtx,
   sheetDef,
   inlineRows,
+  isNa,
   visibleSections,
   NA_VALUE,
   serialLimit,
@@ -220,10 +221,30 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
     const blocks = section.repeat
       ? (input.blocks ?? []).filter((b) => section.repeat!.includes(b.kind))
       : [];
-    if (!rows.length && !blocks.length) continue;
+    // Capitolo messo a N.A. (solo corpo: niente cavalletto, niente linea tubi):
+    // non si salta in silenzio, si stampa che non e' previsto — una sezione
+    // sparita sembra una scheda incompleta.
+    const naSection = isNa(input.values, section.key);
+    if (!rows.length && !blocks.length && !naSection) continue;
     // la testata di sezione non resta orfana in fondo alla pagina
     if (y - 22 - LINE_H < bottom) newPage(false);
     sectionHead(section.title, section.subtitle);
+
+    if (naSection) {
+      const w = COLS[1] + COLS[2] + COLS[3];
+      if (y - LINE_H < bottom) {
+        newPage(false);
+        sectionHead(section.title, section.subtitle);
+      }
+      box(COLX[0], y, COLS[0], LINE_H);
+      cellText("Non previsto", COLX[0], COLS[0], y, LINE_H);
+      box(COLX[1], y, w, LINE_H);
+      cellText(`${NA_VALUE} — capitolo non previsto su questa commessa`, COLX[1], w, y, LINE_H, {
+        align: "center",
+      });
+      y -= LINE_H;
+      continue;
+    }
 
     // Sezione a blocchi: una riga per componente montato, con i suoi dati e le
     // sue matricole. Sul modulo cartaceo si scrivevano a mano in coda.
@@ -261,14 +282,19 @@ export async function generateAllestimentoPdf(input: AllestimentoPdfInput): Prom
       // stesso taglio della scheda a video: gli slot oltre il numero dichiarato
       // (es. un solo motore elettrico) non si stampano se sono vuoti
       const lim = serialLimit(row, input.values);
-      const serials = lim === null ? all : all.filter((s, i) => i < lim || !!s.trim());
+      // Componente escluso dalla macchina: la scheda stampata deve dire che non
+      // e' previsto, non lasciare una riga vuota che sembra da compilare.
+      const naRow = !!row.naComponent && isNa(input.values, row.key);
+      const serials = naRow ? [] : lim === null ? all : all.filter((s, i) => i < lim || !!s.trim());
       // riga senza specifica (lotto albero): la colonna resta vuota; dove N.A.
       // e' il default (specifiche speciali) il vuoto si stampa come N.a.
       const subSpec = inlineRows(def, row.key, ctx)
         .map((r) => (input.values[r.key]?.spec ?? "").trim())
         .filter(Boolean)
         .join(" · ");
-      const spec = row.noSpec
+      const spec = naRow
+        ? `${NA_VALUE} — non spedito`
+        : row.noSpec
         ? ""
         : [(v.spec ?? "") || (row.naDefault ? NA_VALUE : ""), subSpec].filter(Boolean).join(" · ");
       const subRows = Math.max(1, serials.length);

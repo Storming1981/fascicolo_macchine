@@ -10,8 +10,11 @@ import {
   CONTAINER_TYPES,
   containerType,
   inlineRows,
+  isNa,
   MATRICOLA_LABEL,
+  naKey,
   NA_VALUE,
+  sectionCanNa,
   YES_NO,
   YES_NO_NA,
   isListRow,
@@ -32,6 +35,7 @@ import {
   type SheetOptions,
   type SheetDocDef,
   type SheetRow,
+  type SheetSection,
   type SheetValues,
 } from "@/lib/allestimento";
 import { fmtDateTime } from "@/lib/format";
@@ -228,6 +232,23 @@ export default function AllestimentoSheets({
   if (!sheets || !draft || !kinds.length)
     return <div className="al-loading muted">Caricamento schede di allestimento…</div>;
 
+  // Fascicolo di **solo corpo**: lì il cavalletto-tramoggia e la linea tubi
+  // possono non esserci affatto (N.A. di capitolo), e il collaudo non si fa.
+  const soloCorpo = kinds.length === 1 && kinds[0] === "TRITURATORE";
+  const canNa = (sec: SheetSection) => sectionCanNa(sec, kinds);
+  /** Capitolo escluso: si salva con la scheda, come ogni altro valore. */
+  function setSectionNa(section: SheetSection, on: boolean) {
+    if (
+      on &&
+      visibleRows(section, ctx).some((r) => filled(draft.values[r.key]?.spec)) &&
+      !confirm(
+        `«${section.title}» ha già delle voci compilate: restano salvate ma il capitolo sparisce dalla scheda finché è N.A. Continuare?`
+      )
+    )
+      return;
+    setValue(naKey(section.key), "spec", on ? NA_VALUE : "");
+  }
+
   const compOf = (groupId: string) => machine.components.find((c) => c.groupId === groupId);
   /** Componenti ripetibili di una sezione, nell'ordine in cui sono stati aggiunti. */
   const blocksOf = (kinds: string[]) =>
@@ -249,9 +270,12 @@ export default function AllestimentoSheets({
       // Contano TUTTE le voci mostrate: una riga che si compila solo con la
       // matricola (lotto lame, lotto albero) restava fuori dal conteggio, e la
       // sezione risultava completa mentre un dato mancava ancora.
-      return { s, rows, scored: rows, done: rows.filter((r) => rowFilled(r)).length };
+      const na = canNa(s) && isNa(draft.values, s.key);
+      return { s, rows, na, scored: rows, done: rows.filter((r) => rowFilled(r)).length };
     })
-    .filter((x) => x.rows.length || x.s.repeat);
+    // Il capitolo a N.A. non ha righe ma resta in pagina: altrimenti non ci
+    // sarebbe modo di rimetterlo.
+    .filter((x) => x.rows.length || x.s.repeat || x.na);
   const total = sections.reduce((a, x) => a + x.scored.length, 0);
   const done = sections.reduce((a, x) => a + x.done, 0);
   const pct = total ? Math.round((done / total) * 100) : 0;
@@ -267,12 +291,16 @@ export default function AllestimentoSheets({
   /** Riga compilata: la specifica, o la matricola per le righe che non ce l'hanno. */
   function rowFilled(row: SheetRow, values: SheetValues = draft.values) {
     if (row.naDefault) return true;
+    // Componente escluso dalla macchina: non c'è niente da compilare.
+    if (row.naComponent && isNa(values, row.key)) return true;
     if (!row.noSpec) return filled(values[row.key]?.spec);
     return (compOf(row.serials ?? "")?.items ?? []).some((it) => !!(it.serial ?? "").trim());
   }
 
   function specControl(row: SheetRow) {
     const val = draft.values[row.key]?.spec ?? "";
+    if (row.naComponent && isNa(draft.values, row.key))
+      return <span className="muted small al-nospec">Non spedito con la macchina</span>;
     if (row.noSpec)
       return <span className="muted small al-nospec">Si legge dalla foto della targhetta →</span>;
     if (row.input === "yesno" || row.input === "yesnona") {
@@ -334,6 +362,15 @@ export default function AllestimentoSheets({
         placeholder="Nota…"
       />
     );
+    // Componente escluso: niente matricole da chiedere — è il motivo per cui
+    // esiste il N.A. di riga.
+    if (row.naComponent && isNa(draft.values, row.key))
+      return (
+        <div className="al-side-stack">
+          <span className="muted small">Nessuna matricola: componente escluso dalla macchina</span>
+          {note}
+        </div>
+      );
     // Caselle documento della riga (collaudo dimensionale, rilievo alberi):
     // sono allegati del fascicolo, quindi stanno sotto le matricole e non
     // fanno punteggio di riga — il semaforo dell'elenco macchine dice se
@@ -615,6 +652,12 @@ export default function AllestimentoSheets({
                 <span className="al-kv-value" title="Chi ha firmato la check list di collaudo">
                   {draft.header.collaudatoDa}
                 </span>
+              ) : soloCorpo ? (
+                // Il corpo spedito da solo non si collauda: aspettare una firma
+                // che non arriverà mai è peggio che dirlo.
+                <span className="al-kv-value muted" title="Il corpo trituratore da solo non si collauda">
+                  Collaudo non previsto
+                </span>
               ) : (
                 <span className="al-kv-value al-kv-pending" title="Si compila da solo con la firma della check list di collaudo">
                   In attesa del collaudo
@@ -686,10 +729,10 @@ export default function AllestimentoSheets({
 
       {/* Indice sezioni */}
       <nav className="al-jump" aria-label="Sezioni">
-        {sections.map(({ s, rows, done: d }) => (
+        {sections.map(({ s, rows, na, done: d }) => (
           <button
             key={s.key}
-            className={"al-jump-chip" + (d === rows.length ? " done" : "")}
+            className={"al-jump-chip" + (na ? "" : d === rows.length ? " done" : "")}
             onClick={() => {
               setClosed((c) => ({ ...c, [`${kind}.${s.key}`]: false }));
               setTimeout(() => document.getElementById(`al-${kind}-${s.key}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
@@ -697,9 +740,7 @@ export default function AllestimentoSheets({
           >
             <Icon name={s.icon} size={13} />
             {s.title.replace("ALLESTIMENTO ", "").toLowerCase()}
-            <span className="al-jump-n">
-              {d}/{rows.length}
-            </span>
+            <span className="al-jump-n">{na ? "N.A." : `${d}/${rows.length}`}</span>
           </button>
         ))}
       </nav>
@@ -710,7 +751,11 @@ export default function AllestimentoSheets({
         const isOpen = !closed[id];
         const complete = d === x.scored.length;
         return (
-          <section key={s.key} id={`al-${kind}-${s.key}`} className={"al-sec" + (complete ? " complete" : "")}>
+          <section
+            key={s.key}
+            id={`al-${kind}-${s.key}`}
+            className={"al-sec" + (complete ? " complete" : "") + (x.na ? " na" : "")}
+          >
             <button className="al-sec-head" onClick={() => setClosed((c) => ({ ...c, [id]: isOpen }))} aria-expanded={isOpen}>
               <span className="al-sec-icon">
                 <Icon name={s.icon} size={18} />
@@ -722,8 +767,10 @@ export default function AllestimentoSheets({
               <span className="al-sec-meter">
                 <span className="al-sec-meter-bar" style={{ width: `${x.scored.length ? (d / x.scored.length) * 100 : 0}%` }} />
               </span>
-              <span className={"al-count" + (complete && !s.repeat ? " done" : "")}>
-                {s.repeat ? (
+              <span className={"al-count" + (complete && !s.repeat && !x.na ? " done" : "")}>
+                {x.na ? (
+                  "N.A."
+                ) : s.repeat ? (
                   `${blocksOf(s.repeat).length} componenti`
                 ) : (
                   <>
@@ -734,6 +781,35 @@ export default function AllestimentoSheets({
               </span>
               <Icon name={isOpen ? "chev-down" : "chev-right"} size={16} />
             </button>
+
+            {/* Capitolo che su questa commessa non c'è: il corpo trituratore
+                spedito da solo non ha cavalletto-tramoggia né linea tubi, e
+                quelle voci resterebbero vuote per sempre. */}
+            {canNa(s) && (x.na || isOpen) && (
+              <div className={"al-sec-na" + (x.na ? " on" : "")}>
+                {x.na ? (
+                  <>
+                    <span>
+                      Capitolo <strong>non previsto</strong> su questa commessa: non si compila e non
+                      conta nell&apos;avanzamento.
+                    </span>
+                    <button className="btn-ghost-sm" disabled={disabled} onClick={() => setSectionNa(s, false)}>
+                      Rimetti il capitolo
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="al-na"
+                    disabled={disabled}
+                    title="Non previsto su questa commessa (solo corpo): il capitolo esce dalla scheda"
+                    onClick={() => setSectionNa(s, true)}
+                  >
+                    N.A. — capitolo non previsto
+                  </button>
+                )}
+              </div>
+            )}
 
             {isOpen && s.repeat && (
               <BlocksSection
@@ -802,6 +878,23 @@ export default function AllestimentoSheets({
                             </div>
                           );
                         })()}
+                        {row.naComponent && (
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            className={"al-na" + (isNa(draft.values, row.key) ? " on" : "")}
+                            title="Componente non spedito con questa macchina: esce dalla scheda e dalle matricole del fascicolo"
+                            onClick={() =>
+                              setValue(
+                                naKey(row.key),
+                                "spec",
+                                isNa(draft.values, row.key) ? "" : NA_VALUE
+                              )
+                            }
+                          >
+                            N.A.
+                          </button>
+                        )}
                         {row.naButton && (
                           <button
                             type="button"
@@ -955,6 +1048,22 @@ function DocSlot({
     } else notify("Errore nel caricamento del documento", "err");
   }
 
+  /** Il file sbagliato si toglie dal fascicolo, non solo dalla casella. */
+  async function remove(doc: { id: string; name: string }) {
+    if (!confirm(`Eliminare «${doc.name}» dal fascicolo? Non si recupera.`)) return;
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machineId}/documents`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentId: doc.id }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      onDone();
+      notify("Documento eliminato");
+    } else notify((await res.json().catch(() => null))?.error ?? "Documento non eliminato", "err");
+  }
+
   async function move(documentId: string, category: string) {
     setBusy(true);
     const res = await fetch(`/api/machines/${machineId}/documents`, {
@@ -982,14 +1091,24 @@ function DocSlot({
               {f.name}
             </a>
             {!disabled && (
-              <button
-                className="icon-btn"
-                disabled={busy}
-                title="Togli dalla casella (resta fra i documenti allegati)"
-                onClick={() => move(f.id, "documento")}
-              >
-                <Icon name="x" size={12} />
-              </button>
+              <>
+                <button
+                  className="icon-btn"
+                  disabled={busy}
+                  title="Togli dalla casella (resta fra i documenti allegati)"
+                  onClick={() => move(f.id, "documento")}
+                >
+                  <Icon name="x" size={12} />
+                </button>
+                <button
+                  className="icon-btn danger"
+                  disabled={busy}
+                  title="Elimina il documento dal fascicolo"
+                  onClick={() => remove(f)}
+                >
+                  <Icon name="trash" size={12} />
+                </button>
+              </>
             )}
           </span>
         ))}

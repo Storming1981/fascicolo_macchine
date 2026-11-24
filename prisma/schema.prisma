@@ -357,6 +357,9 @@ model Component {
   label     String? // nome del gruppo per i componenti CUSTOM (non a catalogo)
   brand     String?
   extra     Json?
+  // componente NON previsto su questa macchina (N.A. nella scheda di
+  // allestimento): i suoi slot non contano fra le matricole del fascicolo
+  excluded  Boolean @default(false)
   machine   Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
   items     ComponentItem[]
 

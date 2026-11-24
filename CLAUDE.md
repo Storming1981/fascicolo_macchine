@@ -695,6 +695,15 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   nella cartella d'origine e a diario va "Foto ripristinata dal cestino". Il
   loader passa le eliminate a parte in `photoTrash`.
   API: `DELETE /api/machines/[id]/photos/[photoId]` · `PATCH …` `{restore:true}`.
+- **Un allegato si elimina** (cestino nella riga di *Documenti allegati* e
+  nelle caselle delle schede, `DELETE /api/machines/[id]/documents`
+  `{documentId}`): un PDF caricato per sbaglio restava in elenco per sempre, e
+  nelle caselle della scheda si poteva solo *togliere dalla casella*, non
+  buttare. Cancellazione **definitiva** (riga + file su disco), a differenza
+  delle foto: non c'e' un cestino da cui ripescarlo, ma nome, casella, autore e
+  path restano scritti **a diario**, che e' quello che serve per ricostruire
+  cosa e' successo. Lo fa chi lavora sul fascicolo (`machine.intervention` o
+  `machine.edit`) — `Document` non ha un autore da confrontare.
 - **Matricola da foto (OCR)**: pulsante fotocamera nella cella matricola →
   `POST /api/vision/serial` → `src/lib/serialOcr.ts` (**Claude Opus 5**,
   effort medium, output JSON: serial + etichetta + confidenza + codici letti)
@@ -801,6 +810,17 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     scritto. Il filtro vale per le linguette (`kinds` dalla API), per i gruppi
     componente creati da `ensureSheetComponents` e per il semaforo *Schede*
     dell'elenco macchine.
+- **Un fascicolo di solo corpo non si collauda** (`machineHasCollaudo()` in
+  `allestimento.ts`): la check list e le tre firme sono della **macchina
+  completa**, quindi su mezzo impianto resterebbero in attesa per sempre —
+  linguetta che non si chiude, avanzamento fermo a due terzi e semaforo rosso
+  che nessuno puo' spegnere. Vale lo stesso trattamento delle tipologie senza
+  collaudo: niente linguetta *Collaudo & Firme*, niente *Versione software*,
+  la route risponde 400, la voce esce dall'avanzamento e il semaforo
+  dell'elenco mostra "—". Nella testata della M5.16 *Collaudato da* dice
+  **«Collaudo non previsto»** invece di aspettare una firma che non arrivera'.
+  **Chi mostra o pretende un collaudo passa di qui**, non da `hasCollaudo`, che
+  resta la sola regola di tipologia.
 - **Tipologie senza collaudo** (`hasCollaudo()` in `plant.ts`, oggi
   **BLUE SORTER**): la linea di separazione non si collauda come una macchina
   singola, si verifica in campo a linea montata. Quindi niente linguetta
@@ -926,6 +946,29 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     aprirli uno a uno. Il valore arriva dall'intestazione della M5.17 con una
     query sola per pagina; dove la scheda non è ancora stata aperta la colonna
     resta vuota, invece di mostrare un default che nessuno ha scelto.
+  - **Quello che non si spedisce si toglie, non si lascia in bianco** — due
+    N.A. diversi, perche' sono due fatti diversi:
+    - **Capitolo non previsto** (`SheetSection.naButton`, oggi *Cavalletto
+      tramoggia* e *Linea tubi*): compare **solo sui fascicoli di solo corpo**
+      (`sectionCanNa`), dove quei pezzi non esistono — su un impianto completo
+      ci sono sempre, e un N.A. sarebbe solo un modo per non compilarli. Il
+      capitolo resta a video, grigio e col suo *Rimetti il capitolo*: le voci
+      gia' scritte restano salvate (come per le schede tolte col segno di
+      spunta), semplicemente non si vedono finche' e' N.A.
+    - **Componente non previsto** (`SheetRow.naComponent`: riduttori, motori
+      idraulici, blocchi motore): non e' un valore della scheda ma il flag
+      **`Component.excluded`**, quindi i suoi slot **escono anche dal conteggio
+      delle matricole** del fascicolo (`progressService`) — che e' il punto:
+      con le matricole dentro, l'avanzamento sarebbe rimasto sotto al 100% per
+      sempre. Il cambio va a diario come le spunte di dotazione.
+    - Le due cose si salvano **con la scheda** (chiavi riservate `__na.<voce>`
+      nei valori, `naKey`/`isNa`): viaggiano come ogni altro dato nel PUT, e
+      `saveSheet` ne ricava i componenti da escludere. Le chiavi si
+      **rigenerano a ogni lettura** (`resolveValues`), cosi' un capitolo
+      escluso quando il fascicolo era di solo corpo non resta nascosto se
+      domani la commessa comprende anche il container.
+    - Nel PDF il capitolo non sparisce: stampa *«N.a. — capitolo non previsto
+      su questa commessa»*. Una sezione sparita sembra una scheda incompleta.
   - **N.A. sulle voci che spesso non si applicano** (`naButton`): le
     *Specifiche speciali* nascono già su N.A. (`naDefault`) e **contano come
     compilate** — erano la ragione per cui una scheda non arrivava mai al 100%

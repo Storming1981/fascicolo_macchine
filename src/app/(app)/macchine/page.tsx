@@ -93,7 +93,8 @@ export default async function MachinesPage({
     collaudo: collaudoAlert(
       m.plantType,
       collaudoByMachine.get(m.id) ?? null,
-      rolesByMachine.get(m.id) ?? empty
+      rolesByMachine.get(m.id) ?? empty,
+      m.sheetKinds
     ),
   }));
   return (

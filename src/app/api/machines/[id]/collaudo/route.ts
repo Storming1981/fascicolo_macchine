@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { checklistFor, type ChecklistItem } from "@/lib/checklist";
 import { externalSignerLabel } from "@/lib/externalSigners";
 import { isExternalTester } from "@/lib/permissions";
-import { hasCollaudo } from "@/lib/plant";
+import { machineHasCollaudo } from "@/lib/allestimento";
 import type { Prisma, CollaudoStatus } from "@prisma/client";
 
 type Answer = { value: "SI" | "NO" | "NA" | null; note?: string };
@@ -56,9 +56,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const machine = await prisma.machine.findUnique({ where: { id } });
   if (!machine) return NextResponse.json({ error: "Macchina non trovata" }, { status: 404 });
 
-  if (!hasCollaudo(machine.plantType))
+  if (!machineHasCollaudo(machine.plantType, machine.sheetKinds))
     return NextResponse.json(
-      { error: "Per questa tipologia impianto non è prevista la check list di collaudo" },
+      { error: "Questo fascicolo non prevede la check list di collaudo" },
       { status: 400 }
     );
 

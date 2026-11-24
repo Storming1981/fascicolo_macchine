@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
-import { saveFile } from "@/lib/uploads";
+import { deleteUploads, saveFile } from "@/lib/uploads";
 import { statusToPhase } from "@/lib/domain";
 import { sheetDocDef } from "@/lib/allestimento";
 import type { Role } from "@prisma/client";
@@ -96,5 +96,53 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       },
     }),
   ]);
+  return NextResponse.json({ ok: true });
+}
+
+/**
+ * Elimina un allegato del fascicolo. Un PDF caricato per sbaglio (o nella
+ * casella sbagliata) restava lì per sempre: in elenco, nei conteggi e nelle
+ * caselle delle schede.
+ *
+ * Cancellazione **definitiva**, riga e file su disco: a differenza delle foto
+ * non c'è un cestino da cui ripescarlo — ma quello che c'era resta scritto a
+ * diario (nome, casella, chi e quando), che è ciò che serve per ricostruire
+ * cosa è successo.
+ * DELETE { documentId }
+ */
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const user = await currentUser();
+  if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  if (!(await canManage(user.role)))
+    return NextResponse.json({ error: "Permesso negato" }, { status: 403 });
+  const { id } = await ctx.params;
+
+  const b = (await req.json().catch(() => null)) as { documentId?: string } | null;
+  const documentId = String(b?.documentId ?? "");
+  if (!documentId) return NextResponse.json({ error: "Documento non indicato" }, { status: 400 });
+
+  const machine = await prisma.machine.findUnique({ where: { id }, select: { status: true } });
+  const doc = await prisma.document.findUnique({ where: { id: documentId } });
+  if (!machine || !doc || doc.machineId !== id)
+    return NextResponse.json({ error: "Documento non trovato" }, { status: 404 });
+
+  const def = sheetDocDef(doc.category);
+  await prisma.$transaction([
+    prisma.document.delete({ where: { id: documentId } }),
+    prisma.diaryEvent.create({
+      data: {
+        machineId: id,
+        phase: statusToPhase(machine.status),
+        type: "note",
+        title: def ? `${def.label}: documento eliminato` : "Documento allegato eliminato",
+        note: `${doc.name} · ${doc.path}`,
+        actorName: user.name,
+        authorId: user.id,
+      },
+    }),
+  ]);
+  // Il file su disco va via dopo la riga: se la cancellazione fallisse
+  // resterebbe un allegato che punta a un file che non c'è più.
+  await deleteUploads([doc.path]);
   return NextResponse.json({ ok: true });
 }

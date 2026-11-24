@@ -12,6 +12,7 @@
 // Modulo condiviso client/server: niente import server-only.
 
 import type { KitFlag } from "./kits";
+import { hasCollaudo } from "./plant";
 
 export type SheetKind = "TRITURATORE" | "CONTAINER" | "MULINO" | "CESOIA" | "SEPARAZIONE" | "DOWNSTREAM";
 export const SHEET_KINDS: SheetKind[] = [
@@ -66,6 +67,16 @@ export type SheetRow = {
    */
   naButton?: boolean;
   naDefault?: boolean;
+  /**
+   * Bottone **N.A.** che esclude il *componente* dalla macchina: se riduttori,
+   * motori idraulici o blocchi motore non si spediscono non c'e' nessuna
+   * matricola da trascrivere, e le loro caselle terrebbero scheda e
+   * avanzamento del fascicolo sotto al 100% per sempre.
+   * A differenza di `naButton` non e' un valore scritto nella scheda ma il
+   * flag `Component.excluded`: cosi' gli slot smettono di contare anche fra le
+   * matricole del fascicolo, che e' il punto.
+   */
+  naComponent?: boolean;
   /** Riga nascosta quando la riga indicata e' su N.A. (es. tensione del condizionatore). */
   hiddenByNa?: string;
   /**
@@ -157,6 +168,14 @@ export type SheetSection = {
    */
   repeat?: string[];
   /**
+   * Bottone **N.A.** sull'intero capitolo, per i fascicoli che montano un pezzo
+   * solo della macchina: su un *solo corpo* il cavalletto-tramoggia e la linea
+   * tubi non si allestiscono affatto, e le loro voci resterebbero vuote per
+   * sempre. Vale **solo li'** (`sectionCanNa`): su un impianto completo quei
+   * capitoli ci sono sempre, e un N.A. sarebbe solo un modo per non compilarli.
+   */
+  naButton?: boolean;
+  /**
    * Sezione mostrata solo in certe condizioni: le due alimentazioni del mulino
    * sono l'una o l'altra, e tenerle entrambe a video lasciava meta' scheda
    * vuota per sempre.
@@ -189,6 +208,19 @@ export type SheetOptions = Record<string, string[]>;
 
 /** Valore scritto nella scheda quando una voce non si applica. */
 export const NA_VALUE = "N.a.";
+
+/**
+ * Voci messe a **N.A.**: capitoli esclusi e componenti non spediti. Stanno nei
+ * valori della scheda sotto una chiave riservata (`__na.<voce>`) invece che in
+ * una colonna nuova, perche' viaggiano e si salvano come ogni altro dato della
+ * scheda. Per i componenti la verita' resta `Component.excluded`: la chiave si
+ * rigenera da li' a ogni lettura, cosi' non ci sono due verita' sullo stesso
+ * fatto e gli slot smettono di contare fra le matricole del fascicolo.
+ */
+export const NA_PREFIX = "__na.";
+export const naKey = (key: string) => NA_PREFIX + key;
+export const isNa = (values: SheetValues | undefined, key: string) =>
+  (values?.[naKey(key)]?.spec ?? "") === NA_VALUE;
 
 export const YES_NO = ["Sì", "No"];
 export const YES_NO_NA = ["Sì", "No", "N.a."];
@@ -280,6 +312,7 @@ export const SHEET_TRITURATORE: SheetDef = {
       key: "cavalletto",
       title: "ALLESTIMENTO CAVALLETTO TRAMOGGIA",
       icon: "box",
+      naButton: true,
       rows: [
         {
           key: "costruttore_cavalletto",
@@ -297,6 +330,7 @@ export const SHEET_TRITURATORE: SheetDef = {
       key: "tubi",
       title: "ALLESTIMENTO LINEA TUBI",
       icon: "oil",
+      naButton: true,
       rows: [
         { key: "layout", label: "Nr. Layout installazione", free: true },
         { key: "fornitore_tubi", label: "Fornitore tubi", suggest: ["FLUIDMEC"] },
@@ -311,9 +345,12 @@ export const SHEET_TRITURATORE: SheetDef = {
       title: "ALLESTIMENTO CORPO MACCHINA",
       icon: "gear",
       rows: [
-        { key: "riduttori", label: "Costruttore riduttori", bind: { group: "gearboxes", field: "brand" }, serials: "gearboxes", suggest: ["DINAMIC OIL"] },
-        { key: "motori_idraulici", label: "Motori idraulici", bind: { group: "hyd_motors", field: "brand" }, serials: "hyd_motors", suggest: ["LINDE"] },
-        { key: "blocchi_motore", label: "Blocchi motore", bind: { group: "motor_blocks", field: "brand" }, serials: "motor_blocks", suggest: ["MAGNUM"] },
+        // Riduttori, motori idraulici e blocchi motore non partono sempre con la
+        // macchina: dove non si spediscono, N.A. li toglie dal fascicolo invece
+        // di lasciarne le matricole in attesa per sempre.
+        { key: "riduttori", label: "Costruttore riduttori", bind: { group: "gearboxes", field: "brand" }, serials: "gearboxes", suggest: ["DINAMIC OIL"], naComponent: true },
+        { key: "motori_idraulici", label: "Motori idraulici", bind: { group: "hyd_motors", field: "brand" }, serials: "hyd_motors", suggest: ["LINDE"], naComponent: true },
+        { key: "blocchi_motore", label: "Blocchi motore", bind: { group: "motor_blocks", field: "brand" }, serials: "motor_blocks", suggest: ["MAGNUM"], naComponent: true },
         { key: "giunti_sicurezza", label: "Giunti sicurezza", input: "yesno", kitFlag: "tiranteGiunto" },
         { key: "lame", label: "Lame", bind: { group: "blades", field: "extra", extraKey: "type" }, suggest: ["PLATINUM"] },
         { key: "costruttore_lame", label: "Costruttori lame", bind: { group: "blades", field: "brand" }, suggest: ["CO.DI.TRA"] },
@@ -830,6 +867,22 @@ export function machineSheetKinds(
   return picked.length ? picked : all;
 }
 
+/**
+ * Il fascicolo ha un collaudo? Oltre alle tipologie che non si collaudano (la
+ * linea di separazione si verifica in campo), non si collauda un fascicolo di
+ * **solo corpo**: la check list e le tre firme sono della macchina completa,
+ * quindi su mezzo impianto resterebbero in attesa per sempre — una linguetta
+ * che non si chiude mai e un semaforo rosso che nessuno puo' spegnere.
+ */
+export function machineHasCollaudo(
+  plantType: string | null | undefined,
+  selected?: string[] | null
+): boolean {
+  if (!hasCollaudo(plantType)) return false;
+  const kinds = machineSheetKinds(plantType, selected);
+  return !(kinds.length === 1 && kinds[0] === "TRITURATORE");
+}
+
 export function isSheetKind(v: unknown): v is SheetKind {
   return typeof v === "string" && (SHEET_KINDS as string[]).includes(v);
 }
@@ -861,6 +914,29 @@ export function sheetCtx(kind: SheetKind, header: SheetHeader, model: string): S
   return { diesel: false, tipo };
 }
 
+/**
+ * Il capitolo si puo' escludere? Solo sui fascicoli di **solo corpo**: e' li'
+ * che cavalletto-tramoggia e linea tubi non esistono. Su un impianto completo
+ * ci sono sempre, e un N.A. sarebbe solo un modo per lasciarli in bianco.
+ */
+export function sectionCanNa(section: SheetSection, kinds: SheetKind[]): boolean {
+  return !!section.naButton && kinds.length === 1 && kinds[0] === "TRITURATORE";
+}
+
+/** Gruppi componente toccati da una riga (specifica, matricole, foto). */
+export function rowGroups(row: SheetRow): string[] {
+  return [row.bind?.group, row.serials, row.photos].filter((g): g is string => !!g);
+}
+
+/**
+ * Gruppi componente di un capitolo: escludendolo vanno esclusi anche loro,
+ * altrimenti la matricola del cavalletto resterebbe da compilare su una
+ * macchina che il cavalletto non ce l'ha.
+ */
+export function sectionGroups(section: SheetSection): string[] {
+  return [...new Set(section.rows.flatMap(rowGroups))];
+}
+
 /** Sezioni da mostrare: quelle previste per l'alimentazione scelta. */
 export function visibleSections(def: SheetDef, ctx: SheetCtx): SheetSection[] {
   return def.sections.filter((s) => !s.when || s.when(ctx));
@@ -872,6 +948,9 @@ export function visibleSections(def: SheetDef, ctx: SheetCtx): SheetSection[] {
  * assente non ha tensione ne' frequenza da chiedere).
  */
 export function visibleRows(section: SheetSection, ctx: SheetCtx, values?: SheetValues): SheetRow[] {
+  // Capitolo escluso (N.A.): niente da compilare. La sezione resta a video —
+  // con il suo avviso — per poterla rimettere.
+  if (isNa(values, section.key)) return [];
   return section.rows.filter((r) => {
     // le specifiche "in linea" le disegna la riga genitore
     if (r.inlineWith) return false;
@@ -983,7 +1062,7 @@ export function sheetCommessa(
   return m.job; // mulino e cesoia: una sola commessa
 }
 
-type CompLike = { groupId: string; brand: string | null; extra: unknown };
+type CompLike = { groupId: string; brand: string | null; extra: unknown; excluded?: boolean };
 
 /**
  * Valori della scheda come vanno mostrati/stampati: le specifiche collegate a un
@@ -993,10 +1072,11 @@ export function resolveValues(
   kind: SheetKind,
   stored: SheetValues,
   comps: CompLike[],
-  machine: { pressureSettings: string | null }
+  machine: { pressureSettings: string | null; plantType?: string | null; sheetKinds?: string[] | null }
 ): SheetValues {
+  const def = sheetDef(kind);
   const out: SheetValues = {};
-  for (const row of allRows(sheetDef(kind))) {
+  for (const row of allRows(def)) {
     const s = stored[row.key] ?? {};
     let spec = row.noSpec ? "" : s.spec ?? "";
     if (row.bind) {
@@ -1011,5 +1091,14 @@ export function resolveValues(
     if (row.key === "taglio_pressione" && !spec) spec = machine.pressureSettings ?? "";
     out[row.key] = { spec, serial: s.serial ?? "", note: s.note ?? "" };
   }
+  // Le voci a N.A. si rigenerano a ogni lettura: un capitolo escluso quando il
+  // fascicolo era di solo corpo non deve restare nascosto se domani la
+  // commessa comprende anche il container.
+  const kinds = machineSheetKinds(machine.plantType ?? null, machine.sheetKinds ?? null);
+  for (const sec of def.sections)
+    if (sectionCanNa(sec, kinds) && isNa(stored, sec.key)) out[naKey(sec.key)] = { spec: NA_VALUE };
+  for (const row of allRows(def))
+    if (row.naComponent && comps.find((c) => c.groupId === (row.serials ?? row.bind?.group))?.excluded)
+      out[naKey(row.key)] = { spec: NA_VALUE };
   return out;
 }

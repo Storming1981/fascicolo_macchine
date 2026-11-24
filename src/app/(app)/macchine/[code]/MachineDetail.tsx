@@ -14,7 +14,7 @@ import {
   PRIORITY_META,
   COUNTRIES,
 } from "@/lib/domain";
-import { CUSTOM_MODEL, hasCollaudo, jobFields } from "@/lib/plant";
+import { CUSTOM_MODEL, jobFields } from "@/lib/plant";
 import {
   anagraficaFields,
   groupScore,
@@ -26,6 +26,7 @@ import {
   hasAllestimentoSheets,
   machineSheetKinds,
   sheetDef,
+  machineHasCollaudo,
   sheetKindsFor,
   sheetDocDef,
   SHEET_LABEL,
@@ -159,9 +160,10 @@ export default function MachineDetail({
   };
 }) {
   const router = useRouter();
-  // Dove il collaudo non è previsto la linguetta non si propone — nemmeno al
+  // Dove il collaudo non è previsto — tipologia che non si collauda, oppure
+  // fascicolo di solo corpo — la linguetta non si propone, nemmeno al
   // collaudatore esterno, che su una macchina così non ha niente da compilare.
-  const collaudo = hasCollaudo(machine.plantType);
+  const collaudo = machineHasCollaudo(machine.plantType, machine.sheetKinds);
   const tabs = (caps.collaudoOnly
     ? TABS.filter((t) => t.id === "collaudo")
     : TABS.filter((t) => t.id !== "service" || caps.service)
@@ -255,7 +257,7 @@ export default function MachineDetail({
           e una pagina vuota sembrerebbe un guasto. */}
       {tabs.length === 0 && (
         <div className="card empty-state">
-          Per questa tipologia impianto non è prevista la check list di collaudo.
+          Questo fascicolo non prevede la check list di collaudo.
         </div>
       )}
 
@@ -799,6 +801,25 @@ function TabAnagrafica({
     } else notify("Errore upload documenti", "err");
   }
 
+  /**
+   * Toglie un allegato dal fascicolo. Un PDF caricato per sbaglio restava in
+   * elenco per sempre; quello che c'era resta scritto a diario.
+   */
+  async function deleteDoc(doc: { id: string; name: string }) {
+    if (!confirm(`Eliminare «${doc.name}»? Il file viene tolto dal fascicolo e non si recupera.`)) return;
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machine.id}/documents`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentId: doc.id }),
+    });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return notify(d.error || "Documento non eliminato", "err");
+    onDone();
+    notify("Documento eliminato");
+  }
+
   return (
     <div className="tab-content">
       <div className="grid-two">
@@ -948,7 +969,7 @@ function TabAnagrafica({
                 </dd>
               </div>
             ))}
-            {hasCollaudo(machine.plantType) && (
+            {machineHasCollaudo(machine.plantType, machine.sheetKinds) && (
               <div>
                 <dt>
                   Versione software
@@ -1256,6 +1277,14 @@ function TabAnagrafica({
                   </a>
                   {slot && <span className="doc-slot-tag">{slot.label}</span>}
                   <span className="muted mono small">{fmtBytes(d.sizeBytes)}</span>
+                  <button
+                    className="icon-btn sm danger"
+                    title="Elimina il documento dal fascicolo"
+                    disabled={busy}
+                    onClick={() => deleteDoc(d)}
+                  >
+                    <Icon name="trash" size={14} />
+                  </button>
                 </li>
               );
             })}
