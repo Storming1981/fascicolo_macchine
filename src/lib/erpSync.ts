@@ -153,7 +153,6 @@ export async function syncMachine(
       erpContainerOrder: true,
       erpStandOrder: true,
       erpBladesOrder: true,
-      erpShaftOrder: true,
     },
   });
   if (!machine) throw new Error("Macchina non trovata");
@@ -166,7 +165,6 @@ export async function syncMachine(
     containerOrder: machine.erpContainerOrder,
     standOrder: machine.erpStandOrder,
     bladesOrder: machine.erpBladesOrder,
-    shaftOrder: machine.erpShaftOrder,
   });
 
   const found = erp.jobs.some((j) => j.found);

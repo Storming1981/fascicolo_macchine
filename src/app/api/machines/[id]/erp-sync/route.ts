@@ -27,7 +27,6 @@ async function loadMachineAndErp(id: string) {
       erpContainerOrder: true,
       erpStandOrder: true,
       erpBladesOrder: true,
-      erpShaftOrder: true,
     },
   });
   if (!machine) return null;
@@ -39,7 +38,6 @@ async function loadMachineAndErp(id: string) {
     containerOrder: machine.erpContainerOrder,
     standOrder: machine.erpStandOrder,
     bladesOrder: machine.erpBladesOrder,
-    shaftOrder: machine.erpShaftOrder,
   });
   return { machine, erp };
 }

@@ -31,7 +31,6 @@ export async function GET(req: Request) {
       erpContainerOrder: true,
       erpStandOrder: true,
       erpBladesOrder: true,
-      erpShaftOrder: true,
     },
     orderBy: { code: "asc" },
   });

@@ -227,7 +227,6 @@ model Machine {
   erpContainerOrder String?     // chiave ordine container
   erpStandOrder   String?       // chiave ordine cavalletto
   erpBladesOrder  String?       // chiave ordine lame
-  erpShaftOrder   String?       // chiave ordine alberi (lavorati da DGS)
   // Snapshot completo dei dati gestionale (jobs + ordini + articoli) dal
   // sync-agent, per mostrare la card ERP ricca sulla VPS (senza ERP diretto).
   erpSnapshot     Json?

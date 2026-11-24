@@ -88,7 +88,6 @@ export async function computeErpFromSnapshot(id: string): Promise<ComputedErp | 
       erpContainerOrder: true,
       erpStandOrder: true,
       erpBladesOrder: true,
-      erpShaftOrder: true,
     },
   });
   if (!m || !m.erpSnapshot) return null;
@@ -102,7 +101,6 @@ export async function computeErpFromSnapshot(id: string): Promise<ComputedErp | 
       { role: "Container", key: m.erpContainerOrder },
       { role: "Cavalletto", key: m.erpStandOrder },
       { role: "Lame", key: m.erpBladesOrder },
-      { role: "Alberi", key: m.erpShaftOrder },
     ] as { role: string; key: string | null }[]
   ).filter((x): x is { role: string; key: string } => !!x.key);
 

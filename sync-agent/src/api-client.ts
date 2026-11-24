@@ -15,7 +15,6 @@ export interface MachineRow {
   erpContainerOrder: string | null;
   erpStandOrder: string | null;
   erpBladesOrder: string | null;
-  erpShaftOrder: string | null;
 }
 
 export interface PushResult {

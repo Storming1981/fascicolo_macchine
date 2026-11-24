@@ -60,7 +60,7 @@ type Diary = {
 type Machine = {
   id: string; code: string; job: string; jobBody: string | null; jobContainer: string | null;
   erpBodyOrder: string | null; erpContainerOrder: string | null;
-  erpStandOrder: string | null; erpBladesOrder: string | null; erpShaftOrder: string | null;
+  erpStandOrder: string | null; erpBladesOrder: string | null;
   erpDescription: string | null; erpHours: number | null; erpSyncedAt: string | null;
   plantType: string | null;
   /** Schede di allestimento previste; vuoto = tutte quelle della tipologia. */

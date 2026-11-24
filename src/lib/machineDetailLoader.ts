@@ -145,7 +145,6 @@ export async function loadMachineDetailProps(code: string) {
     erpContainerOrder: machine.erpContainerOrder,
     erpStandOrder: machine.erpStandOrder,
     erpBladesOrder: machine.erpBladesOrder,
-    erpShaftOrder: machine.erpShaftOrder,
     erpDescription: machine.erpDescription,
     erpHours: machine.erpHours,
     erpSyncedAt: machine.erpSyncedAt?.toISOString() ?? null,

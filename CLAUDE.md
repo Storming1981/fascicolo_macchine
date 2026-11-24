@@ -78,14 +78,17 @@ prodotto da ZATO: dalla genesi (produzione) fino alla rottamazione.
     pezzo che quel fascicolo non monta è lo stesso errore del doppio job sui
     mulini. Ne segue tutto il resto: avanzamento (`anagraficaFields`),
     convalida, etichetta a diario e, in Analisi ore, le tendine degli ordini.
-  - **I pezzi del trituratore non sono i job.** Cavalletto, **alberi** e lame
-    hanno ognuno il **proprio ordine di produzione** (sotto la commessa di
-    stock ce ne sono 26 di tramoggia/cavalletto, 62 di albero, 30 di lame), ma
-    non hanno un job: le loro tendine seguono quindi la presenza del **corpo**
-    (`bodyParts = hasBody && hasDualJob`), non il numero di job. Legarle a "due
-    job" faceva sparire tre tendine su quattro proprio sui fascicoli di **solo
-    trituratore**, dove quei pezzi ci sono tutti — restava il solo *Ordine
-    Corpo*. Campo `Machine.erpShaftOrder`, ruolo `"Alberi"`.
+  - **I pezzi del trituratore non sono i job.** Cavalletto e lame hanno
+    ognuno il **proprio ordine di produzione**, ma non hanno un job: le loro
+    tendine seguono quindi la presenza del **corpo** (`bodyParts = hasBody &&
+    hasDualJob`), non il numero di job. Legarle a "due job" le faceva sparire
+    proprio sui fascicoli di **solo trituratore**, dove quei pezzi ci sono
+    tutti — restava il solo *Ordine Corpo*.
+    **Gli alberi non sono uno di questi pezzi**: nel gestionale si vedono 62
+    ordini il cui articolo principale è un albero, ma non è un ordine che il
+    fascicolo aggancia (detto dal committente). La tendina *Ordine Alberi* e il
+    campo `Machine.erpShaftOrder` sono stati tolti: dedurre un ordine
+    dall'articolo non basta a dire che quell'ordine esista per la macchina.
   - Salvando l'anagrafica i job **non previsti dalla tipologia o dalle schede
     si svuotano** (il cambio va a diario, quindi resta tracciato) e il wizard
     li azzera al cambio di tipologia o di schede: un numero nascosto in un
