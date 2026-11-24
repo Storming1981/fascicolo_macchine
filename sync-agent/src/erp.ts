@@ -580,6 +580,7 @@ export interface MachineErpInput {
   containerOrder?: string | null;
   standOrder?: string | null;
   bladesOrder?: string | null;
+  shaftOrder?: string | null;
 }
 
 export interface ErpMachineData {
@@ -618,6 +619,7 @@ export async function getMachineErpData(input: MachineErpInput): Promise<ErpMach
     { role: 'Container', key: input.containerOrder },
     { role: 'Cavalletto', key: input.standOrder },
     { role: 'Lame', key: input.bladesOrder },
+    { role: 'Alberi', key: input.shaftOrder },
   ];
   const orders: { role: string; data: ErpOrderData }[] = [];
   for (const oi of orderInputs) {

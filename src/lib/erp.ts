@@ -806,6 +806,7 @@ export type MachineErpInput = {
   standOrder?: string | null;
   /** Ordine di produzione selezionato per le lame. */
   bladesOrder?: string | null;
+  shaftOrder?: string | null;
 };
 
 /**
@@ -849,6 +850,7 @@ export async function getMachineErpData(
     { role: "Container", key: norm.containerOrder },
     { role: "Cavalletto", key: norm.standOrder },
     { role: "Lame", key: norm.bladesOrder },
+    { role: "Alberi", key: norm.shaftOrder },
   ];
   for (const oi of orderInputs) {
     if (!oi.key) continue;

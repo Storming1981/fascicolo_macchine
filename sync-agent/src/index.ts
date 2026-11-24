@@ -211,6 +211,7 @@ async function runSync(opts: { dryRun: boolean; limit: number | null }): Promise
           containerOrder: m.erpContainerOrder,
           standOrder: m.erpStandOrder,
           bladesOrder: m.erpBladesOrder,
+          shaftOrder: m.erpShaftOrder,
         });
         return {
           id: m.id,

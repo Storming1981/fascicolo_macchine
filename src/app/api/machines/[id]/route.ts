@@ -26,6 +26,7 @@ const TEXT_FIELDS = [
   "erpContainerOrder",
   "erpStandOrder",
   "erpBladesOrder",
+  "erpShaftOrder",
   "plantType",
   "site",
   "naCustomer",

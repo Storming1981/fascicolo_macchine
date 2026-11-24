@@ -126,6 +126,7 @@ async function productionHours(machine: {
   erpContainerOrder: string | null;
   erpStandOrder: string | null;
   erpBladesOrder: string | null;
+  erpShaftOrder: string | null;
   erpHours: number | null;
   productionStart: Date | null;
 }): Promise<HoursAnalysis["production"]> {
@@ -253,6 +254,7 @@ async function productionHours(machine: {
         containerOrder: machine.erpContainerOrder,
         standOrder: machine.erpStandOrder,
         bladesOrder: machine.erpBladesOrder,
+        shaftOrder: machine.erpShaftOrder,
       });
       return shape(d, "erp");
     } catch (e) {
@@ -286,6 +288,7 @@ export async function machineHoursAnalysis(machineId: string): Promise<HoursAnal
       erpContainerOrder: true,
       erpStandOrder: true,
       erpBladesOrder: true,
+      erpShaftOrder: true,
       erpHours: true,
       productionStart: true,
       createdAt: true,

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/Icon";
 import { fmtDate, fmtDateTime, fmtHM } from "@/lib/format";
-import { jobFields, mainOrderRole } from "@/lib/plant";
+import { hasDualJob, jobFields, mainOrderRole } from "@/lib/plant";
 import { ordiniRequired } from "@/lib/machineProgress";
 import type { HoursAnalysis, SiteLink } from "@/lib/hoursAnalysis";
 
@@ -75,6 +75,7 @@ export type HoursMachine = {
   erpContainerOrder: string | null;
   erpStandOrder: string | null;
   erpBladesOrder: string | null;
+  erpShaftOrder: string | null;
   erpSyncedAt: string | null;
 };
 
@@ -104,7 +105,12 @@ export default function HoursAnalysisCard({
   const jobs = jobFields(machine.plantType, machine.sheetKinds).map((j) => j.key);
   const hasBody = jobs.includes("jobBody");
   const hasContainer = jobs.includes("jobContainer");
-  const dual = jobs.length > 1;
+  // Cavalletto, lame e alberi sono **pezzi del trituratore**, ognuno col suo
+  // ordine di produzione: si mostrano dove c'è il corpo, non dove ci sono due
+  // job. Su un fascicolo di solo trituratore i job sono uno solo ma i pezzi
+  // restano quattro, e senza questa distinzione sparivano tre tendine su
+  // quattro — restava il solo Ordine Corpo.
+  const bodyParts = hasBody && hasDualJob(machine.plantType);
   const ordini = (() => {
     const fields = ordiniRequired(machine);
     return { done: fields.filter((f) => f.filled).length, total: fields.length, missing: fields.filter((f) => !f.filled) };
@@ -142,6 +148,7 @@ export default function HoursAnalysisCard({
     machine.erpContainerOrder,
     machine.erpStandOrder,
     machine.erpBladesOrder,
+    machine.erpShaftOrder,
   ]);
 
   async function applyDates() {
@@ -335,11 +342,12 @@ export default function HoursAnalysisCard({
               {hasContainer && isGeneric(machine.jobContainer) && (
                 <OrderPicker machineId={machine.id} role="Container" field="erpContainerOrder" currentKey={machine.erpContainerOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
               )}
-              {/* Cavalletto e lame sono pezzi del trituratore: dove il corpo
-                  non c'e' sarebbero due tendine che non si compilano mai. */}
-              {dual && hasBody && (
+              {/* Cavalletto, alberi e lame sono pezzi del trituratore: dove il
+                  corpo non c'e' sarebbero tendine che non si compilano mai. */}
+              {bodyParts && (
                 <>
                   <OrderPicker machineId={machine.id} role="Cavalletto" field="erpStandOrder" currentKey={machine.erpStandOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
+                  <OrderPicker machineId={machine.id} role="Alberi" field="erpShaftOrder" currentKey={machine.erpShaftOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
                   <OrderPicker machineId={machine.id} role="Lame" field="erpBladesOrder" currentKey={machine.erpBladesOrder} canEdit={canEdit} onDone={onDone} notify={notify} />
                 </>
               )}
@@ -559,7 +567,7 @@ function OrderPicker({
 }: {
   machineId: string;
   role: string;
-  field: "erpBodyOrder" | "erpContainerOrder" | "erpStandOrder" | "erpBladesOrder";
+  field: "erpBodyOrder" | "erpContainerOrder" | "erpStandOrder" | "erpBladesOrder" | "erpShaftOrder";
   currentKey: string | null;
   canEdit: boolean;
   onDone: () => void;
