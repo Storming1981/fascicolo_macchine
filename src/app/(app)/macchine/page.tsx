@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { userCaps } from "@/lib/caps";
 import { progressForMachines } from "@/lib/progressService";
-import { defaultTipo, SHAFT_DOC_CATEGORIES } from "@/lib/allestimento";
+import { defaultTipo, machineSheetKinds, SHAFT_DOC_CATEGORIES } from "@/lib/allestimento";
 import { collaudoAlert, sheetsAlert, sheetsScope, shaftDocsAlert, SIGN_ROLES } from "@/lib/machineAlerts";
 import { ORDER_FIELDS, orderRef } from "@/lib/orderRef";
 import { mainOrderRole } from "@/lib/plant";
@@ -111,6 +111,9 @@ export default async function MachinesPage({
       : null,
     tiranteGiunto: m.tiranteGiunto,
     filtroMaggiorato: m.filtroMaggiorato,
+    // Schede che la commessa comprende davvero: le caselle dei kit seguono
+    // queste (solo container -> niente tirante giunto, che sta sulla M5.16).
+    sheetKinds: machineSheetKinds(m.plantType, m.sheetKinds),
     scope: sheetsScope(m.plantType, m.sheetKinds),
     orders: ORDER_FIELDS.flatMap(({ field, role }) => {
       const ref = orderRef(m[field]);

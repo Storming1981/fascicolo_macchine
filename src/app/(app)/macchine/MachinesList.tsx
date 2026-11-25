@@ -23,6 +23,8 @@ type M = {
   progress: number;
   tiranteGiunto: boolean;
   filtroMaggiorato: boolean;
+  /** Schede comprese nel fascicolo: un kit vive sulla sua scheda. */
+  sheetKinds: string[];
   /** Quali schede comprende il fascicolo (corpo + container, o una sola). */
   scope: SheetsScope;
   /** Semafori: schede di allestimento firmate · collaudo chiuso · documenti albero. */
@@ -208,7 +210,7 @@ export default function MachinesList({
                   </td>
                   {KITS.map((k) => (
                     <td key={k.key} style={{ textAlign: "center" }}>
-                      {hasKit(k.key, m.plantType) ? (
+                      {hasKit(k.key, m.plantType, m.sheetKinds) ? (
                         <input
                           type="checkbox"
                           checked={m[k.key]}

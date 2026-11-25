@@ -793,9 +793,17 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     `machine.intervention` o `machine.edit`, 400 se il kit non è previsto per
     quella tipologia), non col salvataggio della scheda: sono un campo della
     macchina, non un valore della scheda. Ogni cambio va a diario.
+  - **Il kit vive sulla sua scheda** (`KitDef.sheet`): su un fascicolo di solo
+    container il **tirante giunto** non c'è — sta sulla M5.16 — e su uno di
+    solo corpo non c'è il **filtro maggiorato**, che sta sulla M5.17. Quindi
+    `hasKit(key, plantType, sheetKinds)` risponde no e l'elenco mostra "—"
+    invece di una casella da spuntare su un pezzo che non si spedisce. La
+    stessa regola vale **lato server** (`POST …/kit` risponde 400), perché la
+    riga della scheda non esiste ma la rotta sì.
   - **Una colonna per kit nell'elenco macchine** (casella in sola lettura, "—"
-    per le tipologie che non lo prevedono): è lo storico che serve al
-    committente. Aggiungerne uno tocca solo `KITS` + il campo su `Machine`.
+    per le tipologie che non lo prevedono e per i fascicoli che non
+    comprendono la sua scheda): è lo storico che serve al committente.
+    Aggiungerne uno tocca solo `KITS` + il campo su `Machine`.
 - **Schede di allestimento per tipologia impianto** — dove ci sono, sono
   l'**unica** vista di Componenti & Matricole (l'elenco per gruppo resta per le
   tipologie senza scheda). Mappatura in `sheetKindsFor()`:

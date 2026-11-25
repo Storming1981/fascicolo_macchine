@@ -4,6 +4,7 @@ import { userCan } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { statusToPhase } from "@/lib/domain";
 import { hasKit, isKitFlag, kitDef, KIT_KEYS } from "@/lib/kits";
+import { machineSheetKinds } from "@/lib/allestimento";
 
 /**
  * Spunte di dotazione della macchina, dalla riga del componente nelle schede di
@@ -22,7 +23,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const machine = await prisma.machine.findUnique({
     where: { id },
-    select: { id: true, plantType: true, status: true, tiranteGiunto: true, filtroMaggiorato: true },
+    select: {
+      id: true,
+      plantType: true,
+      sheetKinds: true,
+      status: true,
+      tiranteGiunto: true,
+      filtroMaggiorato: true,
+    },
   });
   if (!machine) return NextResponse.json({ error: "Macchina non trovata" }, { status: 404 });
 
@@ -34,8 +42,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const key = asked[0];
   const def = kitDef(key)!;
   const value = b[key] as boolean;
-  if (!hasKit(key, machine.plantType))
-    return NextResponse.json({ error: `${def.label}: non previsto per questa tipologia impianto` }, { status: 400 });
+  // Il kit sta su una scheda: niente scheda, niente kit. Senza questo
+  // controllo una commessa di solo container potrebbe tenere il tirante
+  // giunto, che e' un pezzo del corpo che non spedisce.
+  if (!hasKit(key, machine.plantType, machineSheetKinds(machine.plantType, machine.sheetKinds)))
+    return NextResponse.json({ error: `${def.label}: non previsto su questo fascicolo` }, { status: 400 });
   if (value === machine[key]) return NextResponse.json({ ok: true, unchanged: true });
 
   await prisma.$transaction([
