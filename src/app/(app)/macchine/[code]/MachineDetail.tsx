@@ -1618,6 +1618,7 @@ function TabComponenti({
             />
           )}
           renderPhoto={photoCell}
+          hasPhoto={(id) => photoByItem.has(id)}
           onDone={onDone}
           notify={notify}
         />

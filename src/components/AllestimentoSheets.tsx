@@ -90,6 +90,7 @@ export default function AllestimentoSheets({
   kits,
   renderSerial,
   renderPhoto,
+  hasPhoto,
   onDone,
   notify,
 }: {
@@ -113,6 +114,8 @@ export default function AllestimentoSheets({
   kits: Record<KitFlag, boolean>;
   renderSerial: (item: Item, groupId: string) => ReactNode;
   renderPhoto: (itemId: string, title: string) => ReactNode;
+  /** Lo slot ha almeno una foto: serve al conteggio delle voci compilate. */
+  hasPhoto: (itemId: string) => boolean;
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
@@ -288,13 +291,35 @@ export default function AllestimentoSheets({
     return rows.length ? Math.round((rows.filter((r) => rowFilled(r, d.values)).length / rows.length) * 100) : 0;
   }
 
-  /** Riga compilata: la specifica, o la matricola per le righe che non ce l'hanno. */
+  /** Slot di matricola mostrati sulla riga: oltre il numero dichiarato solo quelli già scritti. */
+  function serialItems(row: SheetRow, values: SheetValues = draft.values) {
+    const items = compOf(row.serials ?? "")?.items ?? [];
+    const lim = serialLimit(row, values);
+    return lim === null ? items : items.filter((it, i) => i < lim || !!(it.serial ?? "").trim());
+  }
+
+  /**
+   * Riga compilata solo quando c'è *tutto* quello che chiede: la specifica e,
+   * per ogni slot del componente, matricola e foto. Il solo fornitore non basta:
+   * la voce risultava 1/1 con matricola e foto ancora da fare.
+   */
   function rowFilled(row: SheetRow, values: SheetValues = draft.values) {
-    if (row.naDefault) return true;
     // Componente escluso dalla macchina: non c'è niente da compilare.
     if (row.naComponent && isNa(values, row.key)) return true;
-    if (!row.noSpec) return filled(values[row.key]?.spec);
-    return (compOf(row.serials ?? "")?.items ?? []).some((it) => !!(it.serial ?? "").trim());
+    const spec = values[row.key]?.spec ?? "";
+    // N.A. esplicito (condizionatore assente): niente matricola né foto da chiedere.
+    if (row.naButton && spec === NA_VALUE) return true;
+    if (!row.noSpec && !row.naDefault && !filled(spec)) return false;
+    if (row.serialList || row.serialField) return filled(values[row.key]?.serial);
+    if (row.photos) {
+      const it = compOf(row.photos)?.items[0];
+      return !!it && hasPhoto(it.id);
+    }
+    if (row.serials) {
+      const items = serialItems(row, values);
+      return items.length > 0 && items.every((it) => filled(it.serial ?? "") && hasPhoto(it.id));
+    }
+    return true;
   }
 
   function specControl(row: SheetRow) {
@@ -457,14 +482,13 @@ export default function AllestimentoSheets({
     const c = compOf(row.serials);
     // slot oltre il numero dichiarato (es. un solo motore elettrico): nascosti
     // se vuoti, mostrati se qualcuno ci ha gia' scritto una matricola
-    const lim = serialLimit(row, draft.values);
-    const items = lim === null ? c?.items ?? [] : (c?.items ?? []).filter((it, i) => i < lim || !!(it.serial ?? "").trim());
+    const items = serialItems(row);
     return (
       <div className="al-side-stack">
         {c ? (
           <div className="al-serials">
             {items.map((it) => (
-              <div key={it.id} className={"al-serial" + (it.serial ? " ok" : "")}>
+              <div key={it.id} className={"al-serial" + (it.serial && hasPhoto(it.id) ? " ok" : "")}>
                 <span className="al-serial-label">{it.label}</span>
                 <div className="al-serial-cell">{renderSerial(it, row.serials!)}</div>
                 <div className="al-serial-photo">{renderPhoto(it.id, `${row.label} — ${it.label}`)}</div>
