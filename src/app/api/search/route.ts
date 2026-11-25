@@ -104,9 +104,24 @@ async function suggest(
     ? {}
     : { OR: [{ assignedTechId: user.id }, { participants: { some: { id: user.id } } }] };
 
+  // Ordini di produzione (`ORDER_FIELDS`): in officina una macchina la si
+  // chiama col numero dell'ordine. La chiave e' "H|2026||691", quindi il
+  // numero si cerca **in coda**: con `contains` "691" aggancerebbe anche
+  // l'anno di tutti gli ordini.
+  const ord = (w: string) =>
+    /^\d+$/.test(w)
+      ? [
+          { erpBodyOrder: { endsWith: `|${w}` } },
+          { erpContainerOrder: { endsWith: `|${w}` } },
+          { erpStandOrder: { endsWith: `|${w}` } },
+          { erpBladesOrder: { endsWith: `|${w}` } },
+        ]
+      : [];
+
   const machineWhere = {
     AND: words.map((w) => ({
       OR: [
+        ...ord(w),
         { code: ci(w) },
         { job: ci(w) },
         { jobBody: ci(w) },

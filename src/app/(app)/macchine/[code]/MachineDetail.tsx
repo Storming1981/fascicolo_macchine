@@ -1601,6 +1601,7 @@ function TabComponenti({
           machine={machine}
           canEdit={!!canEdit}
           canSign={!!canSign}
+          canMove={!!canManageOptions}
           canManageOptions={!!canManageOptions}
           hasSavedSignature={!!hasSavedSignature}
           kits={{ tiranteGiunto: machine.tiranteGiunto, filtroMaggiorato: machine.filtroMaggiorato }}

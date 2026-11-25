@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import {
@@ -85,6 +86,7 @@ export default function AllestimentoSheets({
   machine,
   canEdit,
   canSign,
+  canMove,
   canManageOptions,
   hasSavedSignature,
   kits,
@@ -108,6 +110,8 @@ export default function AllestimentoSheets({
   };
   canEdit: boolean;
   canSign: boolean;
+  /** `machine.edit`: spostare una scheda tocca due fascicoli. */
+  canMove: boolean;
   canManageOptions: boolean;
   hasSavedSignature: boolean;
   /** Spunte di dotazione della macchina (tirante giunto, filtro maggiorato). */
@@ -119,6 +123,7 @@ export default function AllestimentoSheets({
   onDone: () => void;
   notify: (m: string, k?: "ok" | "err") => void;
 }) {
+  const router = useRouter();
   const [kind, setKind] = useState<SheetKind>("TRITURATORE");
   // schede previste per la tipologia impianto del fascicolo (dal server)
   const [kinds, setKinds] = useState<SheetKind[]>([]);
@@ -130,6 +135,7 @@ export default function AllestimentoSheets({
   const [busy, setBusy] = useState(false);
   const [signOpen, setSignOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [mail, setMail] = useState<{ configured: boolean; from: string | null }>({ configured: false, from: null });
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
@@ -581,6 +587,15 @@ export default function AllestimentoSheets({
                 <Icon name="upload" size={13} /> Invia via e-mail
               </button>
             )}
+            {canMove && (
+              <button
+                className="btn-ghost-sm"
+                title="Sposta la scheda — con matricole e foto — su un altro fascicolo"
+                onClick={() => setMoveOpen(true)}
+              >
+                <Icon name="arrow-right" size={13} /> Sposta scheda
+              </button>
+            )}
             {canEdit && (
               <button
                 className={"btn-primary-sm al-save" + (dirty[kind] ? " pending" : "")}
@@ -990,6 +1005,22 @@ export default function AllestimentoSheets({
             onDone();
           }}
           onError={(msg) => notify(msg, "err")}
+        />
+      )}
+
+      {moveOpen && (
+        <MoveSheetModal
+          machineId={machine.id}
+          kind={kind}
+          from={{ code: machine.code, job: sheetCommessa(kind, machine) }}
+          signed={signed}
+          onClose={() => setMoveOpen(false)}
+          onMoved={(target, msg) => {
+            setMoveOpen(false);
+            notify(msg);
+            // la scheda non e' piu' qui: si va dov'e' andata
+            router.push(`/macchine/${target.code}`);
+          }}
         />
       )}
 
@@ -1786,6 +1817,140 @@ function BlocksSection({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Sposta la scheda su un altro fascicolo. Il corpo o il container si allestisce
+ * a magazzino sotto la commessa di stock, e la commessa di vendita arriva dopo,
+ * su un altro fascicolo: ricompilare a mano trentotto voci e trenta matricole
+ * non e' una strada.
+ *
+ * Il fascicolo si cerca come in elenco (commessa, codice, cliente, modello) e
+ * l'elenco mostra **solo** quelli che quella scheda la prevedono. Dove e' gia'
+ * compilata la riga c'e' ma non si sceglie: non si fondono due compilazioni.
+ */
+function MoveSheetModal({
+  machineId,
+  kind,
+  from,
+  signed,
+  onClose,
+  onMoved,
+}: {
+  machineId: string;
+  kind: SheetKind;
+  from: { code: string; job: string };
+  signed: boolean;
+  onClose: () => void;
+  onMoved: (target: { code: string; job: string }, msg: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [rows, setRows] = useState<
+    { id: string; code: string; job: string; model: string; customer: string; plantType: string | null; busy: boolean }[]
+  >([]);
+  const [pick, setPick] = useState<{ id: string; code: string; job: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      setLoading(true);
+      const res = await fetch(
+        `/api/machines/search?kind=${kind}&exclude=${machineId}&q=${encodeURIComponent(q)}`,
+        { cache: "no-store" }
+      );
+      const d = await res.json().catch(() => ({}));
+      setLoading(false);
+      setRows(res.ok ? d.machines ?? [] : []);
+      if (!res.ok) setErr(d.error || "Impossibile cercare i fascicoli");
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q, kind, machineId]);
+
+  async function move() {
+    if (!pick) return;
+    setErr(null);
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machineId}/allestimento/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, targetId: pick.id }),
+    });
+    const d = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) return setErr(d.error || "Scheda non spostata");
+    const m = d.moved ?? {};
+    onMoved(
+      { code: d.target?.code ?? pick.code, job: d.target?.job ?? pick.job },
+      `Scheda spostata su ${d.target?.code ?? pick.code}: ${m.serials ?? 0} matricole e ${m.photos ?? 0} foto`
+    );
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Sposta la scheda {sheetDef(kind).code} su un altro fascicolo</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Chiudi">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        <div className="modal-body">
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Dalla commessa <strong className="mono">{from.job}</strong> ({from.code}). Con la scheda si spostano le
+            sue <strong>matricole</strong>, le <strong>foto degli slot</strong>, i documenti delle sue caselle e le
+            spunte di dotazione: restano un dato solo, in un posto solo.
+            {signed && " La firma del compilatore viaggia con la scheda: la macchina è la stessa, cambia la commessa."}
+          </p>
+          <div className="search" style={{ marginBottom: 10 }}>
+            <Icon name="search" size={15} color="var(--muted)" />
+            <input
+              autoFocus
+              placeholder="Cerca commessa, fascicolo, cliente…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+          <div className="move-list">
+            {loading && !rows.length && <div className="muted small">Cerco…</div>}
+            {!loading && !rows.length && (
+              <div className="muted small">Nessun fascicolo che preveda questa scheda.</div>
+            )}
+            {rows.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className={"move-row" + (pick?.id === r.id ? " on" : "") + (r.busy ? " busy" : "")}
+                disabled={r.busy}
+                title={r.busy ? "Su questo fascicolo la scheda è già compilata" : undefined}
+                onClick={() => setPick({ id: r.id, code: r.code, job: r.job })}
+              >
+                <span className="mono move-job">{r.job}</span>
+                <span className="muted small">{r.code}</span>
+                <span className="move-cust">{r.customer}</span>
+                <span className="muted small">{r.model}</span>
+                {r.busy && <span className="scope-tag" style={{ color: "#b45309", background: "#f59e0b1a", borderColor: "#f59e0b40" }}>già compilata</span>}
+              </button>
+            ))}
+          </div>
+          {err && (
+            <div className="form-error" style={{ marginTop: 10 }}>
+              {err}
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn-ghost" onClick={onClose} disabled={busy}>
+            Annulla
+          </button>
+          <button className="btn-primary" onClick={move} disabled={busy || !pick}>
+            {busy ? "Spostamento…" : pick ? `Sposta su ${pick.code}` : "Scegli il fascicolo"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

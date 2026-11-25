@@ -17,6 +17,7 @@ import {
   sheetDef,
   sheetGroupIds,
   machineSheetKinds,
+  SHEET_LABEL,
   serialListKey,
   type SheetHeader,
   type SheetKind,
@@ -478,4 +479,216 @@ export async function signSheet(
       },
     }),
   ]);
+}
+
+export type MoveSheetResult =
+  | {
+      ok: true;
+      target: { id: string; code: string; job: string };
+      moved: { groups: number; serials: number; photos: number; documents: number };
+    }
+  | { ok: false; status: number; error: string };
+
+/** La scheda e' vuota? Una riga mai toccata non e' una compilazione. */
+function sheetIsEmpty(rec: { values: unknown; status: string } | null): boolean {
+  if (!rec) return true;
+  if (rec.status === "SIGNED") return false;
+  return !Object.values(readValues(rec.values)).some((v) =>
+    `${v?.spec ?? ""}${v?.serial ?? ""}${v?.note ?? ""}`.trim()
+  );
+}
+
+/**
+ * Sposta una scheda di allestimento su un **altro fascicolo**.
+ *
+ * Succede davvero: un corpo o un container si allestisce a magazzino, sotto la
+ * commessa di stock, e la commessa di vendita arriva dopo — su un altro
+ * fascicolo. Ricompilare a mano trentotto voci e trenta matricole non e' una
+ * strada: si sposta quello che e' gia' stato scritto.
+ *
+ * Si sposta **tutto quello che la scheda e'**: la riga (firma compresa), i
+ * gruppi componente che le danno le matricole — con i loro slot e le loro foto
+ * — i documenti delle sue caselle e le spunte di dotazione delle sue righe.
+ * Lasciare indietro le matricole vorrebbe dire una scheda che parla di una
+ * macchina e dei numeri che stanno su un'altra.
+ *
+ * Il fascicolo di destinazione **non deve averla gia' compilata**: fondere due
+ * compilazioni non si puo' fare senza inventare, quindi si rifiuta e si dice
+ * perche'. Una scheda mai toccata — riga vuota e gruppi senza matricole, creati
+ * da `ensureSheetComponents` alla prima apertura — non e' una compilazione:
+ * quella si sostituisce.
+ */
+export async function moveSheet(
+  machineId: string,
+  kind: SheetKind,
+  targetId: string,
+  user: { id: string; name: string }
+): Promise<MoveSheetResult> {
+  const def = sheetDef(kind);
+  const what = `${def.code} ${SHEET_LABEL[kind]}`;
+  if (!targetId || machineId === targetId)
+    return { ok: false, status: 400, error: "Scegli un fascicolo di destinazione diverso da questo" };
+
+  const pick = {
+    id: true,
+    code: true,
+    job: true,
+    plantType: true,
+    sheetKinds: true,
+    tiranteGiunto: true,
+    filtroMaggiorato: true,
+  } as const;
+  const [src, dst] = await Promise.all([
+    prisma.machine.findUnique({ where: { id: machineId }, select: pick }),
+    prisma.machine.findUnique({ where: { id: targetId }, select: pick }),
+  ]);
+  if (!src || !dst) return { ok: false, status: 404, error: "Fascicolo non trovato" };
+  if (!machineSheetKinds(dst.plantType, dst.sheetKinds).includes(kind))
+    return {
+      ok: false,
+      status: 400,
+      error: `Il fascicolo ${dst.code} non prevede la scheda ${what}: spostala su un fascicolo che la comprende.`,
+    };
+
+  const sheet = await prisma.allestimentoSheet.findUnique({
+    where: { machineId_kind: { machineId, kind } },
+  });
+  if (!sheet)
+    return {
+      ok: false,
+      status: 404,
+      error: `La scheda ${what} non e' mai stata aperta: non c'e' niente da spostare.`,
+    };
+
+  const groups = sheetGroupIds([kind]);
+  const itemSel = { select: { id: true, serial: true, lot: true, note: true } };
+  const [srcComps, dstComps, dstSheet] = await Promise.all([
+    prisma.component.findMany({ where: { machineId, groupId: { in: groups } }, include: { items: itemSel } }),
+    prisma.component.findMany({
+      where: { machineId: targetId, groupId: { in: groups } },
+      include: { items: itemSel },
+    }),
+    prisma.allestimentoSheet.findUnique({ where: { machineId_kind: { machineId: targetId, kind } } }),
+  ]);
+
+  if (!sheetIsEmpty(dstSheet))
+    return {
+      ok: false,
+      status: 409,
+      error: `Su ${dst.code} (commessa ${dst.job}) la scheda ${what} e' gia' compilata: due compilazioni non si fondono.`,
+    };
+
+  // Un gruppo della destinazione si sostituisce solo se e' davvero vuoto: una
+  // matricola, un lotto, una nota, una marca o una foto sono lavoro di
+  // qualcuno, e cancellarlo per far posto sarebbe peggio del non spostare.
+  const dstItemIds = dstComps.flatMap((c) => c.items.map((i) => i.id));
+  const withPhotos = dstItemIds.length
+    ? new Set(
+        (
+          await prisma.photo.findMany({
+            where: { componentItemId: { in: dstItemIds } },
+            select: { componentItemId: true },
+          })
+        ).map((p) => p.componentItemId as string)
+      )
+    : new Set<string>();
+  const busy = dstComps.filter(
+    (c) =>
+      (c.brand ?? "").trim() ||
+      (c.extra && typeof c.extra === "object" && Object.keys(c.extra).length) ||
+      c.items.some(
+        (i) =>
+          (i.serial ?? "").trim() || (i.lot ?? "").trim() || (i.note ?? "").trim() || withPhotos.has(i.id)
+      )
+  );
+  if (busy.length) {
+    const labels = busy.map((c) => COMPONENT_GROUPS.find((g) => g.id === c.groupId)?.label ?? c.groupId);
+    return {
+      ok: false,
+      status: 409,
+      error: `Su ${dst.code} questi componenti hanno gia' dei dati: ${labels.join(", ")}. Spostala su un fascicolo libero.`,
+    };
+  }
+
+  const itemIds = srcComps.flatMap((c) => c.items.map((i) => i.id));
+  const serials = srcComps.reduce((n, c) => n + c.items.filter((i) => (i.serial ?? "").trim()).length, 0);
+  const photos = itemIds.length ? await prisma.photo.count({ where: { componentItemId: { in: itemIds } } }) : 0;
+  const docCats = allRows(def).flatMap((r) => (r.docs ?? []).map((d) => d.category));
+  const documents = docCats.length
+    ? await prisma.document.count({ where: { machineId, category: { in: docCats } } })
+    : 0;
+  const kitFlags = allRows(def)
+    .map((r) => r.kitFlag)
+    .filter((k): k is NonNullable<typeof k> => !!k);
+
+  const note = `Commessa ${src.job} → ${dst.job} · ${serials} matricole, ${photos} foto, ${documents} documenti.`;
+  const ops: Prisma.PrismaPromise<unknown>[] = [
+    // prima si tolgono i gruppi vuoti della destinazione: il vincolo unico e'
+    // (macchina, gruppo) e lo spostamento lo violerebbe
+    ...dstComps.map((c) => prisma.component.delete({ where: { id: c.id } })),
+    prisma.component.updateMany({
+      where: { id: { in: srcComps.map((c) => c.id) } },
+      data: { machineId: targetId },
+    }),
+    // ... e la riga vuota della scheda, per la stessa ragione: il vincolo e'
+    // (macchina, scheda) e senza questo lo spostamento fallirebbe proprio sui
+    // fascicoli dove la scheda era gia' stata aperta e lasciata in bianco.
+    ...(dstSheet ? [prisma.allestimentoSheet.delete({ where: { id: dstSheet.id } })] : []),
+    prisma.allestimentoSheet.update({ where: { id: sheet.id }, data: { machineId: targetId } }),
+  ];
+  if (itemIds.length)
+    ops.push(
+      prisma.photo.updateMany({ where: { componentItemId: { in: itemIds } }, data: { machineId: targetId } })
+    );
+  if (docCats.length)
+    ops.push(
+      prisma.document.updateMany({
+        where: { machineId, category: { in: docCats } },
+        data: { machineId: targetId },
+      })
+    );
+  // Le spunte di dotazione stanno sulla riga del componente di questa scheda:
+  // seguono la scheda, altrimenti direbbero il falso su entrambi i fascicoli.
+  if (kitFlags.length)
+    ops.push(
+      prisma.machine.update({
+        where: { id: targetId },
+        data: Object.fromEntries(kitFlags.map((k) => [k, src[k]])),
+      }),
+      prisma.machine.update({
+        where: { id: machineId },
+        data: Object.fromEntries(kitFlags.map((k) => [k, false])),
+      })
+    );
+  ops.push(
+    prisma.diaryEvent.create({
+      data: {
+        machineId,
+        phase: "PRODUCTION",
+        type: "note",
+        title: `${what}: scheda spostata sul fascicolo ${dst.code}`,
+        note,
+        actorName: user.name,
+        authorId: user.id,
+      },
+    }),
+    prisma.diaryEvent.create({
+      data: {
+        machineId: targetId,
+        phase: "PRODUCTION",
+        type: "note",
+        title: `${what}: scheda arrivata dal fascicolo ${src.code}`,
+        note,
+        actorName: user.name,
+        authorId: user.id,
+      },
+    })
+  );
+  await prisma.$transaction(ops);
+
+  return {
+    ok: true,
+    target: { id: dst.id, code: dst.code, job: dst.job },
+    moved: { groups: srcComps.length, serials, photos, documents },
+  };
 }

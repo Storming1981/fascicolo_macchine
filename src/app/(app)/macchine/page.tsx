@@ -3,6 +3,8 @@ import { userCaps } from "@/lib/caps";
 import { progressForMachines } from "@/lib/progressService";
 import { defaultTipo, SHAFT_DOC_CATEGORIES } from "@/lib/allestimento";
 import { collaudoAlert, sheetsAlert, sheetsScope, shaftDocsAlert, SIGN_ROLES } from "@/lib/machineAlerts";
+import { ORDER_FIELDS, orderRef } from "@/lib/orderRef";
+import { mainOrderRole } from "@/lib/plant";
 import MachinesList from "./MachinesList";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +63,28 @@ export default async function MachinesPage({
     set.add(f.role);
     rolesByMachine.set(f.machineId, set);
   }
+  // Ordini di produzione del fascicolo: una query sola per la pagina, con
+  // l'articolo principale preso dal catalogo che porta il sync-agent. Servono
+  // nell'elenco perche' una macchina la si cerca anche per numero d'ordine, e
+  // per saperlo si doveva aprire il fascicolo.
+  const orderKeys = [
+    ...new Set(
+      machines.flatMap((m) => ORDER_FIELDS.map((f) => m[f.field]).filter((k): k is string => !!k))
+    ),
+  ];
+  const erpOrders = orderKeys.length
+    ? await prisma.erpCommessaOrder.findMany({
+        where: { key: { in: orderKeys } },
+        select: { key: true, mainArticleCode: true, mainArticleDesc: true, hours: true },
+        // stessa chiave su piu' commesse: vince quella con l'avanzamento
+        orderBy: { hours: "desc" },
+      })
+    : [];
+  const orderInfo = new Map<string, { desc: string | null; hours: number }>();
+  for (const o of erpOrders)
+    if (!orderInfo.has(o.key))
+      orderInfo.set(o.key, { desc: o.mainArticleDesc || o.mainArticleCode, hours: o.hours });
+
   const shaftByMachine = new Map<string, Set<string>>();
   for (const d of shaftDocs) {
     const set = shaftByMachine.get(d.machineId) ?? new Set<string>();
@@ -88,6 +112,19 @@ export default async function MachinesPage({
     tiranteGiunto: m.tiranteGiunto,
     filtroMaggiorato: m.filtroMaggiorato,
     scope: sheetsScope(m.plantType, m.sheetKinds),
+    orders: ORDER_FIELDS.flatMap(({ field, role }) => {
+      const ref = orderRef(m[field]);
+      if (!ref) return [];
+      const info = orderInfo.get(m[field]!);
+      return [
+        {
+          role: role === "Corpo" ? mainOrderRole(m.plantType) : role,
+          ref,
+          desc: info?.desc ?? null,
+          hours: info?.hours ?? null,
+        },
+      ];
+    }),
     schede: sheetsAlert(m.plantType, signedSheets.get(m.id) ?? empty, m.sheetKinds),
     docAlberi: shaftDocsAlert(m.plantType, m.sheetKinds, shaftByMachine.get(m.id) ?? empty),
     collaudo: collaudoAlert(

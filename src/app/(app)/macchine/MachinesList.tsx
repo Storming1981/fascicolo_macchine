@@ -31,7 +31,12 @@ type M = {
   docAlberi: MachineAlert;
   /** Tipo container dalla scheda M5.17 (null = scheda non ancora compilata). */
   containerType: string | null;
+  /** Ordini di produzione agganciati (ruolo, H/2026/691, articolo, ore). */
+  orders: { role: string; ref: string; desc: string | null; hours: number | null }[];
 };
+
+/** Riga sotto il puntatore: la scheda degli ordini si appoggia al suo rettangolo. */
+type Peek = { m: M; top: number; bottom: number; left: number };
 
 export default function MachinesList({
   machines,
@@ -46,6 +51,9 @@ export default function MachinesList({
 }) {
   const router = useRouter();
   const [q, setQ] = useState(initialQuery);
+  // Ordini di produzione della riga sotto il puntatore: si leggono senza
+  // aprire il fascicolo, che era il giro lungo per un numero solo.
+  const [peek, setPeek] = useState<Peek | null>(null);
   // L elenco si apre sulle macchine IN PRODUZIONE: e il quadro che serve ogni
   // giorno (a che punto siamo). Arrivando da una ricerca si parte da "tutte",
   // altrimenti una macchina gia spedita non si troverebbe.
@@ -56,7 +64,18 @@ export default function MachinesList({
       machines.filter((m) => {
         if (filter !== "all" && m.status !== filter) return false;
         if (!q) return true;
-        const hay = [m.code, m.job, m.customer, m.country, m.model, m.plantType || ""]
+        // Si cerca anche per **ordine di produzione**: in officina una
+        // macchina la si chiama col numero dell'ordine, e prima "624" non
+        // trovava niente. Dentro anche l'articolo principale.
+        const hay = [
+          m.code,
+          m.job,
+          m.customer,
+          m.country,
+          m.model,
+          m.plantType || "",
+          ...m.orders.flatMap((o) => [o.ref, o.desc ?? ""]),
+        ]
           .join(" ")
           .toLowerCase();
         return hay.includes(q.toLowerCase());
@@ -91,7 +110,7 @@ export default function MachinesList({
         <div className="search" style={{ flex: 1, minWidth: 220 }}>
           <Icon name="search" size={15} color="var(--muted)" />
           <input
-            placeholder="Cerca commessa, matricola, cliente, paese…"
+            placeholder="Cerca commessa, ordine, cliente, paese…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -156,6 +175,12 @@ export default function MachinesList({
                   // senza leggere riga per riga.
                   style={ct ? { borderLeft: `4px solid ${ct.color}`, background: `${ct.color}0d` } : undefined}
                   onClick={() => router.push(`/macchine/${m.code}`)}
+                  onMouseEnter={(e) => {
+                    if (!m.orders.length) return setPeek(null);
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setPeek({ m, top: r.top, bottom: r.bottom, left: r.left });
+                  }}
+                  onMouseLeave={() => setPeek((pk) => (pk?.m.id === m.id ? null : pk))}
                 >
                   <td className="mono">{m.job}</td>
                   <td>{m.plantType || <span className="muted">—</span>}</td>
@@ -252,6 +277,46 @@ export default function MachinesList({
           </table>
         </div>
       </div>
+
+      {peek && <OrdersPeek peek={peek} />}
+    </div>
+  );
+}
+
+/**
+ * Gli ordini di produzione del fascicolo sotto il puntatore. In officina una
+ * macchina la si chiama col numero dell'ordine (H/2026/691), e per leggerlo si
+ * doveva aprire il fascicolo e scorrere fino ad Analisi ore.
+ *
+ * E' **fissa rispetto alla finestra** e ancorata al rettangolo della riga, non
+ * al puntatore: inseguire il mouse la farebbe tremolare. Non prende eventi
+ * (`pointer-events: none`), altrimenti si frapporrebbe al clic sulla riga.
+ */
+function OrdersPeek({ peek }: { peek: Peek }) {
+  const { m } = peek;
+  const h = 62 + m.orders.length * 32;
+  const vh = typeof window === "undefined" ? 800 : window.innerHeight;
+  const vw = typeof window === "undefined" ? 1200 : window.innerWidth;
+  // sopra la riga se c'e' posto, altrimenti sotto
+  const top = peek.top > h + 16 ? peek.top - h - 8 : Math.min(peek.bottom + 8, vh - h - 8);
+  return (
+    <div className="orders-peek" style={{ top: Math.max(8, top), left: Math.max(8, Math.min(peek.left + 28, vw - 400)) }}>
+      <div className="orders-peek-head">
+        <span className="mono">{m.job}</span>
+        <span className="muted small">
+          {m.code} · {m.customer}
+        </span>
+      </div>
+      <ul>
+        {m.orders.map((o) => (
+          <li key={o.role + o.ref}>
+            <span className="orders-peek-role">Ordine {o.role}</span>
+            <span className="orders-peek-ref mono">{o.ref}</span>
+            <span className="orders-peek-desc">{o.desc || "—"}</span>
+            {o.hours ? <span className="muted small mono">{o.hours.toFixed(1)} h</span> : null}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

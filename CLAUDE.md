@@ -656,6 +656,24 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     `MachinesList.tsx`): non lampeggia come i semafori perché non manca
     niente — è com'è fatta quella macchina — e il colore la distingue senza
     leggere.
+- **Gli ordini di produzione si leggono dall'elenco** (`src/lib/orderRef.ts`,
+  `OrdersPeek` in `MachinesList.tsx`): passando con il puntatore su una riga si
+  apre una scheda con **Ordine Corpo / Container / Cavalletto / Lame** —
+  numero (`H/2026/691`), articolo principale e ore. In officina una macchina la
+  si chiama col numero dell'ordine, e per leggerlo si doveva aprire il
+  fascicolo e scorrere fino ad *Analisi ore*.
+  - La scheda e' **ancorata al rettangolo della riga**, non al puntatore
+    (inseguire il mouse la fa tremolare), e non prende eventi
+    (`pointer-events: none`): sotto c'e' il clic che apre il fascicolo. Sulle
+    righe senza ordini non compare: un riquadro vuoto su ogni riga sarebbe solo
+    rumore.
+  - **Si cerca anche per numero d'ordine**: il campo dell'elenco macchine e la
+    ricerca globale accettano `624`. Nella ricerca globale il numero si cerca
+    **in coda** alla chiave (`endsWith: "|624"`): la chiave e' `H|2026||691`,
+    quindi un `contains` aggancerebbe l'anno di tutti gli ordini.
+  - L'articolo arriva dal catalogo `ErpCommessaOrder` (quello che porta il
+    sync-agent) con **una query per pagina**; dove il catalogo non ha ancora
+    quell'ordine resta il solo numero.
 - **Dettaglio macchina** (6 tab): Anagrafica + documenti, Componenti & Matricole
   (accordion con sostituzione pezzo e foto per slot), Foto produzione (upload con
   categorie), Collaudo & Firme (firme per ruolo PIN/penna), Diario macchina
@@ -1096,6 +1114,37 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     sparisce, la storia no.
   - Il codice modulo **M5.19 è provvisorio**: se nel sistema qualità la scheda ha
     un altro numero, si cambia in `SHEET_SEPARAZIONE.code`.
+- **Una scheda si sposta su un altro fascicolo** (*Sposta scheda* nella barra
+  delle schede, `moveSheet()` in `allestimentoService.ts`, `POST
+  /api/machines/[id]/allestimento/move`): un corpo o un container si allestisce
+  **a magazzino**, sotto la commessa di stock, e la commessa di vendita arriva
+  dopo — su un altro fascicolo. Ricompilare a mano trentotto voci e trenta
+  matricole non e' una strada.
+  - **Si sposta tutto quello che la scheda e'**: la riga `AllestimentoSheet`
+    (firma compresa — la macchina e' la stessa, cambia la commessa), i **gruppi
+    componente** della scheda (`sheetGroupIds`) con i loro slot, le **foto degli
+    slot**, i documenti delle sue caselle (collaudo dimensionale, rilievo
+    alberi) e le **spunte di dotazione** delle sue righe. Lasciare indietro le
+    matricole vorrebbe dire una scheda che parla di una macchina e dei numeri
+    che stanno su un'altra.
+  - **Non si fondono due compilazioni**: se la destinazione ha gia' quella
+    scheda compilata o firmata la route risponde 409 e lo dice. Una scheda
+    **mai toccata** (riga vuota e gruppi senza matricole, creati da
+    `ensureSheetComponents` alla prima apertura) non e' una compilazione:
+    quella si sostituisce — i suoi gruppi vuoti si cancellano **prima** dello
+    spostamento, perche' il vincolo unico e' (macchina, gruppo).
+  - Un gruppo della destinazione si considera vuoto solo se non ha marca,
+    extra, matricole, lotti, note **ne' foto**: quello e' lavoro di qualcuno, e
+    cancellarlo per far posto sarebbe peggio del non spostare.
+  - Lo spostamento va **a diario su entrambi i fascicoli** (chi, da dove, a
+    dove, quante matricole e foto) ed e' reversibile — per questo basta
+    `machine.edit` e non serve essere amministratori come per l'eliminazione
+    del fascicolo. I file su disco **non si spostano**: restano sotto la
+    cartella del fascicolo di partenza, il percorso nel DB continua a valere.
+  - La destinazione si sceglie da una tendina cercabile
+    (`GET /api/machines/search?q=&kind=&exclude=`), che mostra **solo** i
+    fascicoli che quella scheda la prevedono (`machineSheetKinds`) e segna
+    *gia' compilata* quelli su cui non si puo'.
 - **Invio schede via e-mail** (pulsante *Invia via e-mail* nelle schede di
   allestimento): A / Cc / oggetto / messaggio + scelta dei PDF (M5.16, M5.17)
   generati al momento (`renderSheetPdf` in `src/lib/allestimentoRender.ts`,
