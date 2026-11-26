@@ -16,9 +16,15 @@ import { BLOCKS, blockKindOf, blockNumberOf } from "@/lib/allestimento";
  * slot. Il vincolo unico su (machineId, groupId) è il motivo per cui il numero
  * fa parte dell'id, e il prefisso dice di che pezzo si tratta.
  *
- * POST   { kind }                        → aggiunge un blocco
- * PATCH  { componentId, brand?, extra? } → salva i campi
- * DELETE ?componentId=                   → toglie il blocco (e le sue foto)
+ * POST   { kind }                           → aggiunge un blocco
+ * PATCH  { componentId, brand?, extra? }    → salva i campi
+ * PATCH  { componentId, excluded }          → N.A.: il pezzo non c'è su questa linea
+ * DELETE ?componentId=                      → toglie il blocco (e le sue foto)
+ *
+ * **N.A. non è Elimina**: il blocco resta in elenco (così si vede che quel
+ * pezzo è stato valutato e non c'è) ma esce dal conteggio delle matricole del
+ * fascicolo, che è il motivo per cui esiste — `Component.excluded`, lo stesso
+ * flag del N.A. di componente nelle schede BLUE DEVIL.
  */
 
 async function guard(id: string, verb: string) {
@@ -83,7 +89,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (g.err) return g.err;
 
   const b = (await req.json().catch(() => null)) as
-    | { componentId?: string; brand?: unknown; extra?: Record<string, unknown> }
+    | { componentId?: string; brand?: unknown; extra?: Record<string, unknown>; excluded?: unknown }
     | null;
   const componentId = typeof b?.componentId === "string" ? b.componentId : "";
   if (!componentId) return NextResponse.json({ error: "componentId mancante" }, { status: 400 });
@@ -92,6 +98,28 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const block = comp ? blockKindOf(comp.groupId) : null;
   if (!comp || comp.machineId !== id || !block)
     return NextResponse.json({ error: "Componente non trovato" }, { status: 404 });
+
+  // N.A. / rimettilo: cambia un fatto della macchina, quindi va a diario come
+  // le spunte di dotazione e il N.A. di componente delle schede.
+  if (typeof b?.excluded === "boolean") {
+    if (b.excluded !== comp.excluded) {
+      const label = comp.label ?? block.label;
+      await prisma.$transaction([
+        prisma.component.update({ where: { id: componentId }, data: { excluded: b.excluded } }),
+        prisma.diaryEvent.create({
+          data: {
+            machineId: id,
+            phase: "PRODUCTION",
+            type: "note",
+            title: b.excluded ? `${label}: non previsto su questa linea` : `${label}: previsto`,
+            actorName: g.user.name,
+            authorId: g.user.id,
+          },
+        }),
+      ]);
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   const str = (v: unknown, max = 120) => (typeof v === "string" ? v.trim().slice(0, max) : "");
   const data: Prisma.ComponentUpdateInput = {};

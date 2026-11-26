@@ -4,6 +4,9 @@ import { COMPONENT_GROUPS } from "./components";
 import {
   allListKeys,
   allRows,
+  BLOCKS,
+  blockKindOf,
+  sheetInitBlocks,
   SHEET_KINDS,
   defaultTipo,
   isListRow,
@@ -105,7 +108,8 @@ export async function ensureSheetComponents(machineId: string): Promise<number> 
   // Solo i gruppi delle schede di QUESTO fascicolo: su una cesoia non hanno
   // senso i riduttori del trituratore, e su un container senza corpo non ha
   // senso creare i gruppi della M5.16.
-  const groups = sheetGroupIds(machineSheetKinds(machine.plantType, machine.sheetKinds));
+  const kinds = machineSheetKinds(machine.plantType, machine.sheetKinds);
+  const groups = sheetGroupIds(kinds);
   const existing = await prisma.component.findMany({ where: { machineId }, select: { groupId: true } });
   const have = new Set(existing.map((c) => c.groupId));
   let created = 0;
@@ -128,7 +132,54 @@ export async function ensureSheetComponents(machineId: string): Promise<number> 
       if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) throw e;
     }
   }
-  return created + (await ensureSheetSlots(machineId, groups));
+  return created + (await ensureSheetSlots(machineId, groups)) + (await ensureSheetBlocks(machineId, kinds));
+}
+
+/**
+ * Blocchi che la scheda dichiara gia' presenti (`repeatInit`): una linea di
+ * separazione monta quasi sempre gli stessi pezzi, e aprire la scheda su un
+ * foglio bianco voleva dire aggiungerli a mano uno per uno — con il rischio
+ * che una scheda vuota sembri "non ancora compilata" quando invece il pezzo
+ * non c'e'.
+ *
+ * Si creano **una volta sola**: se la scheda ha gia' un blocco qualsiasi,
+ * quello che c'e' e' la linea vera e non si tocca. Trommel e tramoggia
+ * nascono esclusi (`excluded`), cioe' su N.A.: ci sono nell'elenco ma non
+ * chiedono niente finche' qualcuno non dice che sono montati.
+ */
+async function ensureSheetBlocks(machineId: string, kinds: SheetKind[]): Promise<number> {
+  const inits = sheetInitBlocks(kinds);
+  if (!inits.length) return 0;
+  const existing = await prisma.component.findMany({ where: { machineId }, select: { groupId: true } });
+  if (existing.some((c) => blockKindOf(c.groupId))) return 0;
+  let created = 0;
+  for (const init of inits) {
+    const block = BLOCKS[init.kind];
+    if (!block) continue;
+    for (let n = 1; n <= init.count; n++) {
+      try {
+        await prisma.component.create({
+          data: {
+            machineId,
+            groupId: `${init.kind}-${n}`,
+            label: `${block.label} ${n}`,
+            excluded: !!init.na,
+            items: {
+              create: block.slots.map((s, position) => ({
+                position,
+                label: s.label,
+                photoOnly: !!s.photoOnly,
+              })),
+            },
+          },
+        });
+        created++;
+      } catch (e) {
+        if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) throw e;
+      }
+    }
+  }
+  return created;
 }
 
 /**
@@ -561,13 +612,21 @@ export async function moveSheet(
     };
 
   const groups = sheetGroupIds([kind]);
+  // Anche i **blocchi** della scheda (nastri, separatori, cabina): sono
+  // componenti con un numero nell'id, quindi non stanno fra i gruppi fissi —
+  // e lasciarli indietro vorrebbe dire una linea senza le sue matricole.
+  const blockKinds = def.sections.flatMap((s) => s.repeat ?? []);
+  const compWhere = (mid: string) => ({
+    machineId: mid,
+    OR: [
+      { groupId: { in: groups } },
+      ...blockKinds.map((k) => ({ groupId: { startsWith: `${k}-` } })),
+    ],
+  });
   const itemSel = { select: { id: true, serial: true, lot: true, note: true } };
   const [srcComps, dstComps, dstSheet] = await Promise.all([
-    prisma.component.findMany({ where: { machineId, groupId: { in: groups } }, include: { items: itemSel } }),
-    prisma.component.findMany({
-      where: { machineId: targetId, groupId: { in: groups } },
-      include: { items: itemSel },
-    }),
+    prisma.component.findMany({ where: compWhere(machineId), include: { items: itemSel } }),
+    prisma.component.findMany({ where: compWhere(targetId), include: { items: itemSel } }),
     prisma.allestimentoSheet.findUnique({ where: { machineId_kind: { machineId: targetId, kind } } }),
   ]);
 
@@ -602,7 +661,9 @@ export async function moveSheet(
       )
   );
   if (busy.length) {
-    const labels = busy.map((c) => COMPONENT_GROUPS.find((g) => g.id === c.groupId)?.label ?? c.groupId);
+    const labels = busy.map(
+      (c) => COMPONENT_GROUPS.find((g) => g.id === c.groupId)?.label ?? c.label ?? c.groupId
+    );
     return {
       ok: false,
       status: 409,

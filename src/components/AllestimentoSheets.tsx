@@ -49,6 +49,8 @@ type Comp = {
   label?: string | null;
   brand?: string | null;
   extra?: Record<string, string> | null;
+  /** N.A.: il pezzo non c'è su questa macchina (`Component.excluded`). */
+  excluded?: boolean;
   items: Item[];
 };
 
@@ -810,7 +812,11 @@ export default function AllestimentoSheets({
                 {x.na ? (
                   "N.A."
                 ) : s.repeat ? (
-                  `${blocksOf(s.repeat).length} componenti`
+                  (() => {
+                    const bs = blocksOf(s.repeat);
+                    const na = bs.filter((b) => b.excluded).length;
+                    return `${bs.length - na} componenti${na ? ` · ${na} N.A.` : ""}`;
+                  })()
                 ) : (
                   <>
                     {complete && <Icon name="check" size={12} />}
@@ -1709,6 +1715,25 @@ function BlocksSection({
     } else notify(d.error || "Componente non aggiunto", "err");
   }
 
+  /**
+   * N.A.: il pezzo non c'è su questa linea. Non si cancella — resta in elenco,
+   * così si vede che è stato valutato — ma esce dal conteggio delle matricole
+   * del fascicolo, che altrimenti non arriverebbe mai al 100%.
+   */
+  async function setNa(b: Comp, on: boolean) {
+    setBusy(true);
+    const res = await fetch(`/api/machines/${machineId}/blocks`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ componentId: b.id, excluded: on }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      onDone();
+      notify(on ? `${b.label ?? "Componente"}: non previsto` : `${b.label ?? "Componente"}: previsto`);
+    } else notify("Non salvato", "err");
+  }
+
   async function removeBlock(b: Comp) {
     if (!confirm(`Eliminare ${b.label ?? "il componente"}? Le matricole restano scritte a diario.`)) return;
     setBusy(true);
@@ -1727,21 +1752,52 @@ function BlocksSection({
           Niente ancora: aggiungi con i pulsanti qui sotto quello che c'e' davvero su questa linea.
         </p>
       )}
+      {blocks.length > 0 && !disabled && (
+        <p className="muted small belts-empty">
+          Quello che questa linea non monta si mette su <strong>N.A.</strong>, non si cancella: resta
+          scritto che e&apos; stato valutato e smette di chiedere matricole.
+        </p>
+      )}
 
       {blocks.map((b) => {
         const def = blockKindOf(b.groupId);
         if (!def) return null;
+        const na = !!b.excluded;
         return (
-          <section key={b.id} className="belt-card">
+          <section key={b.id} className={"belt-card" + (na ? " na" : "")}>
             <header className="belt-head">
               <strong>{b.label ?? def.label}</strong>
-              {!disabled && (
-                <button className="btn-ghost-sm danger" disabled={busy} onClick={() => removeBlock(b)}>
-                  <Icon name="trash" size={13} /> Elimina
-                </button>
-              )}
+              <span className="belt-actions">
+                {na && <span className="belt-na-tag">Non previsto su questa linea</span>}
+                {!disabled && (
+                  <button
+                    type="button"
+                    className={"al-na" + (na ? " on" : "")}
+                    disabled={busy}
+                    title={
+                      na
+                        ? "Rimetti il pezzo: torna a chiedere fornitore e matricola"
+                        : "Il pezzo non c'è su questa linea: resta in elenco ma non chiede più niente"
+                    }
+                    onClick={() => void setNa(b, !na)}
+                  >
+                    {na ? "Rimettilo" : "N.A."}
+                  </button>
+                )}
+                {!disabled && !na && (
+                  <button className="btn-ghost-sm danger" disabled={busy} onClick={() => removeBlock(b)}>
+                    <Icon name="trash" size={13} /> Elimina
+                  </button>
+                )}
+              </span>
             </header>
 
+            {na ? (
+              <p className="muted small belt-na-body">
+                Nessuna matricola da raccogliere: questa linea non lo monta.
+              </p>
+            ) : (
+              <>
             <div className="belt-grid">
               {def.fields.map((f) => {
                 const v = valueOf(b, f.key);
@@ -1804,6 +1860,8 @@ function BlocksSection({
                 );
               })}
             </div>
+              </>
+            )}
           </section>
         );
       })}

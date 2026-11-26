@@ -634,6 +634,13 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   rumore. Il `title` della targhetta dice **cosa** manca ("Da firmare: M5.17",
   "Manca: check list, firma capo officina"), così non si apre il fascicolo per
   scoprirlo.
+  - **«Da firmare» è un terzo stato** (ambra, **fermo**): quando tutte le
+    matricole del fascicolo sono state raccolte ma una scheda non è ancora
+    firmata, di lavoro non ne manca — manca una firma. Il rosso lampeggiante
+    vuol dire *«qui c'è ancora da compilare»* e mandava a cercare qualcosa che
+    non c'era. Lo decide lo stesso conteggio di slot dell'avanzamento
+    (`componentsDone` in `sheetsAlert`), così i due numeri non possono
+    discordare.
   - Il collaudo si ferma alle firme **più** l'approvazione: contare solo le tre
     firme avrebbe fatto passare per completo un collaudo con la check list
     ancora da compilare.
@@ -1086,9 +1093,26 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     prefisso dice che pezzo è (`blockKindOf`). I numeri **non si riciclano**:
     cancellando il terzo di tre, il prossimo è il quarto, altrimenti una foto
     vecchia finirebbe sotto l'etichetta di un pezzo diverso.
+  - **I pezzi di serie ci sono dalla prima apertura** (`SheetSection.repeatInit`,
+    `ensureSheetBlocks`): **3 nastri · 2 piani vibranti · 1 tamburo magnetico ·
+    1 overbelt · 1 ECS · 1 cabina di cernita**, più **trommel** e **tramoggia
+    di carico** che nascono **su N.A.** — su molte linee non ci sono, e una
+    riga da compilare per un pezzo mai montato è esattamente ciò che tiene una
+    scheda incompleta per sempre. Una linea monta quasi sempre gli stessi
+    pezzi: partire dal foglio bianco voleva dire aggiungerli a mano uno per
+    uno, e una sezione vuota non diceva se il pezzo manca o se nessuno l'ha
+    ancora scritto. Si creano **una volta sola**: se la scheda ha già un blocco
+    qualsiasi, quello che c'è è la linea vera e non si tocca.
+  - **N.A. non è Elimina** (`PATCH …/blocks {componentId, excluded}`): il pezzo
+    che quella linea non monta resta in elenco — così si vede che è stato
+    valutato — ma esce dal conteggio delle matricole del fascicolo, perché è
+    il flag `Component.excluded`, lo stesso N.A. di componente delle schede
+    BLUE DEVIL. Il cambio va a diario, nel PDF il blocco si stampa
+    *«N.a. — non previsto su questa linea»* invece di sparire, e anche la
+    **carpenteria** (riga fissa, gruppo `frame`) ha ora il suo N.A.
   - Blocchi previsti: **Nastro** (sezione NASTRI), **Piano vibrante · Tamburo
-    magnetico · Overbelt · ECS** (sezione SEPARATORI E ALIMENTAZIONE, un
-    pulsante per tipo) e **Cabina di cernita**. Separatori: fornitore,
+    magnetico · Overbelt · ECS · Trommel · Tramoggia di carico** (sezione
+    SEPARATORI E ALIMENTAZIONE, un pulsante per tipo) e **Cabina di cernita**. Separatori: fornitore,
     larghezza, lunghezza, matricola da foto; l'ECS ha in più il **modello**
     (SIS, VIS). La cabina ha il fornitore e la foto, e nemmeno lei è una riga
     fissa: non tutte le linee ne montano una.
@@ -1130,8 +1154,9 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
   matricole non e' una strada.
   - **Si sposta tutto quello che la scheda e'**: la riga `AllestimentoSheet`
     (firma compresa — la macchina e' la stessa, cambia la commessa), i **gruppi
-    componente** della scheda (`sheetGroupIds`) con i loro slot, le **foto degli
-    slot**, i documenti delle sue caselle (collaudo dimensionale, rilievo
+    componente** della scheda (`sheetGroupIds`) **e i suoi blocchi** (nastri,
+    separatori, cabina: hanno il numero nell'id, quindi non stanno fra i gruppi
+    fissi e restavano indietro) con i loro slot, le **foto degli slot**, i documenti delle sue caselle (collaudo dimensionale, rilievo
     alberi) e le **spunte di dotazione** delle sue righe. Lasciare indietro le
     matricole vorrebbe dire una scheda che parla di una macchina e dei numeri
     che stanno su un'altra.
@@ -1344,7 +1369,29 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     diversi della commessa e certe volte non si sanno affatto, quindi tenerle
     fra gli obbligatori lasciava fascicoli incompleti per sempre e bloccava la
     convalida. Restano in pagina e si compilano: semplicemente non contano.
-  - **Componenti e matricole**: slot con matricola sul totale degli slot.
+  - **Schede e matricole**: slot con matricola sul totale, più la **firma**
+    delle schede di allestimento, che vale **un decimo** della voce (il 3% del
+    fascicolo). Pesa poco apposta: a scheda tutta compilata manca davvero solo
+    una firma, e farla valere come un terzo del fascicolo era il numero che non
+    tornava. Dove non ci sono schede la voce torna a chiamarsi *Componenti e
+    matricole* e conta le sole matricole.
+    - **Si contano solo gli slot che il fascicolo mostra** (`hiddenGroupIds`).
+      Dove ci sono le schede, *Componenti & Matricole* **è** la scheda: un
+      gruppo che nessuna delle sue schede nomina non si compila da nessuna
+      parte, quindi contarlo tiene il fascicolo incompleto per sempre.
+      `createMachine` crea tutti i 29 gruppi del catalogo, quindi su
+      M-2026-0019 (**solo corpo**) si contavano i 18 gruppi del container più
+      quelli rimasti dall'import MATRICOLE (ecs, magnet, overbelt, vibro):
+      **45 slot per 8 compilabili**, cioè 59% con la scheda finita. Ora sono
+      8 su 8 e il fascicolo sta al **95%**, con il 5% che è la firma.
+    - Niente slot da contare **e** nessuna scheda da firmare → la voce sparisce
+      (cesoie: la M5.18 non raccoglie matricole), come il collaudo dove non è
+      previsto. Se invece la scheda c'è ma gli slot sono tutti N.A., resta la
+      sola firma: non si pretende una percentuale da un elenco vuoto.
+    - Costo: l'aggregato SQL diventa **una query per composizione di schede**
+      (solo corpo, solo container, corpo + container, mulino, …), non una per
+      fascicolo — i gruppi nascosti dipendono dalla tipologia, non dalla
+      singola macchina.
   - **Collaudo**: 0 → bozza 40% → compilata e firmata 70% → approvata 100%.
 
   Pesano **uguale**: un fascicolo con l'anagrafica piena ma senza matricole è

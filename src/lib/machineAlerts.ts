@@ -19,8 +19,10 @@ export const SIGN_ROLES = ["Montaggio", "Collaudo", "Capo officina"] as const;
 /**
  * `na` = non previsto per questa tipologia impianto: la colonna mostra "—",
  * perché un semaforo rosso che non si può mai spegnere è solo rumore.
+ * `sign` = non manca lavoro, manca una firma: ambra **ferma**, perché il
+ * lampeggio serve a dire "qui c'è ancora da compilare".
  */
-export type AlertState = "ok" | "pending" | "na";
+export type AlertState = "ok" | "sign" | "pending" | "na";
 export type MachineAlert = { state: AlertState; detail: string };
 
 /**
@@ -32,17 +34,24 @@ export type MachineAlert = { state: AlertState; detail: string };
 export function sheetsAlert(
   plantType: string | null,
   signedKinds: Set<string>,
-  selected?: string[] | null
+  selected?: string[] | null,
+  /**
+   * Tutte le matricole del fascicolo sono state raccolte: allora di quelle
+   * schede non manca il lavoro, manca la firma — e il rosso lampeggiante, che
+   * vuol dire "c'è ancora da compilare", mandava a cercare qualcosa che non
+   * c'era. Lo dice chi calcola l'avanzamento, con gli stessi slot contati lì.
+   */
+  componentsDone?: boolean
 ): MachineAlert {
   const kinds = machineSheetKinds(plantType, selected);
   if (!kinds.length) return { state: "na", detail: "Nessuna scheda prevista per questa tipologia" };
   const missing = kinds.filter((k) => !signedKinds.has(k));
   if (!missing.length)
     return { state: "ok", detail: `Schede firmate: ${kinds.map((k) => sheetDef(k).code).join(", ")}` };
-  return {
-    state: "pending",
-    detail: `Da firmare: ${missing.map((k) => sheetDef(k).code).join(", ")}`,
-  };
+  const codes = missing.map((k) => sheetDef(k).code).join(", ");
+  if (componentsDone)
+    return { state: "sign", detail: `Matricole complete: manca solo la firma di ${codes}` };
+  return { state: "pending", detail: `Da firmare: ${codes}` };
 }
 
 /**

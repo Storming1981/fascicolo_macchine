@@ -12,6 +12,7 @@
 // Modulo condiviso client/server: niente import server-only.
 
 import type { KitFlag } from "./kits";
+import { COMPONENT_GROUPS } from "./components";
 import { hasCollaudo } from "./plant";
 
 export type SheetKind = "TRITURATORE" | "CONTAINER" | "MULINO" | "CESOIA" | "SEPARAZIONE" | "DOWNSTREAM";
@@ -167,6 +168,16 @@ export type SheetSection = {
    * una macchina non possono esistere due gruppi con lo stesso id.
    */
   repeat?: string[];
+  /**
+   * Blocchi che nascono **gia' presenti** alla prima apertura della scheda.
+   * Una linea di separazione ha quasi sempre gli stessi pezzi (tre nastri, due
+   * piani vibranti, un tamburo, un overbelt, un ECS): partire dal foglio
+   * bianco voleva dire ricordarsi di aggiungerli uno per uno, e una scheda
+   * vuota non dice se il pezzo manca o se nessuno l'ha ancora scritto.
+   * Con `na: true` il blocco nasce **escluso** (trommel, tramoggia di carico):
+   * c'e' nell'elenco, ma non si compila finche' qualcuno non dice che c'e'.
+   */
+  repeatInit?: { kind: string; count: number; na?: boolean }[];
   /**
    * Bottone **N.A.** sull'intero capitolo, per i fascicoli che montano un pezzo
    * solo della macchina: su un *solo corpo* il cavalletto-tramoggia e la linea
@@ -739,6 +750,16 @@ export const BLOCKS: Record<string, RepeatBlock> = {
     fields: [{ key: "brand", label: "Fornitore", list: "cabina_fornitore" }],
     slots: [{ label: "Foto cabina", photoOnly: true }],
   },
+  // Trommel e tramoggia di carico nascono su N.A.: su molte linee non ci sono,
+  // e una riga da compilare per un pezzo mai montato e' esattamente cio' che
+  // tiene una scheda incompleta per sempre.
+  trommel: { key: "trommel", label: "Trommel", fields: SEP_FIELDS, slots: [{ label: "Matricola" }] },
+  hopper: {
+    key: "hopper",
+    label: "Tramoggia di carico",
+    fields: SEP_FIELDS,
+    slots: [{ label: "Matricola" }],
+  },
 };
 
 /** Il gruppo è un blocco ripetibile? Ritorna il tipo (belt, ecs, …) o null. */
@@ -763,7 +784,7 @@ export const SHEET_SEPARAZIONE: SheetDef = {
       title: "CARPENTERIA",
       icon: "box",
       rows: [
-        { key: "carpenteria", label: "Fornitore carpenteria", bind: { group: "frame", field: "brand" }, suggest: ["STAM"], photos: "frame" },
+        { key: "carpenteria", label: "Fornitore carpenteria", bind: { group: "frame", field: "brand" }, suggest: ["STAM"], photos: "frame", naComponent: true },
         { key: "verniciatura_linea", label: "Verniciatura", suggest: PAINT, list: "verniciatura" },
         { key: "colore_linea", label: "Colore", suggest: COLORS, list: "colori" },
       ],
@@ -771,25 +792,35 @@ export const SHEET_SEPARAZIONE: SheetDef = {
     {
       key: "nastri",
       title: "NASTRI",
-      subtitle: "Un blocco per nastro: il numero cambia da linea a linea",
+      subtitle: "Tre di partenza: aggiungine altri o metti su N.A. quelli che non ci sono",
       icon: "rotor",
       repeat: ["belt"],
+      repeatInit: [{ kind: "belt", count: 3 }],
       rows: [],
     },
     {
       key: "separatori",
       title: "SEPARATORI E ALIMENTAZIONE",
-      subtitle: "Si aggiungono quelli montati: una linea puo' non averli, o averne piu' d'uno",
+      subtitle: "Quelli di serie ci sono gia': trommel e tramoggia partono su N.A.",
       icon: "bolt",
-      repeat: ["vibro", "magnet", "overbelt", "ecs"],
+      repeat: ["vibro", "magnet", "overbelt", "ecs", "trommel", "hopper"],
+      repeatInit: [
+        { kind: "vibro", count: 2 },
+        { kind: "magnet", count: 1 },
+        { kind: "overbelt", count: 1 },
+        { kind: "ecs", count: 1 },
+        { kind: "trommel", count: 1, na: true },
+        { kind: "hopper", count: 1, na: true },
+      ],
       rows: [],
     },
     {
       key: "cabina",
       title: "CABINA DI CERNITA",
-      subtitle: "Si aggiunge se la linea ce l'ha",
+      subtitle: "C'e' di partenza: se la linea non ce l'ha si mette su N.A.",
       icon: "box",
       repeat: ["cabin"],
+      repeatInit: [{ kind: "cabin", count: 1 }],
       rows: [],
     },
     {
@@ -1050,6 +1081,31 @@ export function sheetGroupIds(kinds: SheetKind[] = SHEET_KINDS): string[] {
       if (r.photos) ids.add(r.photos);
     }
   return [...ids];
+}
+
+/**
+ * Blocchi che una scheda crea gia' presenti (`repeatInit` delle sue sezioni).
+ */
+export function sheetInitBlocks(kinds: SheetKind[]): { kind: string; count: number; na?: boolean }[] {
+  return kinds.flatMap((k) => SHEET_DEFS[k].sections.flatMap((s) => s.repeatInit ?? []));
+}
+
+/**
+ * Gruppi del catalogo che questo fascicolo **non mostra**. Dove ci sono le
+ * schede, *Componenti & Matricole* **e'** la scheda: un gruppo che nessuna
+ * delle sue schede nomina non si compila da nessuna parte, quindi contarlo fra
+ * le matricole del fascicolo vuol dire tenerlo incompleto per sempre.
+ * E' il caso dei 18 gruppi del container su un fascicolo di **solo corpo**
+ * (M-2026-0019: 45 slot contati, 8 compilabili) e dei gruppi che restano
+ * dall'import MATRICOLE (ecs, magnet, overbelt, vibro) su ogni BLUE DEVIL.
+ * Senza schede (tipologie che non ne hanno) la vista e' l'elenco per gruppo:
+ * li' si vede tutto, quindi non si nasconde niente.
+ */
+export function hiddenGroupIds(plantType: string | null, selected?: string[] | null): string[] {
+  const kinds = machineSheetKinds(plantType, selected);
+  if (!kinds.length) return [];
+  const shown = new Set(sheetGroupIds(kinds));
+  return COMPONENT_GROUPS.map((g) => g.id).filter((id) => !shown.has(id));
 }
 
 /** Commessa di riferimento stampata nell'intestazione della scheda. */

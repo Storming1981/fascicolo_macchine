@@ -178,6 +178,9 @@ export async function loadMachineDetailProps(code: string) {
       groupId: c.groupId,
       label: c.label,
       brand: c.brand,
+      // N.A.: il pezzo non c'e' su questa macchina (blocchi della linea,
+      // riduttori non spediti). Serve alla scheda per disegnarlo spento.
+      excluded: c.excluded,
       extra: (c.extra as Record<string, string> | null) || null,
       items: c.items.map((i) => ({
         id: i.id,

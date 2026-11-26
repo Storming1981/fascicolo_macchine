@@ -45,13 +45,17 @@ export async function renderSheetPdf(
           })
           .filter(Boolean)
           .join(" · ");
+        // Pezzo messo a N.A.: si stampa che non e' previsto, invece di sparire.
+        // Un blocco mancante sembra una scheda lasciata a meta'.
         return [
           {
             kind: block.key,
             n: blockNumberOf(c.groupId),
             label: c.label ?? block.label,
-            spec,
-            serials: c.items.map((i) => [i.serial ?? "", i.lot ?? ""].filter(Boolean).join(" · ")),
+            spec: c.excluded ? "N.a. - non previsto su questa linea" : spec,
+            serials: c.excluded
+              ? []
+              : c.items.map((i) => [i.serial ?? "", i.lot ?? ""].filter(Boolean).join(" · ")),
           },
         ];
       })

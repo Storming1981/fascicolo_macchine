@@ -356,11 +356,14 @@ function ScopeTag({ scope }: { scope: SheetsScope }) {
  */
 function AlertCell({ alert }: { alert: MachineAlert }) {
   if (alert.state === "na") return <span className="muted">—</span>;
-  const ok = alert.state === "ok";
+  // Tre stati, tre letture diverse: fatto · manca una firma (ambra ferma) ·
+  // c'è ancora da compilare (rosso che lampeggia).
+  const s = alert.state;
+  const cls = s === "ok" ? "ok" : s === "sign" ? "sign" : "warn";
   return (
-    <span className={"alert-pill" + (ok ? " ok" : " warn")} title={alert.detail}>
-      <Icon name={ok ? "check" : "flag"} size={12} />
-      {ok ? "OK" : "Da fare"}
+    <span className={"alert-pill " + cls} title={alert.detail}>
+      <Icon name={s === "ok" ? "check" : s === "sign" ? "sign" : "flag"} size={12} />
+      {s === "ok" ? "OK" : s === "sign" ? "Da firmare" : "Da fare"}
     </span>
   );
 }

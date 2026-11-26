@@ -92,6 +92,10 @@ export default async function MachinesPage({
     shaftByMachine.set(d.machineId, set);
   }
   const empty = new Set<string>();
+  const serialsDone = (id: string) => {
+    const s = progress.get(id)?.serials;
+    return !!s && s.total > 0 && s.filled === s.total;
+  };
   const data = machines.map((m) => ({
     id: m.id,
     code: m.code,
@@ -128,7 +132,9 @@ export default async function MachinesPage({
         },
       ];
     }),
-    schede: sheetsAlert(m.plantType, signedSheets.get(m.id) ?? empty, m.sheetKinds),
+    // Matricole tutte raccolte: alla scheda manca solo la firma, e il
+    // semaforo lo dice invece di lampeggiare come se mancasse del lavoro.
+    schede: sheetsAlert(m.plantType, signedSheets.get(m.id) ?? empty, m.sheetKinds, serialsDone(m.id)),
     docAlberi: shaftDocsAlert(m.plantType, m.sheetKinds, shaftByMachine.get(m.id) ?? empty),
     collaudo: collaudoAlert(
       m.plantType,

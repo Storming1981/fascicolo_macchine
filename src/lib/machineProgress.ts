@@ -13,7 +13,7 @@
 //
 // Modulo puro (client + server): niente import server-only.
 
-import { machineHasCollaudo } from "./allestimento";
+import { machineHasCollaudo, machineSheetKinds } from "./allestimento";
 import { jobFields } from "./plant";
 
 export type CollaudoState = "NONE" | "DRAFT" | "COMPILED" | "APPROVED";
@@ -50,8 +50,15 @@ const STOCK_COMMESSA = "999999999";
 
 export type ProgressFacts = {
   anagrafica: AnagraficaFields;
-  /** Slot componente del fascicolo e quanti hanno una matricola. */
+  /**
+   * Slot componente **che il fascicolo mostra** e quanti hanno una matricola.
+   * Chi li conta (`progressService`) esclude i gruppi che nessuna scheda del
+   * fascicolo nomina: su un *solo corpo* i diciotto gruppi del container non
+   * si compilano da nessuna parte, e contarli lo teneva al 59% per sempre.
+   */
   serials: { filled: number; total: number };
+  /** Schede di allestimento del fascicolo gia' firmate dal compilatore. */
+  signedSheets: number;
   collaudo: CollaudoState;
 };
 
@@ -154,6 +161,20 @@ const COLLAUDO_LABEL: Record<CollaudoState, string> = {
 export function progressSteps(f: ProgressFacts): ProgressStep[] {
   const a = anagraficaScore(f.anagrafica);
   const s = f.serials;
+  // Schede previste dal fascicolo: la **firma** del compilatore e' l'ultimo
+  // atto di questa voce e vale un decimo di essa (il 3% del fascicolo). Vale
+  // poco apposta: a scheda tutta compilata manca davvero solo una firma, e
+  // farla pesare come un terzo del fascicolo era il numero che non tornava.
+  const sheets = machineSheetKinds(f.anagrafica.plantType, f.anagrafica.sheetKinds).length;
+  const signed = Math.min(f.signedSheets, sheets);
+  const serialFrac = s.total ? s.filled / s.total : 0;
+  const signFrac = sheets ? signed / sheets : 0;
+  const detail = [
+    s.total ? `${s.filled} di ${s.total} matricole` : "",
+    sheets ? `${signed} di ${sheets} schede firmate` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return [
     {
       key: "anagrafica",
@@ -162,13 +183,23 @@ export function progressSteps(f: ProgressFacts): ProgressStep[] {
       done: a.total ? a.done / a.total : 1,
       detail: `${a.done} di ${a.total} campi`,
     },
-    {
-      key: "componenti",
-      label: "Componenti e matricole",
-      weight: 1,
-      done: s.total ? s.filled / s.total : 0,
-      detail: s.total ? `${s.filled} di ${s.total} matricole` : "nessuno slot censito",
-    },
+    // Niente slot da compilare **e** nessuna scheda da firmare: la voce non
+    // c'e' proprio (cesoie: il modulo M5.18 non raccoglie matricole). Tenerla
+    // a zero terrebbe quei fascicoli a meta' per sempre.
+    ...(s.total || sheets
+      ? [
+          {
+            key: "componenti",
+            label: sheets ? "Schede e matricole" : "Componenti e matricole",
+            weight: 1,
+            // Senza slot da riempire (tutti N.A., o una scheda che matricole
+            // non ne chiede) resta la sola firma: non si puo' pretendere una
+            // percentuale da un elenco vuoto.
+            done: !sheets ? serialFrac : s.total ? 0.9 * serialFrac + 0.1 * signFrac : signFrac,
+            detail: detail || "nessuno slot censito",
+          },
+        ]
+      : []),
     // Dove il collaudo non è previsto (linea di separazione, fascicolo di solo
     // corpo) la voce non c'è proprio: tenerla a zero terrebbe il fascicolo a
     // due terzi per sempre.
@@ -192,9 +223,14 @@ export function progressPercent(steps: ProgressStep[]): number {
   return Math.round((steps.reduce((acc, s) => acc + s.weight * s.done, 0) / total) * 100);
 }
 
-export type MachineProgress = { percent: number; steps: ProgressStep[] };
+export type MachineProgress = {
+  percent: number;
+  steps: ProgressStep[];
+  /** Gli slot contati davvero: serve al semaforo *Schede* dell'elenco. */
+  serials: { filled: number; total: number };
+};
 
 export function machineProgress(f: ProgressFacts): MachineProgress {
   const steps = progressSteps(f);
-  return { percent: progressPercent(steps), steps };
+  return { percent: progressPercent(steps), steps, serials: f.serials };
 }

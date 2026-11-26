@@ -128,6 +128,12 @@
 /* ── Nastri della linea di separazione: un blocco per nastro ───────────── */
 .belts { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
 .belts-empty { margin: 0; }
+/* Pezzo non previsto su questa linea: resta in elenco, spento. */
+.belt-card.na { background: var(--bg-3); opacity: 0.72; }
+.belt-card.na .belt-head { background: transparent; }
+.belt-actions { display: inline-flex; align-items: center; gap: 8px; }
+.belt-na-tag { font-size: 11px; font-weight: 600; color: #b45309; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 99px; padding: 2px 9px; }
+.belt-na-body { margin: 0; padding: 9px 13px; }
 .belt-card { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); overflow: hidden; }
 .belt-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 13px; background: var(--bg-3); border-bottom: 1px solid var(--border); font-size: 13px; color: var(--navy); }
 .belt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px 14px; padding: 13px; }
