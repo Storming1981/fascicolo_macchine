@@ -1140,7 +1140,11 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     trascrivere, quindi contarle avrebbe tenuto il fascicolo sotto al 100% per
     sempre — lo stesso errore delle *specifiche speciali* senza N.A. Lo
     dichiara il blocco (`slots[].photoOnly`) o il gruppo
-    (`ComponentGroup.photoOnly`, oggi `frame`).
+    (`ComponentGroup.photoOnly`, oggi `frame`). Un gruppo che lo diventa
+    **dopo** che i suoi slot esistono lascia indietro il flag sulle righe gia'
+    create: `ensureSheetSlots` lo riallinea alla definizione all'apertura
+    della scheda (in produzione erano 12 slot `frame` su 15, contati come
+    matricole che nessuno avrebbe mai scritto).
   - API: `POST|PATCH|DELETE /api/machines/[id]/blocks` (`POST {kind}`).
     Eliminando un blocco le sue matricole restano scritte a diario: la riga
     sparisce, la storia no.

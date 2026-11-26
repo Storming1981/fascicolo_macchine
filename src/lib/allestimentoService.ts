@@ -195,13 +195,24 @@ async function ensureSheetSlots(machineId: string, groupIds: string[]): Promise<
       id: true,
       groupId: true,
       extra: true,
-      items: { orderBy: { position: "asc" }, select: { id: true, position: true, label: true, serial: true } },
+      items: {
+        orderBy: { position: "asc" },
+        select: { id: true, position: true, label: true, serial: true, photoOnly: true },
+      },
     },
   });
   let added = 0;
   for (const c of comps) {
     const g = COMPONENT_GROUPS.find((x) => x.id === c.groupId);
     if (!g) continue;
+    // Il gruppo e' diventato "solo foto" dopo che i suoi slot erano gia' stati
+    // creati (la carpenteria di una linea): quegli slot continuavano a contare
+    // fra le matricole del fascicolo, e una matricola che non si scrive mai lo
+    // tiene indietro per sempre. In produzione erano 12 slot su 15.
+    const photoOnly = !!g.photoOnly;
+    const wrong = c.items.filter((i) => i.photoOnly !== photoOnly).map((i) => i.id);
+    if (wrong.length)
+      await prisma.componentItem.updateMany({ where: { id: { in: wrong } }, data: { photoOnly } });
     if (c.groupId === "blades") await moveBladesLot(c);
     // lo slot unico dell'albero si chiamava "Albero": col secondo prende il numero
     const unnamed = c.groupId === "shaft" ? c.items.find((i) => i.label === "Albero") : undefined;
