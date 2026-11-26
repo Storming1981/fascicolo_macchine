@@ -663,6 +663,32 @@ frammenti; CAYMAN → 243) più il corpus operativo (diari, rapportini, chat).
     `MachinesList.tsx`): non lampeggia come i semafori perché non manca
     niente — è com'è fatta quella macchina — e il colore la distingue senza
     leggere.
+- **L'elenco macchine si legge a pagine** (`Pager` in `MachinesList.tsx`):
+  piede della tabella con **5 · 10 · 20 · 100 righe** (20 di partenza, la
+  scelta resta sul browser di chi guarda — `localStorage`), intervallo
+  mostrato ("1–20 di 183 fascicoli") e navigazione prima/ultima. Duecento
+  fascicoli in una pagina sola vogliono dire scorrere per leggere, e la riga
+  che serve finisce sempre fuori schermo.
+  - La pagina corrente si **ricava** (`Math.min(page, totalPages)`), non si
+    corregge con un effetto: dopo una ricerca che lascia tre risultati
+    "pagina 7" non esiste più. Ricerca e filtri riportano alla prima pagina.
+  - Cambiare pagina **riporta in cima alla tabella**: a cento righe il
+    pulsante *avanti* sta in fondo, e senza questo la pagina nuova si apre
+    già in fondo all'elenco.
+- **Niente scorrimento orizzontale** (`.machines-table` in `globals.css`):
+  sedici colonne stanno nella finestra. Una tabella che scorre di lato la si
+  legge a pezzi — si perde di vista la commessa mentre si guardano i semafori.
+  Si stringe il passo (padding e corpo del testo) e **si manda a capo**: il
+  `white-space: nowrap` delle targhette (stato, semafori, scheda inclusa,
+  paese) serviva a tabelle di poche colonne, qui era proprio ciò che spingeva
+  fuori la tabella. A togliere davvero lo scorrimento è però
+  **`overflow-wrap: anywhere`** su celle e intestazioni: porta la larghezza
+  minima di una cella a un carattere, quindi la tabella entra *sempre* e il
+  browser distribuisce lo spazio per contenuto — invece di dover indovinare
+  una percentuale per colonna. Sotto **960px** (telefono, tablet in verticale)
+  torna a scorrere: lì sedici colonne spremute sarebbero illeggibili. 960 non
+  è un numero a caso: è quanto resta su un portatile da 1280 tolta la barra
+  laterale (248) e i margini della pagina (56).
 - **Gli ordini di produzione si leggono dall'elenco** (`src/lib/orderRef.ts`,
   `OrdersPeek` in `MachinesList.tsx`): passando con il puntatore su una riga si
   apre una scheda con **Ordine Corpo / Container / Cavalletto / Lame** —

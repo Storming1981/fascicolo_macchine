@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon, { Flag } from "@/components/Icon";
@@ -60,6 +60,21 @@ export default function MachinesList({
   // giorno (a che punto siamo). Arrivando da una ricerca si parte da "tutte",
   // altrimenti una macchina gia spedita non si troverebbe.
   const [filter, setFilter] = useState<string>(initialQuery ? "all" : "PRODUCTION");
+  // Quante righe si vedono per volta. Duecento fascicoli in una pagina sola
+  // vogliono dire scorrere per leggere, e la riga che serve finisce sempre
+  // fuori schermo. La scelta resta sul browser di chi guarda: chi lavora su
+  // dieci righe per volta non vuole rimetterlo a ogni apertura.
+  const [perPage, setPerPage] = useState(PER_PAGE_DEFAULT);
+  const [page, setPage] = useState(1);
+  const tableRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    try {
+      const v = Number(localStorage.getItem(PER_PAGE_KEY));
+      if (PER_PAGE.includes(v)) setPerPage(v);
+    } catch {
+      /* storage negato (navigazione privata): si resta sul valore di partenza */
+    }
+  }, []);
 
   const filtered = useMemo(
     () =>
@@ -84,6 +99,30 @@ export default function MachinesList({
       }),
     [machines, q, filter]
   );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  // La pagina corrente si **ricava**, non si corregge con un effetto: dopo una
+  // ricerca che lascia tre risultati, "pagina 7" non esiste piu'.
+  const curPage = Math.min(page, totalPages);
+  const paged = filtered.slice((curPage - 1) * perPage, curPage * perPage);
+
+  function go(p: number) {
+    setPage(Math.min(Math.max(1, p), totalPages));
+    setPeek(null); // la scheda degli ordini e' della riga di prima
+    // A cento righe per pagina il pulsante "avanti" sta in fondo: senza
+    // questo si arriva alla pagina nuova gia' in fondo all'elenco.
+    tableRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
+  function setRows(n: number) {
+    setPerPage(n);
+    setPage(1);
+    try {
+      localStorage.setItem(PER_PAGE_KEY, String(n));
+    } catch {
+      /* niente storage: vale per questa sessione */
+    }
+  }
 
   return (
     <div className="view">
@@ -114,13 +153,19 @@ export default function MachinesList({
           <input
             placeholder="Cerca commessa, ordine, cliente, paese…"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
         <div className="filters">
           <button
             className={"chip-btn" + (filter === "all" ? " active" : "")}
-            onClick={() => setFilter("all")}
+            onClick={() => {
+              setFilter("all");
+              setPage(1);
+            }}
           >
             Tutte
           </button>
@@ -128,7 +173,10 @@ export default function MachinesList({
             <button
               key={s}
               className={"chip-btn" + (filter === s ? " active" : "")}
-              onClick={() => setFilter(s)}
+              onClick={() => {
+                setFilter(s);
+                setPage(1);
+              }}
             >
               <span className="badge-dot" style={{ background: STATUS_META[s].color }} />
               {STATUS_META[s].label}
@@ -137,9 +185,9 @@ export default function MachinesList({
         </div>
       </div>
 
-      <div className="card no-pad">
+      <div className="card no-pad" ref={tableRef}>
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table machines-table">
             <thead>
               <tr>
                 {/* La commessa è il riferimento con cui si parla di una macchina in
@@ -166,7 +214,7 @@ export default function MachinesList({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((m) => {
+              {paged.map((m) => {
                 const ct = containerType(m.containerType);
                 return (
                 <tr
@@ -270,7 +318,7 @@ export default function MachinesList({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="empty">
+                  <td colSpan={COLS} className="empty">
                     Nessuna macchina trovata.
                   </td>
                 </tr>
@@ -278,9 +326,94 @@ export default function MachinesList({
             </tbody>
           </table>
         </div>
+        <Pager
+          total={filtered.length}
+          perPage={perPage}
+          page={curPage}
+          totalPages={totalPages}
+          onRows={setRows}
+          onPage={go}
+        />
       </div>
 
       {peek && <OrdersPeek peek={peek} />}
+    </div>
+  );
+}
+
+/** Righe per pagina: le misure chieste, con 20 come partenza. */
+const PER_PAGE = [5, 10, 20, 100];
+const PER_PAGE_DEFAULT = 20;
+const PER_PAGE_KEY = "zato:macchine:righe";
+/** Colonne della tabella: fisse + una per kit (serve alla riga "nessun risultato"). */
+const COLS = 14 + KITS.length;
+
+/**
+ * Piede della tabella: quante righe per volta e su che pagina si e'. Sta
+ * **sotto** l'elenco, dove si arriva scorrendo: a 5 righe per pagina i
+ * pulsanti devono essere li' dove finisce la tabella, non in cima.
+ */
+function Pager({
+  total,
+  perPage,
+  page,
+  totalPages,
+  onRows,
+  onPage,
+}: {
+  total: number;
+  perPage: number;
+  page: number;
+  totalPages: number;
+  onRows: (n: number) => void;
+  onPage: (p: number) => void;
+}) {
+  const from = total === 0 ? 0 : (page - 1) * perPage + 1;
+  const to = Math.min(page * perPage, total);
+  return (
+    <div className="table-pager">
+      <span className="muted small">
+        {total === 0 ? "Nessun fascicolo" : `${from}–${to} di ${total} fascicoli`}
+      </span>
+      <span className="table-pager-rows">
+        <span className="muted small">Righe</span>
+        {PER_PAGE.map((n) => (
+          <button
+            key={n}
+            className={"chip-btn" + (perPage === n ? " active" : "")}
+            onClick={() => onRows(n)}
+          >
+            {n}
+          </button>
+        ))}
+      </span>
+      <span className="table-pager-nav">
+        <button className="btn-ghost-sm" disabled={page <= 1} onClick={() => onPage(1)} title="Prima pagina">
+          «
+        </button>
+        <button className="btn-ghost-sm" disabled={page <= 1} onClick={() => onPage(page - 1)} title="Pagina precedente">
+          ‹
+        </button>
+        <span className="muted small mono">
+          {page} / {totalPages}
+        </span>
+        <button
+          className="btn-ghost-sm"
+          disabled={page >= totalPages}
+          onClick={() => onPage(page + 1)}
+          title="Pagina successiva"
+        >
+          ›
+        </button>
+        <button
+          className="btn-ghost-sm"
+          disabled={page >= totalPages}
+          onClick={() => onPage(totalPages)}
+          title="Ultima pagina"
+        >
+          »
+        </button>
+      </span>
     </div>
   );
 }

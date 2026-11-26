@@ -265,6 +265,41 @@ h1, h2, h3, h4 { margin: 0; }
 .data-table tbody tr.clickable { cursor: pointer; }
 .data-table tbody tr.clickable:hover { background: var(--hover); }
 .country-cell { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+
+/* Piede di una tabella paginata: quante righe per volta e su che pagina si e'. */
+.table-pager { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--border); background: var(--bg-3); }
+.table-pager-rows { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
+.table-pager-rows .chip-btn { padding: 4px 10px; min-width: 34px; justify-content: center; }
+.table-pager-nav { display: inline-flex; align-items: center; gap: 5px; }
+.table-pager-nav .btn-ghost-sm { min-width: 28px; justify-content: center; }
+/* Elenco macchine: sedici colonne che devono stare nella finestra. Una
+   tabella che scorre di lato la si legge a pezzi — si perde di vista la
+   commessa mentre si guardano i semafori — quindi si stringe il passo e si
+   manda a capo invece di allargare. Il "nowrap" delle targhette serviva a
+   tabelle di poche colonne: qui e' proprio cio' che spingeva fuori la tabella.
+   `overflow-wrap: anywhere` e' quello che toglie davvero lo scorrimento: la
+   larghezza minima di una cella diventa un carattere, quindi la tabella entra
+   sempre nella finestra e il browser distribuisce lo spazio per contenuto.
+   Sotto 960px (telefono, tablet in verticale) torna a scorrere: li' sedici
+   colonne spremute sarebbero illeggibili, e lo scorrimento e' il male minore.
+   960 non e' un numero a caso: e' quanto resta su un portatile da 1280 tolta
+   la barra laterale (248) e i margini della pagina (56). */
+.machines-table { font-size: 12.5px; min-width: 960px; }
+.machines-table thead th { padding: 9px 8px; white-space: normal; line-height: 1.2; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+.machines-table tbody td { padding: 9px 8px; overflow-wrap: anywhere; }
+.machines-table .badge,
+.machines-table .alert-pill,
+.machines-table .scope-tag { white-space: normal; }
+.machines-table .alert-pill { padding: 3px 7px; gap: 4px; }
+.machines-table .country-cell { flex-wrap: wrap; white-space: normal; gap: 6px; }
+.machines-table .row-progress { gap: 6px; }
+.machines-table .row-progress-bar { max-width: 64px; min-width: 20px; }
+@media (max-width: 1400px) {
+  .machines-table { font-size: 12px; }
+  .machines-table thead th, .machines-table tbody td { padding: 8px 6px; }
+  .machines-table .alert-pill { font-size: 10.5px; padding: 2px 6px; gap: 3px; }
+  .machines-table .alert-pill svg { display: none; }
+}
 .row-progress { display: flex; align-items: center; gap: 8px; }
 .row-progress-bar { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; max-width: 90px; }
 .row-progress-bar span { display: block; height: 100%; }
